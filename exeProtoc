@@ -1,0 +1,2 @@
+export PATH=$PATH:$GOPATH/bin
+protoc -I ../../../madao/resource/protos/ ../../../madao/resource/protos/tradeCheck.proto --go_out=plugins=grpc:./
