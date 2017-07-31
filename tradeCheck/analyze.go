@@ -59,6 +59,20 @@ func (a *Analyzer) Analyze() {
 
 			if counter >= 4 {
 				log.Printf("Name:%v, Date:%v is triggered.", a.tokenName, values[i].Hm)
+
+				var order redis.OrderItem
+				order.Pair = a.tokenName
+				order.BuyLimitHigh = 1
+				order.BuyLimitLow = 2
+				order.SellLimitHigh = 1
+				order.SellLimitLow = 2
+				order.Trigger = values[i].Hm
+
+				redisConn := new(redis.RedisOrder)
+				err := redisConn.SaveOrder("poloniex", order)
+				if err != nil {
+					log.Printf("Error when saving order:%v", err.Error())
+				}
 				return
 			}
 

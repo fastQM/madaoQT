@@ -25,7 +25,6 @@ func (S *Service) GetInfo(ctx context.Context, handle *tradeCheck.TradeHandle) (
 func (S *Service) TradeCheck(ctx context.Context, name *tradeCheck.TokenName) (*tradeCheck.TradeExpect, error) {
 
 	conn := new(redis.ChartsHistory)
-	conn.Connect()
 	err := conn.LoadCharts(name.Name, 1)
 
 	if err == nil {
@@ -38,6 +37,8 @@ func (S *Service) TradeCheck(ctx context.Context, name *tradeCheck.TokenName) (*
 }
 
 func main() {
+	log.Printf("Server starting...")
+
 	port := flag.String("port", ":5000", "RPC listen port")
 	lis, err := net.Listen("tcp", *port)
 	if err != nil {

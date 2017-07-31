@@ -27,16 +27,26 @@ type ChartItem struct {
 	WeightedAverage float64 `json:"weightedAverage"`
 }
 
-func (t *ChartsHistory) Connect() {
+func (t *ChartsHistory) connect() error {
 	conn, err := redis.Dial("tcp", "localhost:6379")
 	if err != nil {
 		fmt.Println("Connect to redis error", err)
-		return
+		return err
 	}
 	t.conn = conn
+	return nil
 }
 
 func (t *ChartsHistory) LoadCharts(name string, period int) error {
+
+	err := t.connect()
+
+	if err != nil {
+		return errors.New("Redis is not connected")
+	}
+
+	defer t.conn.Close()
+
 	key := "charts-poloniex-" + name
 	log.Printf("Load datas from:%v", key)
 	tmp, err := t.conn.Do("lrange", key, 0, -1)
