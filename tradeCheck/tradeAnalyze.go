@@ -48,6 +48,7 @@ func (a *Analyzer) Analyze() {
 	a.checkRatio()
 
 	for i := 5; i < len(values); i++ {
+		// i := len(values) - 1 {// 最新数据
 		if (values[i].Volume > 3*values[i-1].Volume) &&
 			(values[i].Close < values[i].Open) &&
 			((values[i].Close-values[i].Low)/values[i].Low > 0.01) {

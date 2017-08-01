@@ -9,6 +9,8 @@ import (
 	redis "github.com/garyburd/redigo/redis"
 )
 
+const RedisServer = "localhost:6379"
+
 type ChartsHistory struct {
 	conn redis.Conn
 
@@ -28,7 +30,7 @@ type ChartItem struct {
 }
 
 func (t *ChartsHistory) connect() error {
-	conn, err := redis.Dial("tcp", "localhost:6379")
+	conn, err := redis.Dial("tcp", RedisServer)
 	if err != nil {
 		fmt.Println("Connect to redis error", err)
 		return err
