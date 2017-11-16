@@ -2,15 +2,15 @@ package tradeCheck
 
 import (
 	"log"
-	"madaoqt/redis"
+	"madaoqt/mongo"
 )
 
 type Analyzer struct {
 	tokenName string
-	values    []redis.ChartItem
+	values    []mongo.ChartItem
 }
 
-func (a *Analyzer) Init(tokenName string, array []redis.ChartItem, period int) {
+func (a *Analyzer) Init(tokenName string, array []mongo.ChartItem, period int) {
 	a.tokenName = tokenName
 
 	for i := 1; i < len(array); i++ {
@@ -61,7 +61,7 @@ func (a *Analyzer) Analyze() {
 			if counter >= 4 {
 				log.Printf("Name:%v, Date:%v is triggered.", a.tokenName, values[i].Hm)
 
-				var order redis.OrderItem
+				var order mongo.OrderItem
 				order.Pair = a.tokenName
 				order.BuyLimitHigh = 1
 				order.BuyLimitLow = 2
@@ -69,11 +69,11 @@ func (a *Analyzer) Analyze() {
 				order.SellLimitLow = 2
 				order.Trigger = values[i].Hm
 
-				redisConn := new(redis.RedisOrder)
-				err := redisConn.SaveOrder("poloniex", order)
-				if err != nil {
-					log.Printf("Error when saving order:%v", err.Error())
-				}
+				// redisConn := new(mongo.RedisOrder)
+				// err := redisConn.SaveOrder("poloniex", order)
+				// if err != nil {
+				// 	log.Printf("Error when saving order:%v", err.Error())
+				// }
 				return
 			}
 
