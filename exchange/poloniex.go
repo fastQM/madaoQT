@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	Utils "madaoqt/utils"
+	Utils "madaoQT/utils"
 )
 
 type PoloniexAPI struct {
