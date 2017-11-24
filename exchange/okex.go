@@ -140,7 +140,7 @@ func (o *OKExAPI)Init(tradeType TradeType){
 							o.depthList[i].Asks = data["asks"].([]interface{})
 							o.depthList[i].Bids = data["bids"].([]interface{})
 							unitTime := time.Unix(int64(data["timestamp"].(float64))/1000, 0)
-							timeHM := unitTime.Format("2006-01-02 03:04:05 PM")
+							timeHM := unitTime.Format("2006-01-02 03:04:05")
 							o.depthList[i].Time = timeHM
 							log.Printf("Result:%s", o.depthList[i])
 
@@ -246,7 +246,7 @@ func (o *OKExAPI)GetTickerValue(tag string) *TickerValue {
 				}
 
 				unitTime := time.Unix(int64(tmp["timestamp"].(float64))/1000, 0)
-				timeHM := unitTime.Format("2006-01-02 03:04:05 PM")
+				timeHM := unitTime.Format("2006-01-02 06:04:05")
 
 				tickerValue := &TickerValue {
 					Last: lastValue,
@@ -371,7 +371,7 @@ func (o *OKExAPI)command(data map[string]string, parameters map[string]string) e
 		   return errors.New("Marshal failed")
 	}
 	
-	log.Printf("Cmd:%v", string(cmd))
+	// log.Printf("Cmd:%v", string(cmd))
 	o.conn.WriteMessage(websocket.TextMessage, cmd)
 
 	return nil

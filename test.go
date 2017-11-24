@@ -10,6 +10,7 @@ import (
 func main(){
 
 	analyzer := new(Exchange.IAnalyzer)
+	analyzer.Init(nil)
 
 	log.Print("启动OKEx合约监视程序")
 	okexContract := new (Exchange.OKExAPI)
@@ -47,7 +48,7 @@ func main(){
 				okexCurrent.Init(Exchange.TradeTypeCurrent)
 			}
 		case <- time.After(3 * time.Second): 
-			analyzer.Analyze()
+			analyzer.Watch()
 		}
 	}
 

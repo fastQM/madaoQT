@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	Utils "madaoqt/utils"
+	Utils "madaoQT/utils"
 )
 
 const BittrexMarketUrl = "https://bittrex.com/api/v1.1/public/getticker?market="
