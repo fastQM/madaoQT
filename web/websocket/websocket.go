@@ -17,7 +17,7 @@ func SetupWebsocket(app *iris.Application) {
 
 	// register the server on an endpoint.
 	// see the inline javascript code in the websockets.html, this endpoint is used to connect to the server.
-	app.Get("/echo", ws.Handler())
+	app.Get("/websocket", ws.Handler())
 
 	// serve the javascript built'n client-side library,
 	// see weboskcets.html script tags, this path is used.
@@ -27,6 +27,7 @@ func SetupWebsocket(app *iris.Application) {
 }
 
 func handleConnection(c websocket.Connection) {
+	c.Emit("chat", "welcome!")
 	// Read events from browser
 	c.On("chat", func(msg string) {
 		// Print the message to the console, c.Context() is the iris's http context.

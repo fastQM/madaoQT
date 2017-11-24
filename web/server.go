@@ -7,13 +7,17 @@ import (
     websocket "madaoqt/web/websocket"
 )
 
-func createServer() {
+func setupHttpServer() {
 	
     app := iris.New()
 
     websocket.SetupWebsocket(app)
 
+    // views := iris.HTML("./views", ".html")
+    // views.Reload(true)  //开发模式，强制每次请求都更新页面
+
     app.RegisterView(iris.HTML("./views", ".html"))
+    
     app.Controller("/helloworld", new(controllers.HelloWorldController))
 
     app.Get("/", func(ctx iris.Context) {
@@ -27,5 +31,5 @@ func createServer() {
 }
 
 func main(){
-    createServer()
+    setupHttpServer()
 }

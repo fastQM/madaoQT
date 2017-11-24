@@ -3,14 +3,14 @@ package exchange
 
 import (
 	"log"
-	"os"
-	"os/signal"
 	"crypto/md5"
 	"errors"
 	"sort"
 	"fmt"
 	"encoding/json"
 	"strings"
+	"time"
+	"strconv"
 
 	websocket "github.com/gorilla/websocket"
 )
@@ -20,9 +20,6 @@ const currentUrl = "wss://real.okex.com:10441/websocket"
 
 const constApiKey = "a982120e-8505-41db-9ae3-0c62dd27435c"
 const constSecretKey = "71430C7FA63A067724FB622FB3031970"
-
-const tradeTypeContract = 0
-const tradeTypeCurrent = 1
 
 const X_BTC = "btc"
 const X_LTC = "ltc"
@@ -50,11 +47,12 @@ const Z_week = "week"
 const EventAddChannel = "addChannel"
 
 // 合约行情API
-const ChannelTicker = "ok_sub_futureusd_X_ticker_Y"
+const ChannelContractTicker = "ok_sub_futureusd_X_ticker_Y"
+const ChannelContractDepth = "ok_sub_futureusd_X_depth_Y_Z"
 
 
 const ChannelLogin = "login"
-const ChannelTrade = "ok_futureusd_trade"
+const ChannelContractTrade = "ok_futureusd_trade"
 const ChannelCancelOrder = "ok_futureusd_cancel_order"
 const ChannelUserInfo = "ok_futureusd_userinfo"
 const ChannelOrderInfo = "ok_futureusd_orderinfo"
@@ -63,37 +61,46 @@ const ChannelSubUserInfo = "ok_sub_futureusd_userinfo"
 const ChannelSubPositions = "ok_sub_futureusd_positions"
 
 // 现货行情API
-const CurrentChannelTicker = "ok_sub_spot_X_ticker"
+const ChannelCurrentChannelTicker = "ok_sub_spot_X_ticker"
+const ChannelCurrentDepth = "ok_sub_spot_X_depth_Y"
 
-const EventConnected = 0
-const EventError = 1
+type ContractItemValueIndex int8
+
+const (
+	UsdPriceIndex ContractItemValueIndex = iota
+	ContractQuantity
+	CoinQuantity
+	TotalCoinQuantity
+	TotalContractQuantity
+)
 
 type OKExAPI struct{
 	conn *websocket.Conn
-	tickerList []tickerValue
-	event chan int
+	tickerList []TickerListItem
+	depthList []DepthListItem
+	event chan EventType
+	tradeType TradeType
 }
 
-func (o *OKExAPI) WatchEvent() chan int {
+func (o *OKExAPI) WatchEvent() chan EventType {
 	return o.event
 }
 
-func (o *OKExAPI) triggerEvent(event int){
+func (o *OKExAPI) triggerEvent(event EventType){
 	o.event <- event
 }
 
-func (o *OKExAPI)Init(tradeType int){
-
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
+func (o *OKExAPI)Init(tradeType TradeType){
 
 	o.tickerList = nil
-	o.event = make(chan int)
+	o.depthList = nil
+	o.event = make(chan EventType)
+	o.tradeType = tradeType
 
 	var url string
-	if tradeType == tradeTypeContract{
+	if tradeType == TradeTypeContract{
 		url = contractUrl
-	} else if tradeType == tradeTypeCurrent {
+	} else if tradeType == TradeTypeCurrent {
 		url = currentUrl
 	}
 
@@ -113,32 +120,48 @@ func (o *OKExAPI)Init(tradeType int){
 			}
 
 			// log.Printf("recv: %s", message)
-			var records []map[string]interface{}
-			if err = json.Unmarshal([]byte(message), &records); err != nil {
+
+			var response []map[string]interface{}
+			if err = json.Unmarshal([]byte(message), &response); err != nil {
 				log.Println("Unmarshal:", err)
 				continue
 			}
 
-			if records[0]["channel"].(string) == EventAddChannel {
+			if response[0]["channel"].(string) == EventAddChannel {
 
 			}else{
+
+				// 处理期货价格深度
+				if o.depthList != nil {
+					data := response[0]["data"].(map[string]interface{})
+					for i, item := range o.depthList {
+						if item.Name == response[0]["channel"] {
+
+							o.depthList[i].Asks = data["asks"].([]interface{})
+							o.depthList[i].Bids = data["bids"].([]interface{})
+							unitTime := time.Unix(int64(data["timestamp"].(float64))/1000, 0)
+							timeHM := unitTime.Format("2006-01-02 03:04:05 PM")
+							o.depthList[i].Time = timeHM
+							log.Printf("Result:%s", o.depthList[i])
+
+							goto END
+						}
+					}
+				}
+
+				// 处理现货价格
 				if o.tickerList != nil {
 					for i, ticker := range o.tickerList {
-						if ticker.Name == records[0]["channel"] {
-							o.tickerList[i].Value = records[0]["data"]
-							break
+						if ticker.Name == response[0]["channel"] {
+							// o.tickerList[i].Time = timeHM
+							o.tickerList[i].Value = response[0]["data"]
+							goto END
 						}
 					}
 				}
 			}
 
-			// record := records[0]["data"].(map[string]interface{})
-			// log.Printf("record: %v", record)
-			// if record["timestamp"] != nil {
-			// 	unitTime := time.Unix(int64(record["timestamp"].(float64))/1000, 0)
-			// 	timeHM := unitTime.Format("2006-01-02 03:04:05 PM")
-			// 	log.Printf("recv: %v", timeHM)
-			// }
+			END:
 		}
 
 	}()
@@ -155,11 +178,15 @@ func (o *OKExAPI)Close(){
 	}
 }
 
+/*
+① X值为：btc, ltc
+② Y值为：this_week, next_week, quarter
+*/
 func (o *OKExAPI) StartContractTicker(coin string, period string, tag string) {
-	channel := strings.Replace(ChannelTicker, "X", coin, 1)
+	channel := strings.Replace(ChannelContractTicker, "X", coin, 1)
 	channel = strings.Replace(channel, "Y", period, 1)
 
-	ticker := tickerValue{
+	ticker := TickerListItem{
 		Tag: tag,
 		Name: channel,
 	}
@@ -174,12 +201,18 @@ func (o *OKExAPI) StartContractTicker(coin string, period string, tag string) {
 	o.command(data, nil)
 }
 
+/*
+① X值为：ltc_btc eth_btc etc_btc bch_btc btc_usdt 
+eth_usdt ltc_usdt etc_usdt bch_usdt etc_eth bt1_btc 
+bt2_btc btg_btc qtum_btc hsr_btc neo_btc gas_btc 
+qtum_usdt hsr_usdt neo_usdt gas_usdt
+*/
 func (o *OKExAPI) StartCurrentTicker(coinA string, coinB string, tag string) {
 	pair := (coinA + "_" + coinB)
 	
-	channel := strings.Replace(CurrentChannelTicker, "X", pair, 1)
+	channel := strings.Replace(ChannelCurrentChannelTicker, "X", pair, 1)
 
-	ticker := tickerValue{
+	ticker := TickerListItem{
 		Tag: tag,
 		Name: channel,
 	}
@@ -198,11 +231,29 @@ func (o *OKExAPI) GetExchangeName() string {
 	return "OKEX";
 }
 
-func (o *OKExAPI)GetTickerValue(tag string) map[string]interface{} {
+func (o *OKExAPI)GetTickerValue(tag string) *TickerValue {
 	for _, ticker := range o.tickerList {
 		if ticker.Tag == tag {
 			if ticker.Value != nil {
-				return ticker.Value.(map[string]interface{})
+				// return ticker.Value.(map[string]interface{})
+				var lastValue float64
+				tmp := ticker.Value.(map[string]interface{})
+				if o.tradeType == TradeTypeContract {
+					lastValue = tmp["last"].(float64)
+				} else if o.tradeType == TradeTypeCurrent {
+					value, _ := strconv.ParseFloat(tmp["last"].(string), 64)
+					lastValue = value
+				}
+
+				unitTime := time.Unix(int64(tmp["timestamp"].(float64))/1000, 0)
+				timeHM := unitTime.Format("2006-01-02 03:04:05 PM")
+
+				tickerValue := &TickerValue {
+					Last: lastValue,
+					Time: timeHM,
+				}
+				
+				return tickerValue
 			}
 		}
 	}
@@ -228,6 +279,53 @@ func (o *OKExAPI) Login() {
 		"secret_key": constSecretKey,
 	}
 	o.command(data,parameters)	
+}
+
+/*
+	① X值为：btc, ltc
+	② Y值为：this_week, next_week, quarter
+	③ Z值为：5, 10, 20(获取深度条数)  
+*/
+func (o *OKExAPI) GetContractDepth(coin string, period string, depth string) {
+
+	channel := strings.Replace(ChannelContractDepth, "X", coin, 1)
+	channel = strings.Replace(channel, "Y", period, 1)
+	channel = strings.Replace(channel, "Z", depth, 1)
+
+	depthItem := DepthListItem {
+		Name: channel,
+	}
+	o.depthList = append(o.depthList, depthItem)
+
+	data := map[string]string {
+		"event": EventAddChannel,
+		"channel": channel,
+	}
+
+	o.command(data,nil)	
+}
+
+/*
+X值为：ltc_btc eth_btc etc_btc bch_btc btc_usdt eth_usdt 
+ltc_usdt etc_usdt bch_usdt etc_eth bt1_btc bt2_btc btg_btc 
+qtum_btc hsr_btc neo_btc gas_btc qtum_usdt hsr_usdt neo_usdt gas_usdt
+Y值为: 5, 10, 20(获取深度条数)
+*/
+func (o *OKExAPI) GetCurrentDepth(pair string, depth string) {
+	channel := strings.Replace(ChannelCurrentDepth, "X", pair, 1)
+	channel = strings.Replace(channel, "Y", depth, 1)
+
+	depthItem := DepthListItem {
+		Name: channel,
+	}
+	o.depthList = append(o.depthList, depthItem)
+
+	data := map[string]string {
+		"event": EventAddChannel,
+		"channel": channel,
+	}
+
+	o.command(data,nil)	
 }
 
 func (o *OKExAPI)command(data map[string]string, parameters map[string]string) error{

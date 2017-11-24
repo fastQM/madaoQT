@@ -7,15 +7,42 @@ import (
 	"strconv"
 )
 
-func Compare(current float64, 
-		currentExchange string,
-		contract float64,
-		contractExchange string) {
+func _TestGetContractDepth(t *testing.T) {
+	okex := new(OKExAPI)
+	okex.Init(tradeTypeContract)
 
-	log.Printf("现货(%s):%f, 期货(%s):%f， 价差[(期货-现货）/现货]:%f%%", 
-	currentExchange, current, 
-	contractExchange, contract,
-	(contract - current) * 100/current)
+	for{
+		select{
+			case event := <- okex.WatchEvent():
+				if event == EventConnected{
+					log.Printf("connected")
+					okex.GetContractDepth("btc", "this_week", "20")
+					// okex.StartContractTicker("btc", Y_THIS_WEEK, "test")
+				}else if event == EventError {
+					log.Printf("reconnnect")
+					okex.Init(tradeTypeContract)
+				}
+		}
+	}
+}
+
+func TestGetCurrentDepth(t *testing.T) {
+	okex := new(OKExAPI)
+	okex.Init(tradeTypeCurrent)
+
+	for{
+		select{
+			case event := <- okex.WatchEvent():
+				if event == EventConnected{
+					log.Printf("connected")
+					okex.GetCurrentDepth("btc_usdt", "5")
+					// okex.StartContractTicker("btc", Y_THIS_WEEK, "test")
+				}else if event == EventError {
+					log.Printf("reconnnect")
+					okex.Init(tradeTypeCurrent)
+				}
+		}
+	}
 }
 
 func TestExchangesTicker(t *testing.T) {
@@ -51,28 +78,28 @@ func TestExchangesTicker(t *testing.T) {
 					Compare(currentLast, okex2.GetExchangeName(), contractLast, okex.GetExchangeName())
 				}
 
-				value := polo.GetTickerValue("USDT_BTC")
-				if value != nil && currentBTC != nil {
-					contractLast := contractBTC["last"].(float64)
-					current, _ := strconv.ParseFloat(value["last"].(string), 64)
-					// log.Printf("%s: 现货: %v", polo.GetExchangeName(), value["last"])
-					Compare(current, polo.GetExchangeName(), contractLast, okex.GetExchangeName())
-				}
+				// value := polo.GetTickerValue("USDT_BTC")
+				// if value != nil && currentBTC != nil {
+				// 	contractLast := contractBTC["last"].(float64)
+				// 	current, _ := strconv.ParseFloat(value["last"].(string), 64)
+				// 	// log.Printf("%s: 现货: %v", polo.GetExchangeName(), value["last"])
+				// 	Compare(current, polo.GetExchangeName(), contractLast, okex.GetExchangeName())
+				// }
 
-				values := bittrex.GetTickerValue("USDT-BTC")
+				// values := bittrex.GetTickerValue("USDT-BTC")
 
-				if value != nil && values != nil {
-					last := values["Last"].(float64)
-					contractLast := contractBTC["last"].(float64)
+				// if value != nil && values != nil {
+				// 	last := values["Last"].(float64)
+				// 	contractLast := contractBTC["last"].(float64)
 
-					Compare(last, bittrex.GetExchangeName(), contractLast, okex.GetExchangeName())
-				}
+				// 	Compare(last, bittrex.GetExchangeName(), contractLast, okex.GetExchangeName())
+				// }
 
 
 			case event := <- okex.WatchEvent():
 				if event == EventConnected{
 					log.Printf("connected")
-					okex.StartContractTicker(X_BTC, Y_THIS_WEEK, tag1)
+					okex.StartContractTicker("btc", Y_THIS_WEEK, tag1)
 				}else if event == EventError {
 					log.Printf("reconnnect")
 					okex.Init(tradeTypeContract)

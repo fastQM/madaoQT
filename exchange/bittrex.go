@@ -12,7 +12,7 @@ import (
 const BittrexMarketUrl = "https://bittrex.com/api/v1.1/public/getticker?market="
 
 type BittrexAPI struct {
-	tickerList []tickerValue
+	tickerList []TickerListItem
 }
 
 func (b *BittrexAPI) Init() {
@@ -77,7 +77,7 @@ func (b *BittrexAPI) AddTicker(coinA string, coinB string, tag string) {
 	pair := (strings.ToUpper(coinA) + "-" + strings.ToUpper(coinB))
 
 	// log.Printf("Pair:%v", pair)
-	ticker := tickerValue{
+	ticker := TickerListItem{
 		Tag: tag,
 		Name: pair,
 	}

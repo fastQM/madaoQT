@@ -10,12 +10,11 @@ import (
 )
 
 type PoloniexAPI struct {
-	tickerList []tickerValue
+	tickerList []TickerListItem
 }
 
 func (p *PoloniexAPI) Init() {
 
-	// get ticker
 	go func(){
 		for {
 			select {
@@ -59,7 +58,7 @@ func (p *PoloniexAPI) AddTicker(coinA string, coinB string, tag string) {
 	pair := (strings.ToUpper(coinA) + "_" + strings.ToUpper(coinB))
 
 	// log.Printf("Pair:%v", pair)
-	ticker := tickerValue {
+	ticker := TickerListItem {
 		Tag: tag,
 		Name: pair,
 	}
