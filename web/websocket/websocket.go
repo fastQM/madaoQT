@@ -2,22 +2,28 @@ package websocket
 
 import (
 	"fmt"
+	// "log"
 	
 	"github.com/kataras/iris"
 	"github.com/kataras/iris/websocket"	
 )
 
-func SetupWebsocket(app *iris.Application) {
+type WebsocketServer struct {
+	ws *websocket.Server
+}
+
+func (w *WebsocketServer)SetupWebsocket(app *iris.Application) {
 	// create our echo websocket server
-	ws := websocket.New(websocket.Config{
+	w.ws = websocket.New(websocket.Config{
 		// ReadBufferSize:  1024,
 		// WriteBufferSize: 1024,
 	})
-	ws.OnConnection(handleConnection)
+
+	w.ws.OnConnection(w.handleConnection)
 
 	// register the server on an endpoint.
 	// see the inline javascript code in the websockets.html, this endpoint is used to connect to the server.
-	app.Get("/websocket", ws.Handler())
+	app.Get("/websocket", w.ws.Handler())
 
 	// serve the javascript built'n client-side library,
 	// see weboskcets.html script tags, this path is used.
@@ -26,8 +32,18 @@ func SetupWebsocket(app *iris.Application) {
 	})
 }
 
-func handleConnection(c websocket.Connection) {
-	c.Emit("chat", "welcome!")
+func (w *WebsocketServer)BroadcastAll(msg interface{}){
+
+	connections := w.ws.GetConnections()
+	if connections != nil && len(connections) != 0 {
+		connections[0].To(websocket.All).Emit("chat", msg)
+	}
+
+	return
+}
+
+func (w *WebsocketServer)handleConnection(c websocket.Connection) {
+
 	// Read events from browser
 	c.On("chat", func(msg string) {
 		// Print the message to the console, c.Context() is the iris's http context.

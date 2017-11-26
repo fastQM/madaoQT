@@ -1,35 +1,42 @@
-package main
+package web
 
 import (
     "github.com/kataras/iris"
 	
-    controllers "madaoqt/web/controllers"
-    websocket "madaoqt/web/websocket"
+    controllers "madaoQT/web/controllers"
+    websocket "madaoQT/web/websocket"
 )
 
-func setupHttpServer() {
-	
-    app := iris.New()
+type HttpServer struct {
+    app *iris.Application
+    ws *websocket.WebsocketServer
+}
 
-    websocket.SetupWebsocket(app)
+func (h *HttpServer)SetupHttpServer() {
+	
+    h.app = iris.New()
+
+    // websocket.SetupWebsocket(app)
+    h.ws = new(websocket.WebsocketServer)
+    h.ws.SetupWebsocket(h.app)
 
     // views := iris.HTML("./views", ".html")
     // views.Reload(true)  //开发模式，强制每次请求都更新页面
 
-    app.RegisterView(iris.HTML("./views", ".html"))
+    h.app.RegisterView(iris.HTML("/Users/qiumin/Desktop/btnas/agent/src/madaoQT/web/views", ".html"))
     
-    app.Controller("/helloworld", new(controllers.HelloWorldController))
+    h.app.Controller("/helloworld", new(controllers.HelloWorldController))
 
-    app.Get("/", func(ctx iris.Context) {
+    h.app.Get("/", func(ctx iris.Context) {
         // Bind: {{.message}} with "Hello world!"
         // ctx.ViewData("message", "Hello world!")
         // Render template file: ./views/hello.html
         ctx.View("websockets.html")
     })
 
-    app.Run(iris.Addr(":8080"))
+    h.app.Run(iris.Addr(":8080"))
 }
 
-func main(){
-    setupHttpServer()
+func (h *HttpServer)BroadcastByWebsocket(msg interface{}){
+    h.ws.BroadcastAll(msg)
 }

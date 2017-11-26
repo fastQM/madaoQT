@@ -5,11 +5,16 @@ import (
 	"time"
 
 	Exchange "madaoQT/exchange"
+	Rules "madaoQT/rules"
+	Web "madaoQT/web"
 )
 
 func main(){
 
-	analyzer := new(Exchange.IAnalyzer)
+
+
+
+	analyzer := new(Rules.IAnalyzer)
 	analyzer.Init(nil)
 
 	log.Print("启动OKEx合约监视程序")
@@ -19,6 +24,21 @@ func main(){
 	log.Printf("启动OKEx现货监视程序")
 	okexCurrent := new (Exchange.OKExAPI)
 	okexCurrent.Init(Exchange.TradeTypeCurrent)
+
+	http := new(Web.HttpServer)
+	go http.SetupHttpServer()
+
+	go func(){
+		
+		for{
+			select{
+			case event := <-analyzer.WatchEvent():
+				if event.EventType == Rules.EventTypeTrigger {
+					http.BroadcastByWebsocket(event.Msg)
+				}
+			}
+		}
+	}()
 
 	for{
 		select{

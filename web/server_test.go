@@ -1,11 +1,20 @@
-package main
+package web
 
 import (
+	"time"
 	"testing"
-	utils "madaoqt/utils"
+	// utils "madaoQT/utils"
 )
 
 func TestCreateServer(t *testing.T) {
-	createServer();
-	utils.SleepAsyncBySecond(30)
+	
+	server := new(HttpServer)
+	go server.SetupHttpServer()
+
+	for{
+		select{
+		case <-time.After(3*time.Second):
+			server.BroadcastByWebsocket("hello, world")
+		}
+	}
 }
