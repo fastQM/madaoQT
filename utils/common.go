@@ -29,3 +29,10 @@ func RevertArray(array ...interface{}) []interface{} {
 	}
 	return array
 }
+
+func FormatTime(timestamp_ms int64) string {
+	timeFormat := "2006-01-02 06:04:05"
+	location,_ := time.LoadLocation("Asia/Shanghai")
+	unixTime := time.Unix(timestamp_ms/1000, 0)
+	return unixTime.In(location).Format(timeFormat)
+}

@@ -6,7 +6,7 @@ import (
 	"log"
 )
 
-func TestGetAveragePrice(t *testing.T) {
+func _TestGetAveragePrice(t *testing.T) {
 	values := []DepthPrice{
 		{price: 155, qty:10},
 		{price: 165, qty:10},
@@ -22,42 +22,74 @@ func _TestGetContractDepth(t *testing.T) {
 
 	value := okex.GetDepthValue("btc", "")
 	log.Printf("Value:%v", value)
-
-	// for{
-	// 	select{
-	// 		case event := <- okex.WatchEvent():
-	// 			if event == EventConnected{
-	// 				log.Printf("connected")
-	// 				okex.GetContractDepth("btc", "this_week", "20")
-	// 				// okex.StartContractTicker("btc", Y_THIS_WEEK, "test")
-	// 			}else if event == EventError {
-	// 				log.Printf("reconnnect")
-	// 				okex.Init(TradeTypeContract)
-	// 			}
-	// 	}
-	// }
 }
 
-func TestGetCurrentDepth(t *testing.T) {
+func _TestGetCurrentDepth(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(TradeTypeCurrent)
 
 	value := okex.GetDepthValue("btc", "usdt")
-	log.Printf("Value:%v", value)	
+	log.Printf("Value:%v", value)
+}
 
-	// for{
-	// 	select{
-	// 		case event := <- okex.WatchEvent():
-	// 			if event == EventConnected{
-	// 				log.Printf("connected")
-	// 				okex.GetCurrentDepth("btc_usdt", "5")
-	// 				// okex.StartContractTicker("btc", Y_THIS_WEEK, "test")
-	// 			}else if event == EventError {
-	// 				log.Printf("reconnnect")
-	// 				okex.Init(TradeTypeCurrent)
-	// 			}
-	// 	}
-	// }
+func _TestOKEXContractTicker(t *testing.T) {
+	okex := new(OKExAPI)
+	okex.Init(TradeTypeContract)
+
+	okex.StartContractTicker("ltc", "this_week", "ltc_contract")	
+
+	counter := 3
+	for {
+		select{
+		case <-time.After(1*time.Second):
+			values := okex.GetTickerValue("ltc_contract")
+			if values != nil {
+				log.Printf("Value:%v %v", values)
+			}
+			if counter > 0{
+				counter--
+			}else{
+				return
+			}
+		}
+	}
+}
+
+func _TestOKEXCurrentTicker(t *testing.T) {
+	okex := new(OKExAPI)
+	okex.Init(TradeTypeCurrent)
+
+	okex.StartCurrentTicker("ltc", "usdt", "ltc_current")	
+
+	counter := 3
+	for {
+		select{
+		case <-time.After(1*time.Second):
+			values := okex.GetTickerValue("ltc_current")
+			if values != nil {
+				log.Printf("Value:%v %v", values)
+			}
+			if counter > 0{
+				counter--
+			}else{
+				return
+			}
+		}
+	}
+}
+
+func TestGetUserInfo(t *testing.T) {
+	okex := new(OKExAPI)
+	okex.Init(TradeTypeContract)
+
+	log.Printf("UserInfo:%v", okex.GetUserInfo())
+}
+
+func TestGetTrades(t *testing.T) {
+	okex := new(OKExAPI)
+	okex.Init(TradeTypeContract)
+
+	log.Printf("TradesInfo:%v", okex.GetTradesInfo())
 }
 
 func _TestBittrexTicker(t *testing.T) {

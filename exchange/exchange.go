@@ -40,6 +40,7 @@ type DepthListItem struct {
 }
 
 type DepthValue struct {
+	Time string
 	AskAverage float64 
 	AskQty float64
 	BidAverage float64

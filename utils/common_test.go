@@ -3,6 +3,7 @@ package utils
 import (
 	"testing"
 	"log"
+	
 )
 
 func TestRevert(t *testing.T){
@@ -19,4 +20,9 @@ func TestRevert(t *testing.T){
 
 	array1 = RevertArray(array1)
 	log.Printf("array1:%v", array1)
+}
+
+func TestTimeLocation(t *testing.T) {
+	time := FormatTime(1511680608304)
+	log.Printf(time)
 }

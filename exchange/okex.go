@@ -83,10 +83,18 @@ type OKExAPI struct{
 	tradeType TradeType
 
 	/* Each channel has a depth */
-	depthChannels map[string]chan *DepthValue
+	messageChannels map[string]chan interface{}
 
 	/* 建仓数量 */
 	qty float64
+}
+
+func formatTimeOKEX() string {
+	timeFormat := "2006-01-02 06:04:05"
+	location,_ := time.LoadLocation("Local")
+	// unixTime := time.Unix(timestamp/1000, 0)
+	unixTime := time.Now()
+	return unixTime.In(location).Format(timeFormat)
 }
 
 func (o *OKExAPI) WatchEvent() chan EventType {
@@ -113,9 +121,9 @@ func (o *OKExAPI)Init(tradeType TradeType){
 	o.event = make(chan EventType)
 	o.tradeType = tradeType
 
-	o.depthChannels = make(map[string]chan *DepthValue)
+	o.messageChannels = make(map[string]chan interface{})
 
-	o.qty = 10
+	o.qty = 100
 
 	var url string
 	if tradeType == TradeTypeContract{
@@ -128,6 +136,7 @@ func (o *OKExAPI)Init(tradeType TradeType){
 	if err != nil {
 		log.Printf("Fail to dial: %v", err)
 		go o.triggerEvent(EventError)
+		return
 	}
 
 	go func(){
@@ -149,10 +158,29 @@ func (o *OKExAPI)Init(tradeType TradeType){
 
 			if response[0]["channel"].(string) == EventAddChannel || response[0]["channel"].(string) == EventRemoveChannel  {
 
-			}else{
+			}else if response[0]["channel"].(string) == ChannelUserInfo {
+				if o.messageChannels[ChannelUserInfo] != nil {
+					data := response[0]["data"].(map[string]interface{})
+					if data != nil && data["result"] == true {
+						info := data["info"]
+						go func() {
+							o.messageChannels[ChannelUserInfo] <- info
+							close(o.messageChannels[ChannelUserInfo])
+							delete(o.messageChannels, ChannelUserInfo)
+						}()
+					}
+				}
+			} else if response[0]["channel"].(string) == ChannelTrades {
+				log.Printf("trades: %v", response[0]["data"])
+				go func() {
+					o.messageChannels[ChannelTrades] <- response[0]["data"]
+					close(o.messageChannels[ChannelTrades])
+					delete(o.messageChannels, ChannelTrades)
+				}()
+			} else{
 
 				// 处理期货价格深度
-				if o.depthChannels[response[0]["channel"].(string)] != nil {
+				if o.messageChannels[response[0]["channel"].(string)] != nil {
 
 					depth := new(DepthValue)
 					data := response[0]["data"].(map[string]interface{})
@@ -164,6 +192,8 @@ func (o *OKExAPI)Init(tradeType TradeType){
 						log.Printf("Invalid data")
 						goto END
 					}
+
+					depth.Time = formatTimeOKEX()
 
 					asks := data["asks"].([]interface{})
 					bids := data["bids"].([]interface{})
@@ -219,14 +249,12 @@ func (o *OKExAPI)Init(tradeType TradeType){
 						}
 					}
 
-					// log.Printf("Result:%v", depth)
+					log.Printf("Result:%v", depth)
 
 					go func(){
-						if o.depthChannels[response[0]["channel"].(string)] != nil {
-							o.depthChannels[response[0]["channel"].(string)] <- depth
-							close(o.depthChannels[response[0]["channel"].(string)])
-							delete(o.depthChannels, response[0]["channel"].(string))
-						}
+						o.messageChannels[response[0]["channel"].(string)] <- depth
+						close(o.messageChannels[response[0]["channel"].(string)])
+						delete(o.messageChannels, response[0]["channel"].(string))
 					}()
 
 					goto END
@@ -329,12 +357,12 @@ func (o *OKExAPI)GetTickerValue(tag string) *TickerValue {
 					lastValue = value
 				}
 
-				unitTime := time.Unix(int64(tmp["timestamp"].(float64))/1000, 0)
-				timeHM := unitTime.Format("2006-01-02 06:04:05")
+				// unitTime := time.Unix(int64(tmp["timestamp"].(float64))/1000, 0)
+				// timeHM := unitTime.Format("2006-01-02 06:04:05")
 
 				tickerValue := &TickerValue {
 					Last: lastValue,
-					Time: timeHM,
+					Time: formatTimeOKEX(),
 				}
 				
 				return tickerValue
@@ -379,11 +407,11 @@ func (o *OKExAPI) SwithContractDepth(open bool, coin string, period string, dept
 	var event string
 	if open {
 		event = EventAddChannel
-		o.depthChannels[channel] = make(chan *DepthValue)
+		o.messageChannels[channel] = make(chan interface{})
 
 	} else {
 		event = EventRemoveChannel
-		delete(o.depthChannels, channel)
+		delete(o.messageChannels, channel)
 	}
 
 	data := map[string]string {
@@ -410,10 +438,10 @@ func (o *OKExAPI) SwitchCurrentDepth(open bool, coinA string, coinB string, dept
 	var event string
 	if open {
 		event = EventAddChannel
-		o.depthChannels[channel] = make(chan *DepthValue)
+		o.messageChannels[channel] = make(chan interface{})
 	} else {
 		event = EventRemoveChannel
-		delete(o.depthChannels, channel)
+		delete(o.messageChannels, channel)
 	}
 
 	data := map[string]string {
@@ -438,14 +466,12 @@ func (o *OKExAPI)GetDepthValue(coinA string, coinB string) *DepthValue {
 		// defer o.SwitchCurrentDepth(false, coinA, coinB, "20")
 	}
 
-	for{
-		select{
-		case <-time.After(1*time.Second):
-			log.Print("timeout to wait for the depths")
-			return nil	
-		case value := <- o.depthChannels[channel]:
-			return value
-		}
+	select{
+	case <-time.After(1*time.Second):
+		log.Print("timeout to wait for the depths")
+		return nil	
+	case value := <- o.messageChannels[channel]:
+		return value.(*DepthValue)
 	}
 }	
 
@@ -492,8 +518,69 @@ func (o *OKExAPI)command(data map[string]string, parameters map[string]string) e
 		   return errors.New("Marshal failed")
 	}
 	
-	// log.Printf("Cmd:%v", string(cmd))
+	log.Printf("Cmd:%v", string(cmd))
 	o.conn.WriteMessage(websocket.TextMessage, cmd)
 
 	return nil
+}
+
+
+/* 合约交易接口 */
+
+func (o *OKExAPI) Trade() {
+
+}
+
+func (o *OKExAPI) CancelTrade() {
+
+}
+
+func (o *OKExAPI) GetUserInfo() map[string]interface{} {
+	data := map[string]string{
+		"event":EventAddChannel,
+		"channel": ChannelUserInfo,
+	}
+
+	parameters := map[string]string {
+		"api_key": constApiKey,
+		"secret_key": constSecretKey,
+	}
+
+	o.messageChannels[ChannelUserInfo] = make(chan interface{})	
+
+	o.command(data,parameters)
+
+	select{
+	case <- time.After(1 * time.Second):
+		log.Printf("Timeout to get user account info")
+		return nil
+	case msg := <- o.messageChannels[ChannelUserInfo]:
+		return msg.(map[string]interface{})
+	}
+}
+
+
+// 没有响应
+func (o *OKExAPI) GetTradesInfo() map[string]interface{} {
+	data := map[string]string{
+		"event":EventAddChannel,
+		"channel": ChannelTrades,
+	}
+
+	parameters := map[string]string {
+		"api_key": constApiKey,
+		"secret_key": constSecretKey,
+	}
+
+	o.messageChannels[ChannelTrades] = make(chan interface{})	
+
+	o.command(data,parameters)
+
+	select{
+	case <- time.After(5 * time.Second):
+		log.Printf("Timeout to get user trades info")
+		return nil
+	case msg := <- o.messageChannels[ChannelUserInfo]:
+		return msg.(map[string]interface{})
+	}
 }

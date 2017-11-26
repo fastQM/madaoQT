@@ -9,10 +9,6 @@ import (
 	bson "gopkg.in/mgo.v2/bson"
 )
 
-const MongoURL = "mongodb://localhost"
-const Database = "tokens"
-const Collection = "tokendbs"
-
 type Charts struct {
 	session *mgo.Session
 	collection *mgo.Collection
@@ -41,7 +37,7 @@ func (t *Charts) Connect() error {
 		return err
 	}
 	session.SetMode(mgo.Monotonic, true)
-	c := session.DB(Database).C(Collection)
+	c := session.DB(Database).C(ChartCollectin)
 
 	t.session = session
 	t.collection = c
