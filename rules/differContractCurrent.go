@@ -127,6 +127,7 @@ func (a *IAnalyzer) Watch() {
 				coin, valueContract.Last, valueCurrent.Last, difference)
 
 			log.Print(msg)
+			a.triggerEvent(EventTypeTrigger, msg)
 
 			if math.Abs(difference) > a.config.Trigger {
 				if valueContract.Last > valueCurrent.Last {
@@ -139,6 +140,7 @@ func (a *IAnalyzer) Watch() {
 						sell.BidAverage, sell.BidQty, exchange.GetQty(), sell.BidByOrder)
 
 					log.Print(msg)
+					a.triggerEvent(EventTypeTrigger, msg)
 
 					exchange = *a.currents[coin].exchange
 					buy := exchange.GetDepthValue(coin, "usdt")
@@ -146,12 +148,14 @@ func (a *IAnalyzer) Watch() {
 						buy.AskAverage, buy.AskQty, exchange.GetQty(), buy.AskByOrder)
 
 					log.Print(msg)
+					a.triggerEvent(EventTypeTrigger, msg)
 
 					msg = fmt.Sprintf("[深度均价收益：%v%%, 限制资金收益：%v%%]",
 						Exchange.GetRatio(sell.BidAverage, buy.AskAverage),
 						Exchange.GetRatio(sell.BidByOrder, buy.AskByOrder))
 
 					log.Print(msg)
+					a.triggerEvent(EventTypeTrigger, msg)
 
 				}else {
 					log.Printf("买入合约, 卖出现货")
@@ -162,6 +166,7 @@ func (a *IAnalyzer) Watch() {
 						buy.AskAverage, buy.AskQty, exchange.GetQty(), buy.AskByOrder)
 
 					log.Print(msg)
+					a.triggerEvent(EventTypeTrigger, msg)
 
 					exchange = *a.currents[coin].exchange
 					sell := exchange.GetDepthValue(coin, "usdt")
@@ -169,14 +174,15 @@ func (a *IAnalyzer) Watch() {
 						sell.BidAverage, sell.BidQty, exchange.GetQty(), sell.BidByOrder)
 
 					log.Print(msg)
+					a.triggerEvent(EventTypeTrigger, msg)
 
 					msg = fmt.Sprintf("[深度均价收益：%v%%, 限制资金收益：%v%%]",
 						Exchange.GetRatio(buy.AskAverage, sell.BidAverage),
 						Exchange.GetRatio(buy.AskByOrder, sell.BidByOrder))
 
 					log.Print(msg)
+					a.triggerEvent(EventTypeTrigger, msg)
 				}
-				a.triggerEvent(EventTypeTrigger, msg)
 			}	
 		}
 	}

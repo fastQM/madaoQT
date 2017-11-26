@@ -152,8 +152,7 @@ func (o *OKExAPI)Init(tradeType TradeType){
 			}else{
 
 				// 处理期货价格深度
-				channel := o.depthChannels[response[0]["channel"].(string)]
-				if channel != nil {
+				if o.depthChannels[response[0]["channel"].(string)] != nil {
 
 					depth := new(DepthValue)
 					data := response[0]["data"].(map[string]interface{})
@@ -220,10 +219,14 @@ func (o *OKExAPI)Init(tradeType TradeType){
 						}
 					}
 
-					log.Printf("Result:%v", depth)
+					// log.Printf("Result:%v", depth)
 
 					go func(){
-						channel <- depth
+						if o.depthChannels[response[0]["channel"].(string)] != nil {
+							o.depthChannels[response[0]["channel"].(string)] <- depth
+							close(o.depthChannels[response[0]["channel"].(string)])
+							delete(o.depthChannels, response[0]["channel"].(string))
+						}
 					}()
 
 					goto END
@@ -367,7 +370,7 @@ func (o *OKExAPI) Login() {
 	② Y值为：this_week, next_week, quarter
 	③ Z值为：5, 10, 20(获取深度条数)  
 */
-func (o *OKExAPI) SwithContractDepth(open bool, coin string, period string, depth string) chan *DepthValue {
+func (o *OKExAPI) SwithContractDepth(open bool, coin string, period string, depth string) string {
 
 	channel := strings.Replace(ChannelContractDepth, "X", coin, 1)
 	channel = strings.Replace(channel, "Y", period, 1)
@@ -390,7 +393,7 @@ func (o *OKExAPI) SwithContractDepth(open bool, coin string, period string, dept
 
 	o.command(data,nil)	
 
-	return o.depthChannels[channel]
+	return channel
 }
 
 /*
@@ -399,7 +402,7 @@ ltc_usdt etc_usdt bch_usdt etc_eth bt1_btc bt2_btc btg_btc
 qtum_btc hsr_btc neo_btc gas_btc qtum_usdt hsr_usdt neo_usdt gas_usdt
 Y值为: 5, 10, 20(获取深度条数)
 */
-func (o *OKExAPI) SwitchCurrentDepth(open bool, coinA string, coinB string, depth string) chan *DepthValue {
+func (o *OKExAPI) SwitchCurrentDepth(open bool, coinA string, coinB string, depth string) string {
 	pair := (coinA + "_" + coinB)
 	channel := strings.Replace(ChannelCurrentDepth, "X", pair, 1)
 	channel = strings.Replace(channel, "Y", depth, 1)
@@ -419,20 +422,20 @@ func (o *OKExAPI) SwitchCurrentDepth(open bool, coinA string, coinB string, dept
 	}
 
 	o.command(data,nil)	
-	return o.depthChannels[channel]
+	return channel
 	
 }
 
 func (o *OKExAPI)GetDepthValue(coinA string, coinB string) *DepthValue {
 
-	var channel chan *DepthValue
+	var channel string
 
 	if o.tradeType == TradeTypeContract {
 		channel = o.SwithContractDepth(true, coinA, "this_week", "20")
-		defer o.SwithContractDepth(false, coinA, "this_week", "20")
+		// defer o.SwithContractDepth(false, coinA, "this_week", "20")
 	} else if o.tradeType == TradeTypeCurrent {
 		channel = o.SwitchCurrentDepth(true, coinA, coinB, "20")
-		defer o.SwitchCurrentDepth(false, coinA, coinB, "20")
+		// defer o.SwitchCurrentDepth(false, coinA, coinB, "20")
 	}
 
 	for{
@@ -440,7 +443,7 @@ func (o *OKExAPI)GetDepthValue(coinA string, coinB string) *DepthValue {
 		case <-time.After(1*time.Second):
 			log.Print("timeout to wait for the depths")
 			return nil	
-		case value := <- channel:
+		case value := <- o.depthChannels[channel]:
 			return value
 		}
 	}
@@ -489,7 +492,7 @@ func (o *OKExAPI)command(data map[string]string, parameters map[string]string) e
 		   return errors.New("Marshal failed")
 	}
 	
-	log.Printf("Cmd:%v", string(cmd))
+	// log.Printf("Cmd:%v", string(cmd))
 	o.conn.WriteMessage(websocket.TextMessage, cmd)
 
 	return nil
