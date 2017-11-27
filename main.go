@@ -67,7 +67,7 @@ func main(){
 			} else if event == Exchange.EventError {
 				okexCurrent.Init(Exchange.TradeTypeCurrent)
 			}
-		case <- time.After(3 * time.Second): 
+		case <- time.After(5 * time.Second): 
 			analyzer.Watch()
 		}
 	}
