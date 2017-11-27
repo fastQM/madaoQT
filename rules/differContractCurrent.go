@@ -118,6 +118,11 @@ func (a *IAnalyzer) Watch() {
 		}
 	}
 
+	placeOrderQuan := map[string]float64 {
+		"btc": 0.1,
+		"ltc": 10,
+	}
+
 	for _, coin := range a.coins {
 		valueContract := a.contracts[coin].value
 		valueCurrent := a.currents[coin].value
@@ -135,17 +140,17 @@ func (a *IAnalyzer) Watch() {
 					
 					// 期货判断bids深度
 					exchange := *a.contracts[coin].exchange
-					sell := exchange.GetDepthValue(coin, "")
+					sell := exchange.GetDepthValue(coin, "", placeOrderQuan[coin])
 					msg = fmt.Sprintf("[合约买单均格：%v 合约买单量:%v 操盘资金量：%v 下单均格：%v]", 
-						sell.BidAverage, sell.BidQty, exchange.GetQty(), sell.BidByOrder)
+						sell.BidAverage, sell.BidQty, placeOrderQuan[coin], sell.BidByOrder)
 
 					log.Print(msg)
 					a.triggerEvent(EventTypeTrigger, msg)
 
 					exchange = *a.currents[coin].exchange
-					buy := exchange.GetDepthValue(coin, "usdt")
+					buy := exchange.GetDepthValue(coin, "usdt", placeOrderQuan[coin])
 					msg = fmt.Sprintf("[现货卖单均价：%v 现货卖单量:%v 操盘资金量:%v 下单均价:%v]",
-						buy.AskAverage, buy.AskQty, exchange.GetQty(), buy.AskByOrder)
+						buy.AskAverage, buy.AskQty, placeOrderQuan[coin], buy.AskByOrder)
 
 					log.Print(msg)
 					a.triggerEvent(EventTypeTrigger, msg)
@@ -161,17 +166,17 @@ func (a *IAnalyzer) Watch() {
 					log.Printf("买入合约, 卖出现货")
 
 					exchange := *a.contracts[coin].exchange
-					buy := exchange.GetDepthValue(coin, "")
+					buy := exchange.GetDepthValue(coin, "", placeOrderQuan[coin])
 					msg = fmt.Sprintf("[合约卖单均格：%v 合约卖单量:%v 操盘资金量：%v 下单均格：%v]", 
-						buy.AskAverage, buy.AskQty, exchange.GetQty(), buy.AskByOrder)
+						buy.AskAverage, buy.AskQty, placeOrderQuan[coin], buy.AskByOrder)
 
 					log.Print(msg)
 					a.triggerEvent(EventTypeTrigger, msg)
 
 					exchange = *a.currents[coin].exchange
-					sell := exchange.GetDepthValue(coin, "usdt")
+					sell := exchange.GetDepthValue(coin, "usdt", placeOrderQuan[coin])
 					msg = fmt.Sprintf("[现货买单均价：%v 现货买单量:%v 操盘资金量:%v 下单均价:%v]",
-						sell.BidAverage, sell.BidQty, exchange.GetQty(), sell.BidByOrder)
+						sell.BidAverage, sell.BidQty, placeOrderQuan[coin], sell.BidByOrder)
 
 					log.Print(msg)
 					a.triggerEvent(EventTypeTrigger, msg)

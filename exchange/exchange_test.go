@@ -13,22 +13,23 @@ func _TestGetAveragePrice(t *testing.T) {
 		{price: 155, qty:10},
 	}
 
-	log.Printf("Ave:%v", GetDepthPriceByOrder(0, values, 25))
+	value1, value2 := GetDepthPriceByOrder(0, values, 25)
+	log.Printf("Ave:%v%v", value1, value2)
 }
 
-func _TestGetContractDepth(t *testing.T) {
+func TestGetContractDepth(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(TradeTypeContract)
 
-	value := okex.GetDepthValue("btc", "")
+	value := okex.GetDepthValue("btc", "", 1)
 	log.Printf("Value:%v", value)
 }
 
-func _TestGetCurrentDepth(t *testing.T) {
+func TestGetCurrentDepth(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(TradeTypeCurrent)
 
-	value := okex.GetDepthValue("btc", "usdt")
+	value := okex.GetDepthValue("btc", "usdt", 1)
 	log.Printf("Value:%v", value)
 }
 
@@ -59,13 +60,13 @@ func _TestOKEXCurrentTicker(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(TradeTypeCurrent)
 
-	okex.StartCurrentTicker("ltc", "usdt", "ltc_current")	
+	okex.StartCurrentTicker("btc", "usdt", "btc_current")	
 
 	counter := 3
 	for {
 		select{
 		case <-time.After(1*time.Second):
-			values := okex.GetTickerValue("ltc_current")
+			values := okex.GetTickerValue("btc_current")
 			if values != nil {
 				log.Printf("Value:%v %v", values)
 			}
@@ -78,14 +79,14 @@ func _TestOKEXCurrentTicker(t *testing.T) {
 	}
 }
 
-func TestGetUserInfo(t *testing.T) {
+func _TestGetUserInfo(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(TradeTypeContract)
 
 	log.Printf("UserInfo:%v", okex.GetUserInfo())
 }
 
-func TestGetTrades(t *testing.T) {
+func _TestGetTrades(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(TradeTypeContract)
 

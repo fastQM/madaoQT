@@ -45,8 +45,10 @@ type DepthValue struct {
 	AskQty float64
 	BidAverage float64
 	BidQty float64
-	AskByOrder float64
+	AskByOrder float64	// 下单深度均价
+	AskPrice float64	// 下单价格
 	BidByOrder float64
+	BidPrice float64
 }
 
 type TickerValue struct {
@@ -62,9 +64,7 @@ type IExchange interface{
 	// AddTicker(coinA string, coinB string, config interface{}, tag string)
 	GetTickerValue(tag string) *TickerValue
 	WatchEvent() chan EventType
-	GetDepthValue(coinA string, coinB string) *DepthValue
-	// 资金量	 
-	GetQty() float64
+	GetDepthValue(coinA string, coinB string, orderQuantity float64) *DepthValue
 }
 
 /* 获取深度价格 */
@@ -111,9 +111,9 @@ func GetDepthAveragePrice(items []DepthPrice) (float64,float64) {
 	return total/quantity, quantity
 }
 
-func GetDepthPriceByOrder(depthType int, items []DepthPrice, orderQty float64) float64 {
+func GetDepthPriceByOrder(depthType int, items []DepthPrice, orderQty float64) (float64,float64) {
 	if items == nil || len(items) == 0 {
-		return (-1)
+		return -1,-1
 	}
 
 	if depthType == DepthTypeAsks {
@@ -127,7 +127,7 @@ func GetDepthPriceByOrder(depthType int, items []DepthPrice, orderQty float64) f
 	}
 
 	if orderQty > total {
-		return (-1)
+		return -2,-2
 	}
 
 	var depth int
@@ -149,7 +149,7 @@ func GetDepthPriceByOrder(depthType int, items []DepthPrice, orderQty float64) f
 
 	total += (items[depth].price * balance)
 
-	return total/orderQty
+	return total/orderQty,items[depth].price
 }
 
 func GetRatio(value1 float64, value2 float64) float64 {

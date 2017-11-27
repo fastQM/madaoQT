@@ -84,9 +84,6 @@ type OKExAPI struct{
 
 	/* Each channel has a depth */
 	messageChannels map[string]chan interface{}
-
-	/* 建仓数量 */
-	qty float64
 }
 
 func formatTimeOKEX() string {
@@ -105,15 +102,6 @@ func (o *OKExAPI) triggerEvent(event EventType){
 	o.event <- event
 }
 
-
-func (o *OKExAPI) SetQty(quantity float64) {
-	o.qty = quantity
-}
-
-func (o *OKExAPI) GetQty() float64 {
-	return o.qty;
-}
-
 func (o *OKExAPI)Init(tradeType TradeType){
 
 	o.tickerList = nil
@@ -122,8 +110,6 @@ func (o *OKExAPI)Init(tradeType TradeType){
 	o.tradeType = tradeType
 
 	o.messageChannels = make(map[string]chan interface{})
-
-	o.qty = 100
 
 	var url string
 	if tradeType == TradeTypeContract{
@@ -182,77 +168,20 @@ func (o *OKExAPI)Init(tradeType TradeType){
 				// 处理期货价格深度
 				if o.messageChannels[response[0]["channel"].(string)] != nil {
 
-					depth := new(DepthValue)
+					// depth := new(DepthValue)
 					data := response[0]["data"].(map[string]interface{})
 
 					// unitTime := time.Unix(int64(data["timestamp"].(float64))/1000, 0)
 					// timeHM := unitTime.Format("2006-01-02 03:04:05")
 					// o.depthList[i].Time = timeHM
-					if data["asks"] == nil || data["bids"] == nil {
-						log.Printf("Invalid data")
+					if data["asks"] == nil {
+						log.Printf("Recv Invalid data from %s:%v",
+						o.GetExchangeName(), response)
 						goto END
 					}
 
-					depth.Time = formatTimeOKEX()
-
-					asks := data["asks"].([]interface{})
-					bids := data["bids"].([]interface{})
-
-					if o.tradeType == TradeTypeContract {
-						if asks != nil && len(asks) > 0 {
-							askList := make([]DepthPrice, len(asks))
-							for i, ask := range asks {
-								values := ask.([]interface{})
-								askList[i].price, _ = strconv.ParseFloat(values[UsdPriceIndex].(string), 64)
-								askList[i].qty, _ = strconv.ParseFloat(values[CoinQuantity].(string), 64)
-							}
-
-							depth.AskAverage, depth.AskQty = GetDepthAveragePrice(askList)
-							depth.AskByOrder = GetDepthPriceByOrder(DepthTypeAsks, askList, o.qty)
-						}
-
-						if bids != nil && len(bids) > 0 {
-							bidList := make([]DepthPrice, len(bids))
-							for i, bid := range bids {
-								values := bid.([]interface{})
-								bidList[i].price, _ = strconv.ParseFloat(values[UsdPriceIndex].(string), 64)
-								bidList[i].qty, _ = strconv.ParseFloat(values[CoinQuantity].(string), 64)
-							}
-
-							depth.BidAverage, depth.BidQty = GetDepthAveragePrice(bidList)
-							depth.BidByOrder = GetDepthPriceByOrder(DepthTypeBids, bidList, o.qty)
-						}
-
-					} else if o.tradeType == TradeTypeCurrent {
-						if asks != nil && len(asks) > 0 {
-							askList := make([]DepthPrice, len(asks))
-							for i, ask := range asks {
-								values := ask.([]interface{})
-								askList[i].price, _ = strconv.ParseFloat(values[0].(string), 64)
-								askList[i].qty, _ = strconv.ParseFloat(values[1].(string), 64)
-							}
-
-							depth.AskAverage, depth.AskQty = GetDepthAveragePrice(askList)
-							depth.AskByOrder = GetDepthPriceByOrder(DepthTypeAsks, askList, o.qty)
-						}
-
-						if bids != nil && len(bids) > 0 {
-							bidList := make([]DepthPrice, len(bids))
-							for i, bid := range bids {
-								values := bid.([]interface{})
-								bidList[i].price, _ = strconv.ParseFloat(values[0].(string), 64)
-								bidList[i].qty, _ = strconv.ParseFloat(values[1].(string), 64)
-							}
-
-							depth.BidAverage, depth.BidQty = GetDepthAveragePrice(bidList)
-							depth.BidByOrder = GetDepthPriceByOrder(DepthTypeBids, bidList, o.qty)
-						}
-					}
-
-					log.Printf("Result:%v", depth)
-
 					go func(){
-						o.messageChannels[response[0]["channel"].(string)] <- depth
+						o.messageChannels[response[0]["channel"].(string)] <- data
 						close(o.messageChannels[response[0]["channel"].(string)])
 						delete(o.messageChannels, response[0]["channel"].(string))
 					}()
@@ -454,7 +383,7 @@ func (o *OKExAPI) SwitchCurrentDepth(open bool, coinA string, coinB string, dept
 	
 }
 
-func (o *OKExAPI)GetDepthValue(coinA string, coinB string) *DepthValue {
+func (o *OKExAPI)GetDepthValue(coinA string, coinB string, orderQuantity float64) *DepthValue {
 
 	var channel string
 
@@ -470,8 +399,68 @@ func (o *OKExAPI)GetDepthValue(coinA string, coinB string) *DepthValue {
 	case <-time.After(1*time.Second):
 		log.Print("timeout to wait for the depths")
 		return nil	
-	case value := <- o.messageChannels[channel]:
-		return value.(*DepthValue)
+	case recv := <- o.messageChannels[channel]:
+		depth := new(DepthValue)
+
+		data := recv.(map[string]interface{})
+		depth.Time = formatTimeOKEX()
+		
+		asks := data["asks"].([]interface{})
+		bids := data["bids"].([]interface{})
+
+		if o.tradeType == TradeTypeContract {
+			if asks != nil && len(asks) > 0 {
+				askList := make([]DepthPrice, len(asks))
+				for i, ask := range asks {
+					values := ask.([]interface{})
+					askList[i].price, _ = strconv.ParseFloat(values[UsdPriceIndex].(string), 64)
+					askList[i].qty, _ = strconv.ParseFloat(values[CoinQuantity].(string), 64)
+				}
+
+				depth.AskAverage, depth.AskQty = GetDepthAveragePrice(askList)
+				depth.AskByOrder, depth.AskPrice = GetDepthPriceByOrder(DepthTypeAsks, askList, orderQuantity)
+			}
+
+			if bids != nil && len(bids) > 0 {
+				bidList := make([]DepthPrice, len(bids))
+				for i, bid := range bids {
+					values := bid.([]interface{})
+					bidList[i].price, _ = strconv.ParseFloat(values[UsdPriceIndex].(string), 64)
+					bidList[i].qty, _ = strconv.ParseFloat(values[CoinQuantity].(string), 64)
+				}
+
+				depth.BidAverage, depth.BidQty = GetDepthAveragePrice(bidList)
+				depth.BidByOrder, depth.BidPrice = GetDepthPriceByOrder(DepthTypeBids, bidList, orderQuantity)
+			}
+
+		} else if o.tradeType == TradeTypeCurrent {
+			if asks != nil && len(asks) > 0 {
+				askList := make([]DepthPrice, len(asks))
+				for i, ask := range asks {
+					values := ask.([]interface{})
+					askList[i].price, _ = strconv.ParseFloat(values[0].(string), 64)
+					askList[i].qty, _ = strconv.ParseFloat(values[1].(string), 64)
+				}
+
+				depth.AskAverage, depth.AskQty = GetDepthAveragePrice(askList)
+				depth.AskByOrder, depth.AskPrice = GetDepthPriceByOrder(DepthTypeAsks, askList, orderQuantity)
+			}
+
+			if bids != nil && len(bids) > 0 {
+				bidList := make([]DepthPrice, len(bids))
+				for i, bid := range bids {
+					values := bid.([]interface{})
+					bidList[i].price, _ = strconv.ParseFloat(values[0].(string), 64)
+					bidList[i].qty, _ = strconv.ParseFloat(values[1].(string), 64)
+				}
+
+				depth.BidAverage, depth.BidQty = GetDepthAveragePrice(bidList)
+				depth.BidByOrder, depth.BidPrice = GetDepthPriceByOrder(DepthTypeBids, bidList, orderQuantity)
+			}
+		}
+
+		// log.Printf("Result:%v", depth)
+		return depth
 	}
 }	
 
@@ -518,7 +507,7 @@ func (o *OKExAPI)command(data map[string]string, parameters map[string]string) e
 		   return errors.New("Marshal failed")
 	}
 	
-	log.Printf("Cmd:%v", string(cmd))
+	// log.Printf("Cmd:%v", string(cmd))
 	o.conn.WriteMessage(websocket.TextMessage, cmd)
 
 	return nil
