@@ -23,7 +23,7 @@ func (h *HttpServer)SetupHttpServer() {
     // views := iris.HTML("./views", ".html")
     // views.Reload(true)  //开发模式，强制每次请求都更新页面
 
-    h.app.RegisterView(iris.HTML("/Users/qiumin/Desktop/btnas/agent/src/madaoQT/web/views", ".html"))
+    h.app.RegisterView(iris.HTML("./views", ".html"))
     
     h.app.Controller("/helloworld", new(controllers.HelloWorldController))
 
