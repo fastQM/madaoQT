@@ -82,7 +82,6 @@ func _TestOKEXCurrentTicker(t *testing.T) {
 func _TestTrade(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(TradeTypeContract)
-	okex.Login()
 
 	config := map[string]interface{} {
         "symbol": "ltc_usd",
@@ -147,6 +146,54 @@ func TestCancelOrder(t *testing.T) {
         "contract_type": "this_week",
 	}
 	log.Printf("CancelOrder:%v", okex.CancelOrder(configs))
+}
+
+func TestSpotCancelOrder(t *testing.T) {
+	okex := new(OKExAPI)
+	okex.Init(TradeTypeCurrent)
+
+	configs := map[string]interface{} {
+		"order_id": "58520149",
+		"symbol": "ltc_usdt",
+	}
+	log.Printf("CancelOrder:%v", okex.CancelOrder(configs))
+}
+
+func TestSpotOrder(t *testing.T) {
+	okex := new(OKExAPI)
+	okex.Init(TradeTypeCurrent)
+
+	configs := map[string]interface{} {
+		"symbol":"ltc_usdt",
+        "type":"buy",
+        "price":"85",
+        "amount":"1",
+	}
+
+	err, result := okex.PlaceOrder(configs)
+	if err != nil {
+		log.Printf("Error:%v", err)
+		return
+	}
+
+	log.Printf("TestSpotOrder:%v", result)
+}
+
+func TestSpotGetOrderInfo(t *testing.T) {
+	okex := new(OKExAPI)
+	okex.Init(TradeTypeCurrent)
+	configs := map[string]interface{} {
+		"order_id": "-1",
+		"symbol": "ltc_usdt",
+	}
+
+	log.Printf("OrderInfo:%v", okex.GetOrderInfo(configs))	
+}
+
+func TestSpotGetUserInfo(t *testing.T) {
+	okex := new(OKExAPI)
+	okex.Init(TradeTypeCurrent)
+	log.Printf("UserInfo:%v", okex.GetUserInfo())
 }
 
 func _TestBittrexTicker(t *testing.T) {

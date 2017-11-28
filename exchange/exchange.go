@@ -59,6 +59,15 @@ type TickerValue struct {
 	Period string // 合约周期
 }
 
+type OrderConfig struct {
+	Coin string
+	/* buy or sell */
+	Type string	
+	Price float64
+	Amount float64
+	
+}
+
 type IExchange interface{
 	GetExchangeName() string
 	// Init(config interface{}) error
@@ -67,7 +76,7 @@ type IExchange interface{
 	WatchEvent() chan EventType
 	GetDepthValue(coinA string, coinB string, orderQuantity float64) *DepthValue
 	PlaceOrder(configs map[string]interface{}) (error, map[string]interface{})
-	CancelOrder(config map[string]interface{}) bool
+	// CancelOrder(config map[string]interface{}) (erros, map[string]interface{})
 }
 
 /* 获取深度价格 */

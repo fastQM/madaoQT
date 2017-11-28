@@ -9,6 +9,7 @@ import (
 	"log"
 	"math"
 	"fmt"
+	"sync"
 
 	Exchange "madaoQT/exchange"
 )
@@ -36,6 +37,8 @@ type IAnalyzer struct {
 	currents map[string]AnalyzeItem
 
 	event chan RulesEvent
+
+	exception error
 }
 
 type AnalyzerConfig struct {
@@ -65,6 +68,7 @@ func (a *IAnalyzer) Init(config *AnalyzerConfig) {
 		a.config = a.defaultConfig()
 	}
 
+	a.exception = nil
 	a.event = make(chan RulesEvent)
 	a.contracts = make(map[string]AnalyzeItem)
 	a.currents = make(map[string]AnalyzeItem)
@@ -144,7 +148,7 @@ func (a *IAnalyzer) Watch() {
 					// 期货判断bids深度
 					exchange := *a.contracts[coin].exchange
 					sell := exchange.GetDepthValue(coin, "", placeOrderQuan[coin])
-					msg = fmt.Sprintf("[合约买单均格：%v 合约买单量:%v 操盘资金量：%v 下单深度均格：%v 下单价格:%v]", 
+					msg = fmt.Sprintf("[合约买单均格：%.2f 合约买单量:%.2f 操盘资金量：%.2f 下单深度均格：%.2f 下单价格:%.2f]", 
 						sell.BidAverage, sell.BidQty, placeOrderQuan[coin], sell.BidByOrder, sell.BidPrice)
 
 					log.Print(msg)
@@ -152,13 +156,13 @@ func (a *IAnalyzer) Watch() {
 
 					exchange = *a.currents[coin].exchange
 					buy := exchange.GetDepthValue(coin, "usdt", placeOrderQuan[coin])
-					msg = fmt.Sprintf("[现货卖单均价：%v 现货卖单量:%v 操盘资金量:%v 下单深度均格：%v 下单价格:%v]",
+					msg = fmt.Sprintf("[现货卖单均价：%.2f 现货卖单量:%.2f 操盘资金量:%.2f 下单深度均格：%.2f 下单价格:%.2f]",
 						buy.AskAverage, buy.AskQty, placeOrderQuan[coin], buy.AskByOrder, buy.AskPrice)
 
 					log.Print(msg)
 					a.triggerEvent(EventTypeTrigger, msg)
 
-					msg = fmt.Sprintf("[深度均价收益：%v%%, 限制资金收益：%v%%]",
+					msg = fmt.Sprintf("[深度均价收益：%.2f%%, 限制资金收益：%.2f%%]",
 						Exchange.GetRatio(sell.BidAverage, buy.AskAverage),
 						Exchange.GetRatio(sell.BidByOrder, buy.AskByOrder))
 
@@ -170,7 +174,7 @@ func (a *IAnalyzer) Watch() {
 
 					exchange := *a.contracts[coin].exchange
 					buy := exchange.GetDepthValue(coin, "", placeOrderQuan[coin])
-					msg = fmt.Sprintf("[合约卖单均格：%v 合约卖单量:%v 操盘资金量：%v 下单深度均格：%v 下单价格:%v]", 
+					msg = fmt.Sprintf("[合约卖单均格：%.2f 合约卖单量:%.2f 操盘资金量：%.2f 下单深度均格：%.2f 下单价格:%.2f]", 
 						buy.AskAverage, buy.AskQty, placeOrderQuan[coin], buy.AskByOrder, buy.AskPrice)
 
 					log.Print(msg)
@@ -178,13 +182,13 @@ func (a *IAnalyzer) Watch() {
 
 					exchange = *a.currents[coin].exchange
 					sell := exchange.GetDepthValue(coin, "usdt", placeOrderQuan[coin])
-					msg = fmt.Sprintf("[现货买单均价：%v 现货买单量:%v 操盘资金量:%v 下单深度均格：%v 下单价格:%v]",
+					msg = fmt.Sprintf("[现货买单均价：%.2f 现货买单量:%.2f 操盘资金量:%.2f 下单深度均格：%.2f 下单价格:%.2f]",
 						sell.BidAverage, sell.BidQty, placeOrderQuan[coin], sell.BidByOrder, sell.BidPrice)
 
 					log.Print(msg)
 					a.triggerEvent(EventTypeTrigger, msg)
 
-					msg = fmt.Sprintf("[深度均价收益：%v%%, 限制资金收益：%v%%]",
+					msg = fmt.Sprintf("[深度均价收益：%.2f%%, 限制资金收益：%.2f%%]",
 						Exchange.GetRatio(buy.AskAverage, sell.BidAverage),
 						Exchange.GetRatio(buy.AskByOrder, sell.BidByOrder))
 
@@ -196,5 +200,54 @@ func (a *IAnalyzer) Watch() {
 			}	
 		}
 	}
+
+}
+
+
+func (a *IAnalyzer) placeOrders(contract Exchange.IExchange, current Exchange.IExchange, 
+	config map[string]interface{}) error {
+
+		if a.exception != nil {
+			log.Printf("Excpetion %v, stop trading...", a.exception)
+			return a.exception
+		}
+
+		var waitGroup sync.WaitGroup
+		var contractResult bool
+		var currentResult bool
+
+		waitGroup.Add(1)
+		go func() {
+			/* contract trade */
+
+
+			waitGroup.Done()
+		}()
+
+		waitGroup.Add(1)
+		go func() {
+			/* current trade */
+
+
+			waitGroup.Done()
+		}()
+
+		waitGroup.Wait()
+
+		if contractResult && currentResult {
+
+			return nil
+		} else if contractResult && !currentResult {
+			// cancel current
+
+		} else if !contractResult && currentResult {
+			// cancel contract
+
+		} else if !contractResult && !currentResult {
+
+			return nil
+		}
+
+		return nil
 
 }

@@ -65,6 +65,16 @@ const ChannelSubPositions = "ok_sub_futureusd_positions"
 const ChannelCurrentChannelTicker = "ok_sub_spot_X_ticker"
 const ChannelCurrentDepth = "ok_sub_spot_X_depth_Y"
 
+// 现货交易API
+const ChannelSpotOrder = "ok_spot_order"
+const ChannelSpotCancelOrder = "ok_spot_cancel_order"
+const ChannelSpotUserInfo = "ok_spot_userinfo"
+const ChannelSpotOrderInfo = "ok_spot_orderinfo"
+
+const ShowMessages = false
+const DefaultTimeoutSec = 3
+
+
 type ContractItemValueIndex int8
 
 const (
@@ -134,7 +144,9 @@ func (o *OKExAPI)Init(tradeType TradeType){
 				return
 			}
 
-			log.Printf("recv: %s", message)
+			if ShowMessages {
+				log.Printf("recv: %s", message)
+			}
 
 			var response []map[string]interface{}
 			if err = json.Unmarshal([]byte(message), &response); err != nil {
@@ -172,6 +184,10 @@ func (o *OKExAPI)Init(tradeType TradeType){
 					ChannelSubTradesInfo,
 					ChannelContractTrade,
 					ChannelContractTradeCancel,
+					ChannelSpotOrder,
+					ChannelSpotCancelOrder,
+					ChannelSpotUserInfo,
+					ChannelSpotOrderInfo,
 				}
 
 				for _, accept := range acceptChannels {
@@ -405,7 +421,7 @@ func (o *OKExAPI)GetDepthValue(coinA string, coinB string, orderQuantity float64
 	}
 
 	select{
-	case <-time.After(1*time.Second):
+	case <-time.After(DefaultTimeoutSec * time.Second):
 		log.Print("timeout to wait for the depths")
 		return nil	
 	case recv := <- o.messageChannels[channel]:
@@ -516,25 +532,14 @@ func (o *OKExAPI)command(data map[string]string, parameters map[string]string) e
 		   return errors.New("Marshal failed")
 	}
 	
-	// log.Printf("Cmd:%v", string(cmd))
+	if ShowMessages {
+		log.Printf("Cmd:%v", string(cmd))
+	}
+
 	o.conn.WriteMessage(websocket.TextMessage, cmd)
 
 	return nil
 }
-
-
-/* 合约交易接口 */
-
-func (o *OKExAPI) Trade() {
-
-}
-
-func (o *OKExAPI) CancelTrade() {
-
-}
-
-
-
 
 /*
 
@@ -558,182 +563,216 @@ lever_rate 杠杆倍数 value:10\20 默认10
 */
 func (o *OKExAPI) PlaceOrder(configs map[string]interface{}) (error, map[string]interface{}) {
 
+	var channel string
+	var data,parameters map[string]string
+
 	if o.tradeType == TradeTypeContract {
 
-		data := map[string]string{
-			"event":EventAddChannel,
-			"channel": ChannelContractTrade,
-		}
-
-		o.messageChannels[ChannelContractTrade] = make(chan interface{})
+		channel = ChannelContractTrade
 	
-		parameters := map[string]string {
+		parameters = map[string]string {
 			"api_key": constApiKey,
 			// "secret_key": constSecretKey,
 		}
 		for k,v := range configs {
 			parameters[k] = v.(string)
 		}
-
-		o.command(data, parameters)
-
-		select{
-		case <-time.After(10*time.Second):
-			return errors.New("Timeout"), nil
-		case message := <- o.messageChannels[ChannelContractTrade]:
-			// log.Printf("message:%v", message)
-			return nil, message.(map[string]interface{})
-		}
-
 		
 	}else if o.tradeType == TradeTypeCurrent {
 
+		channel = ChannelSpotOrder
+	
+		parameters = map[string]string {
+			"api_key": constApiKey,
+			// "secret_key": constSecretKey,
+		}
+		for k,v := range configs {
+			parameters[k] = v.(string)
+		}
 	}
 
-	return errors.New("Invalide type"), nil
+	data = map[string]string{
+		"event": EventAddChannel,
+		"channel": channel,
+	}
+
+	o.messageChannels[channel] = make(chan interface{})
+
+	o.command(data, parameters)
+	
+	select{
+	case <-time.After(DefaultTimeoutSec * time.Second):
+		return errors.New("Timeout"), nil
+	case message := <- o.messageChannels[channel]:
+		// log.Printf("message:%v", message)
+		return nil, message.(map[string]interface{})
+	}
 
 }
 
-func (o *OKExAPI) CancelOrder(configs map[string]interface{}) bool {
+func (o *OKExAPI) CancelOrder(configs map[string]interface{}) map[string]interface{} {
+
+	var channel string
+	var data,parameters map[string]string
 
 	if o.tradeType == TradeTypeContract {
-		
-				data := map[string]string{
-					"event":EventAddChannel,
-					"channel": ChannelContractTradeCancel,
-				}
-		
-				o.messageChannels[ChannelContractTradeCancel] = make(chan interface{})
+
+		channel = ChannelContractTradeCancel
 			
-				parameters := map[string]string {
-					"api_key": constApiKey,
-					// "secret_key": constSecretKey,
-				}
-				for k,v := range configs {
-					parameters[k] = v.(string)
-				}
-		
-				o.command(data, parameters)
-		
-				select{
-				case <-time.After(10*time.Second):
-					return false
-				case message := <- o.messageChannels[ChannelContractTradeCancel]:
-					// log.Printf("message:%v", message)
-					return message.(map[string]interface{})["result"].(bool)
-				}
-		
-				
-			}else if o.tradeType == TradeTypeCurrent {
-		
-			}
-		
-			return false
-}
-
-/*
-	个人信息推送，个人数据有变化时会自动推送，其它旧的个人数据订阅类型可不订阅，
-	如:ok_sub_futureusd_trades,ok_sub_futureusd_userinfo,ok_sub_futureusd_positions
-*/
-func (o *OKExAPI) Login() {
-	data := map[string]string{
-		"event":"login",
-	}
-
-	o.messageChannels[ChannelSubPositions] = make(chan interface{})
-	o.messageChannels[ChannelSubTradesInfo] = make(chan interface{})
-	o.messageChannels[ChannelSubUserInfo] = make(chan interface{})
-
-	parameters := map[string]string {
-		"api_key": constApiKey,
-		// "secret_key": constSecretKey,
-	}
-	o.command(data,parameters)	
-
-	go func() {
-		for {
-			select{
-			case positions := <- o.messageChannels[ChannelSubPositions]:
-				log.Printf("Pos:%v", positions)
-			case trades := <- o.messageChannels[ChannelSubTradesInfo]:
-				log.Printf("Trades:%v", trades)
-			case userInfo := <- o.messageChannels[ChannelSubUserInfo]:
-				log.Printf("UserInfo:%v", userInfo)
-			}
+		parameters = map[string]string {
+			"api_key": constApiKey,
+			// "secret_key": constSecretKey,
 		}
-	}()
+		for k,v := range configs {
+			parameters[k] = v.(string)
+		}
+		
+	}else if o.tradeType == TradeTypeCurrent {
+		channel = ChannelSpotCancelOrder
+		
+		parameters = map[string]string {
+			"api_key": constApiKey,
+			// "secret_key": constSecretKey,
+		}
+		for k,v := range configs {
+			parameters[k] = v.(string)
+		}
+	}
+
+	data = map[string]string{
+		"event":EventAddChannel,
+		"channel": channel,
+	}
+
+	o.messageChannels[channel] = make(chan interface{})
+
+	o.command(data, parameters)
+	
+	select{
+	case <-time.After(DefaultTimeoutSec * time.Second):
+		return nil
+	case message := <- o.messageChannels[channel]:
+		// log.Printf("message:%v", message)
+		return message.(map[string]interface{})
+	}
+
 }
+
+// /*
+// 	个人信息推送，个人数据有变化时会自动推送，其它旧的个人数据订阅类型可不订阅，
+// 	如:ok_sub_futureusd_trades,ok_sub_futureusd_userinfo,ok_sub_futureusd_positions
+// */
+// func (o *OKExAPI) Login() {
+// 	data := map[string]string{
+// 		"event":"login",
+// 	}
+
+// 	o.messageChannels[ChannelSubPositions] = make(chan interface{})
+// 	o.messageChannels[ChannelSubTradesInfo] = make(chan interface{})
+// 	o.messageChannels[ChannelSubUserInfo] = make(chan interface{})
+
+// 	parameters := map[string]string {
+// 		"api_key": constApiKey,
+// 		// "secret_key": constSecretKey,
+// 	}
+// 	o.command(data,parameters)	
+
+// 	go func() {
+// 		for {
+// 			select{
+// 			case positions := <- o.messageChannels[ChannelSubPositions]:
+// 				log.Printf("Pos:%v", positions)
+// 			case trades := <- o.messageChannels[ChannelSubTradesInfo]:
+// 				log.Printf("Trades:%v", trades)
+// 			case userInfo := <- o.messageChannels[ChannelSubUserInfo]:
+// 				log.Printf("UserInfo:%v", userInfo)
+// 			}
+// 		}
+// 	}()
+// }
 
 
 func (o *OKExAPI) GetOrderInfo(configs map[string]interface{}) interface{} {
-	data := map[string]string{
+
+	var channel string
+	var data, parameters map[string]string
+
+	if o.tradeType == TradeTypeContract {
+		
+		channel = ChannelOrderInfo
+
+		parameters = map[string]string {
+			"api_key": constApiKey,
+			// "secret_key": constSecretKey,
+		}
+
+		for k,v := range configs {
+			parameters[k] = v.(string)
+		}
+
+	} else if o.tradeType == TradeTypeCurrent {
+		
+		channel = ChannelSpotOrderInfo
+
+		parameters = map[string]string {
+			"api_key": constApiKey,
+			// "secret_key": constSecretKey,
+		}
+
+		for k,v := range configs {
+			parameters[k] = v.(string)
+		}
+	}
+
+	data = map[string]string{
 		"event": EventAddChannel,
-		"channel": ChannelOrderInfo,
+		"channel": channel,
 	}
 
-	o.messageChannels[ChannelOrderInfo] = make(chan interface{})
-
-	parameters := map[string]string {
-		"api_key": constApiKey,
-		// "secret_key": constSecretKey,
-	}
-
-	for k,v := range configs {
-		parameters[k] = v.(string)
-	}
+	o.messageChannels[channel] = make(chan interface{})
 
 	o.command(data,parameters)	
 
 	select{
-	case orderInfo := <- o.messageChannels[ChannelOrderInfo]:
+	case orderInfo := <- o.messageChannels[channel]:
 		return orderInfo
-	case <-time.After(3 * time.Second):
+	case <-time.After(DefaultTimeoutSec * time.Second):
 		log.Printf("Timeout to get user info")
 		return nil
 	}
 }
 
 func (o *OKExAPI) GetUserInfo() interface{} {
-	data := map[string]string{
-		"event": EventAddChannel,
-		"channel": ChannelUserInfo,
+
+	var channel string
+	var data, parameters map[string]string
+
+	if o.tradeType == TradeTypeContract {
+		channel = ChannelUserInfo
+
+	} else if o.tradeType == TradeTypeCurrent {
+
+		channel = ChannelSpotUserInfo
 	}
 
-	o.messageChannels[ChannelUserInfo] = make(chan interface{})
-
-	parameters := map[string]string {
+	parameters = map[string]string {
 		"api_key": constApiKey,
 		// "secret_key": constSecretKey,
 	}
+
+	data = map[string]string{
+		"event": EventAddChannel,
+		"channel": channel,
+	}
+
+	o.messageChannels[channel] = make(chan interface{})
+
 	o.command(data,parameters)	
 
 	select{
 	case orderInfo := <- o.messageChannels[ChannelUserInfo]:
 		return orderInfo
-	case <-time.After(3 * time.Second):
-		log.Printf("Timeout to get user info")
-		return nil
-	}
-}
-
-func (o *OKExAPI) GetTradesInfo() interface{} {
-	data := map[string]string{
-		"event": EventAddChannel,
-		"channel": ChannelSubTradesInfo,
-	}
-
-	o.messageChannels[ChannelSubTradesInfo] = make(chan interface{})
-
-	parameters := map[string]string {
-		"api_key": constApiKey,
-		// "secret_key": constSecretKey,
-	}
-	o.command(data,parameters)	
-
-	select{
-	case tradesInfo := <- o.messageChannels[ChannelSubTradesInfo]:
-		return tradesInfo
-	case <-time.After(3 * time.Second):
+	case <-time.After(DefaultTimeoutSec * time.Second):
 		log.Printf("Timeout to get user info")
 		return nil
 	}
