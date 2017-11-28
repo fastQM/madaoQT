@@ -1,6 +1,7 @@
 package exchange
 
 import (
+	"log"
 	// Utils "madaoQT/utils"
 )
 
@@ -65,6 +66,8 @@ type IExchange interface{
 	GetTickerValue(tag string) *TickerValue
 	WatchEvent() chan EventType
 	GetDepthValue(coinA string, coinB string, orderQuantity float64) *DepthValue
+	PlaceOrder(configs map[string]interface{}) (error, map[string]interface{})
+	CancelOrder(config map[string]interface{}) bool
 }
 
 /* 获取深度价格 */
@@ -120,13 +123,14 @@ func GetDepthPriceByOrder(depthType int, items []DepthPrice, orderQty float64) (
 		// 倒序
 		items = RevertDepthArray(items)
 	}
-
+	// log.Printf("Depth:%v", items)
 	var total float64
 	for _, item := range items {
 		total += item.qty
 	}
 
 	if orderQty > total {
+		log.Printf("深度不够：%v", total)
 		return -2,-2
 	}
 

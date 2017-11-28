@@ -3,6 +3,7 @@ package mongo
 import (
 	"testing"
 	"time"
+	"log"
 )
 
 func _TestLoadingCharts(t *testing.T) {
@@ -25,5 +26,13 @@ func TestInsertTradeRecord(t *testing.T) {
 			Quantity: 123.45,
 		}
 		tradesDB.Insert(record)
-	}	
+	}
+	
+	err, records := tradesDB.FindAll()
+	if err != nil {
+		log.Printf("Error:%v", err)
+		return
+	}
+	
+	log.Printf("Records:%v", records)
 }

@@ -17,7 +17,7 @@ func _TestGetAveragePrice(t *testing.T) {
 	log.Printf("Ave:%v%v", value1, value2)
 }
 
-func TestGetContractDepth(t *testing.T) {
+func _TestGetContractDepth(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(TradeTypeContract)
 
@@ -25,7 +25,7 @@ func TestGetContractDepth(t *testing.T) {
 	log.Printf("Value:%v", value)
 }
 
-func TestGetCurrentDepth(t *testing.T) {
+func _TestGetCurrentDepth(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(TradeTypeCurrent)
 
@@ -45,7 +45,7 @@ func _TestOKEXContractTicker(t *testing.T) {
 		case <-time.After(1*time.Second):
 			values := okex.GetTickerValue("ltc_contract")
 			if values != nil {
-				log.Printf("Value:%v %v", values)
+				log.Printf("Value:%v", values)
 			}
 			if counter > 0{
 				counter--
@@ -68,7 +68,7 @@ func _TestOKEXCurrentTicker(t *testing.T) {
 		case <-time.After(1*time.Second):
 			values := okex.GetTickerValue("btc_current")
 			if values != nil {
-				log.Printf("Value:%v %v", values)
+				log.Printf("Value:%v", values)
 			}
 			if counter > 0{
 				counter--
@@ -79,18 +79,74 @@ func _TestOKEXCurrentTicker(t *testing.T) {
 	}
 }
 
-func _TestGetUserInfo(t *testing.T) {
+func _TestTrade(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(TradeTypeContract)
+	okex.Login()
 
-	log.Printf("UserInfo:%v", okex.GetUserInfo())
+	config := map[string]interface{} {
+        "symbol": "ltc_usd",
+        "contract_type": "this_week",
+        "price": "80",
+        "amount": "1",
+        "type": "1",
+        "match_price": "0",
+        "lever_rate": "10",
+	}
+
+	err, message := okex.PlaceOrder(config)
+	if err != nil {
+		log.Printf("Error:%v", err)
+		return
+	}
+
+	log.Printf("message:%v", message)
+
+	select{
+	case <- time.After(1 * time.Second):
+		return
+	}
+
 }
 
-func _TestGetTrades(t *testing.T) {
+func TestGetOrderInfo(t *testing.T) {
+	okex := new(OKExAPI)
+	okex.Init(TradeTypeContract)
+	
+	configs := map[string]interface{} {
+		"symbol": "ltc_usd",
+		"order_id": "-1",
+		"contract_type": "this_week",
+		"status": "2",
+		"current_page": "1",
+		"page_length": "1",
+	}
+
+	log.Printf("OrderInfo:%v", okex.GetOrderInfo(configs))	
+}
+
+// func TestGetTradesInfo(t *testing.T) {
+// 	okex := new(OKExAPI)
+// 	okex.Init(TradeTypeContract)
+// 	log.Printf("UserInfo:%v", okex.GetTradesInfo())	
+// }
+
+func TestGetUserInfo(t *testing.T) {
+	okex := new(OKExAPI)
+	okex.Init(TradeTypeContract)
+	log.Printf("UserInfo:%v", okex.GetUserInfo())	
+}
+
+func TestCancelOrder(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(TradeTypeContract)
 
-	log.Printf("TradesInfo:%v", okex.GetTradesInfo())
+	configs := map[string]interface{} {
+		"order_id": "14318387904",
+		"symbol": "ltc_usd",
+        "contract_type": "this_week",
+	}
+	log.Printf("CancelOrder:%v", okex.CancelOrder(configs))
 }
 
 func _TestBittrexTicker(t *testing.T) {

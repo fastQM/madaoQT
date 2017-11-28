@@ -119,8 +119,8 @@ func (a *IAnalyzer) Watch() {
 	}
 
 	placeOrderQuan := map[string]float64 {
-		"btc": 0.1,
-		"ltc": 10,
+		"btc": 0.2,
+		"ltc": 20,
 	}
 
 	for _, coin := range a.coins {
@@ -129,7 +129,7 @@ func (a *IAnalyzer) Watch() {
 		if valueContract != nil && valueCurrent != nil {
 
 			a.triggerEvent(EventTypeTrigger, "===============================")
-			
+
 			difference := (valueContract.Last - valueCurrent.Last)*100/valueCurrent.Last
 			msg := fmt.Sprintf("币种:%s, 合约价格：%.2f, 现货价格：%.2f, 价差：%.2f%%",
 				coin, valueContract.Last, valueCurrent.Last, difference)

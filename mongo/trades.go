@@ -3,6 +3,7 @@ package mongo
 import (
   "fmt"
   "time"
+  "errors"
 
   mgo "gopkg.in/mgo.v2"
 //   bson "gopkg.in/mgo.v2/bson"
@@ -53,5 +54,19 @@ func (t *Trades) Insert(record *TradesRecord) error {
 		return nil
 	}
 	return nil
+}
+
+func (t *Trades) FindAll() (error,[]TradesRecord) {
+	var result []TradesRecord
+	if t.session != nil {
+		err := t.collection.Find(nil).All(&result)
+		if err != nil {
+			return err, nil
+		}
+
+		return nil, result
+	}
+
+	return errors.New("Connection is lost"), nil
 }
 
