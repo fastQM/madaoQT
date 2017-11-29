@@ -2,7 +2,6 @@ package exchange
 
 
 import (
-	"log"
 	"crypto/md5"
 	"errors"
 	"sort"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"time"
 	"strconv"
+	"log"
 
 	websocket "github.com/gorilla/websocket"
 )
@@ -145,7 +145,7 @@ func (o *OKExAPI)Init(tradeType TradeType){
 			}
 
 			if ShowMessages {
-				log.Printf("recv: %s", message)
+				Logger.Debugf("recv: %s", message)
 			}
 
 			var response []map[string]interface{}

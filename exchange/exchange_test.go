@@ -30,7 +30,7 @@ func _TestGetCurrentDepth(t *testing.T) {
 	okex.Init(TradeTypeCurrent)
 
 	value := okex.GetDepthValue("btc", "usdt", 1)
-	log.Printf("Value:%v", value)
+	Logger.Infof("Value:%v", value)
 }
 
 func _TestOKEXContractTicker(t *testing.T) {

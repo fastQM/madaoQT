@@ -1,9 +1,22 @@
 package exchange
 
 import (
+	"github.com/kataras/golog"
 	"log"
-	// Utils "madaoQT/utils"
 )
+
+/*
+	初始化日志句柄
+*/
+var Logger *golog.Logger
+
+func init(){
+	logger := golog.New()
+	Logger = logger
+	Logger.SetLevel("debug")
+
+	Logger.Info("Exchange init() finished")
+}
 
 type TradeType int8
 type EventType int8
@@ -179,4 +192,5 @@ func GetRatio(value1 float64, value2 float64) float64 {
 
 	return (big - small) * 100 / small ///????
 }
+
 

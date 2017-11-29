@@ -2,7 +2,6 @@ package exchange
 
 import (
 	"time"
-	"log"
 	"encoding/json"
 	"strings"
 
@@ -39,20 +38,20 @@ func (b *BittrexAPI) ticker(pair string) {
 	// log.Printf("URL:%s", url)
 	data, err := Utils.HttpGet(url, nil)
 	if err != nil {
-		log.Printf("fail to http request");
+		Logger.Errorf("fail to http request:%v", err);
 		return
 	}
 
 	var records map[string]interface{}
 	if err = json.Unmarshal(data, &records); err != nil {
-		log.Printf("Fail to Unmarshal:%v", err)
+		Logger.Errorf("Fail to Unmarshal:%v", err)
 		return
 	}
 
 	// log.Printf("record:%v", records)
 
 	if !records["success"].(bool) {
-		log.Printf("Fail to get ticker")
+		Logger.Error("Fail to get ticker")
 		return
 	}
 
