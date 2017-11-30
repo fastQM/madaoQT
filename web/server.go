@@ -5,6 +5,7 @@ import (
 	
     controllers "madaoQT/web/controllers"
     websocket "madaoQT/web/websocket"
+    Config "madaoQt/config"
 )
 
 type HttpServer struct {
@@ -22,7 +23,15 @@ func (h *HttpServer)SetupHttpServer() {
 
     views := iris.HTML("./views", ".html")
     // views.Reload(true)  //开发模式，强制每次请求都更新页面
-    views.Binary(Asset, AssetNames)
+    
+
+    if Config.PRODUCTION_ENV {
+        // h.app.StaticEmbedded("/static", "./views/node_modules", Asset, AssetNames)
+
+    } else {
+        h.app.StaticWeb("/static", "./views/node_modules")
+
+    }
     
     h.app.RegisterView(views)
     
@@ -33,7 +42,7 @@ func (h *HttpServer)SetupHttpServer() {
         // ctx.ViewData("message", "Hello world!")
         // Render template file: ./views/hello.html
         // ctx.View("websockets.html")
-        if err := ctx.View("websockets.html"); err != nil {
+        if err := ctx.View("index.html"); err != nil {
 			ctx.StatusCode(iris.StatusInternalServerError)
 			ctx.Writef(err.Error())
 		}

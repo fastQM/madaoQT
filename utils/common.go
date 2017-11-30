@@ -2,7 +2,53 @@ package utils
 
 import (
 	"time"
+	"runtime"
+	"os/exec"
+
+	"github.com/kataras/golog"
 )
+
+const OS_Windows = "windows"
+const OS_MacOS = "darwin"
+const OS_Linux = "linux"
+const OS_Unknown = "unknown"
+
+/*
+	初始化日志句柄
+*/
+var Logger *golog.Logger
+
+func init(){
+	logger := golog.New()
+	Logger = logger
+	Logger.SetLevel("debug")
+}
+
+func OpenBrowser(url string) {
+
+	os := runtime.GOOS
+	var cmd string
+
+	Logger.Debugf("OS:%s", os)
+
+	if os == OS_Windows {
+		cmd = "explorer"
+	} else if os == OS_MacOS {
+		cmd = "open"
+	} else if os == OS_Linux {
+		cmd = "xdg-open"
+	} else {
+		//
+		return
+	}
+	
+	err := exec.Command(cmd, url).Start()
+	if err != nil {
+		Logger.Errorf("Fail to OpenBrowser:%v", err)
+	}
+	
+}
+
 
 func SleepAsyncBySecond(sec time.Duration){
 

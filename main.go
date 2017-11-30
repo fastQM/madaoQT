@@ -7,12 +7,10 @@ import (
 	Exchange "madaoQT/exchange"
 	Rules "madaoQT/rules"
 	Web "madaoQT/web"
+	Utils "madaoQT/utils"
 )
 
 func main(){
-
-
-
 
 	analyzer := new(Rules.IAnalyzer)
 	analyzer.Init(nil)
@@ -27,6 +25,7 @@ func main(){
 
 	http := new(Web.HttpServer)
 	go http.SetupHttpServer()
+	go Utils.OpenBrowser("http://loalhost:8080")
 
 	go func(){
 		
