@@ -1,16 +1,16 @@
 package web
 
 import (
-    "github.com/kataras/iris"
-	
-    controllers "madaoQT/web/controllers"
-    websocket "madaoQT/web/websocket"
-    Config "madaoQt/config"
+	"github.com/kataras/iris"
+
+	Config "madaoQT/config"
+	controllers "madaoQT/web/controllers"
+	websocket "madaoQT/web/websocket"
 )
 
 type HttpServer struct {
-    app *iris.Application
-    ws *websocket.WebsocketServer
+	app *iris.Application
+	ws  *websocket.WebsocketServer
 }
 
 func (h *HttpServer)SetupHttpServer() {
@@ -48,11 +48,11 @@ func (h *HttpServer)SetupHttpServer() {
 			ctx.StatusCode(iris.StatusInternalServerError)
 			ctx.Writef(err.Error())
 		}
-    })
+	})
 
-    h.app.Run(iris.Addr(":8080"))
+	h.app.Run(iris.Addr(":8080"))
 }
 
-func (h *HttpServer)BroadcastByWebsocket(msg interface{}){
-    h.ws.BroadcastAll(msg)
+func (h *HttpServer) BroadcastByWebsocket(msg interface{}) {
+	h.ws.BroadcastAll(msg)
 }
