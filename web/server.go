@@ -21,16 +21,17 @@ func (h *HttpServer)SetupHttpServer() {
     h.ws = new(websocket.WebsocketServer)
     h.ws.SetupWebsocket(h.app)
 
-    views := iris.HTML("./views/templates", ".html")
-    // views.Reload(true)  //开发模式，强制每次请求都更新页面
+    views := iris.HTML("./www/www", ".html")
+    views.Reload(true)  //开发模式，强制每次请求都更新页面
     
 
     if Config.PRODUCTION_ENV {
         // h.app.StaticEmbedded("/static", "./views/node_modules", Asset, AssetNames)
 
     } else {
-        h.app.StaticWeb("/bower", "./views/bower_components")
-        h.app.StaticWeb("/elements", "./views/elements")
+        h.app.StaticWeb("/bower_components", "./www/bower_components")
+        h.app.StaticWeb("/elements", "./www/elements")
+        h.app.StaticWeb("/images", "./www/images")
 
     }
     
