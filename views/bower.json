@@ -1,0 +1,19 @@
+{
+  "name": "madao-ui",
+  "homepage": "https://github.com/maisuid/madaoQT",
+  "authors": [
+    "maisuid"
+  ],
+  "description": "The web interface of the madaoQT framework",
+  "main": "",
+  "keywords": [
+    "madaoQT",
+    "polymer"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "polymer": "Polymer/polymer#^2.0.0",
+    "iron-icon": "PolymerElements/iron-icon#^2.0.0",
+    "iron-icons": "PolymerElements/iron-icons#^2.0.0"
+  }
+}

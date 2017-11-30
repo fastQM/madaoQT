@@ -1,8 +1,9 @@
 package main
 
 import (
-	"log"
 	"time"
+
+	"github.com/kataras/golog"
 
 	Exchange "madaoQT/exchange"
 	Rules "madaoQT/rules"
@@ -10,22 +11,30 @@ import (
 	Utils "madaoQT/utils"
 )
 
+var Logger *golog.Logger
+
+func init(){
+	logger := golog.New()
+	Logger = logger
+	Logger.SetLevel("debug")
+}
+
 func main(){
 
 	analyzer := new(Rules.IAnalyzer)
 	analyzer.Init(nil)
 
-	log.Print("启动OKEx合约监视程序")
+	Logger.Info("启动OKEx合约监视程序")
 	okexContract := new (Exchange.OKExAPI)
 	okexContract.Init(Exchange.TradeTypeContract)
 
-	log.Printf("启动OKEx现货监视程序")
+	Logger.Info("启动OKEx现货监视程序")
 	okexCurrent := new (Exchange.OKExAPI)
 	okexCurrent.Init(Exchange.TradeTypeCurrent)
 
 	http := new(Web.HttpServer)
 	go http.SetupHttpServer()
-	go Utils.OpenBrowser("http://loalhost:8080")
+	go Utils.OpenBrowser("http://localhost:8080")
 
 	go func(){
 		

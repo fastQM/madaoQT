@@ -21,7 +21,7 @@ func (h *HttpServer)SetupHttpServer() {
     h.ws = new(websocket.WebsocketServer)
     h.ws.SetupWebsocket(h.app)
 
-    views := iris.HTML("./views", ".html")
+    views := iris.HTML("./views/templates", ".html")
     // views.Reload(true)  //开发模式，强制每次请求都更新页面
     
 
@@ -29,7 +29,8 @@ func (h *HttpServer)SetupHttpServer() {
         // h.app.StaticEmbedded("/static", "./views/node_modules", Asset, AssetNames)
 
     } else {
-        h.app.StaticWeb("/static", "./views/node_modules")
+        h.app.StaticWeb("/bower", "./views/bower_components")
+        h.app.StaticWeb("/elements", "./views/elements")
 
     }
     
