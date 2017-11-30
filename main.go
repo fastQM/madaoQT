@@ -2,6 +2,8 @@ package main
 
 import (
 	"time"
+	"fmt"
+	"os"
 
 	"github.com/kataras/golog"
 
@@ -19,7 +21,22 @@ func init(){
 	Logger.SetLevel("debug")
 }
 
+func handleCmd() {
+	var cmd string
+	for {
+		fmt.Scanln(&cmd)
+		switch cmd {
+		case "q":
+			Logger.Info("Exiting...")
+			os.Exit(0);
+		}
+	}
+
+}
+
 func main(){
+
+	go handleCmd()
 
 	analyzer := new(Rules.IAnalyzer)
 	analyzer.Init(nil)
