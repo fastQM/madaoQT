@@ -7,7 +7,7 @@ The complete set of contributors may be found at http://polymer.github.io/CONTRI
 Code distributed by Google as part of the polymer project is also
 subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
 -->
-
+<script src="/iris-ws.js"></script>
 <link rel="import" href="../bower_components/polymer/polymer-element.html">
 <link rel="import" href="shared-styles.html">
 
@@ -23,16 +23,55 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
     <div class="card">
       <div class="circle">1</div>
-      <h1>View One</h1>
-      <p>Ut labores minimum atomorum pro. Laudem tibique ut has.</p>
-      <p>Lorem ipsum dolor sit amet, per in nusquam nominavi periculis, sit elit oportere ea.Lorem ipsum dolor sit amet, per in nusquam nominavi periculis, sit elit oportere ea.Cu mei vide viris gloriatur, at populo eripuit sit.</p>
+      <p>监视数据</p>
+      <pre>[[text]]</pre>
     </div>
   </template>
 
   <script>
     class MyView1 extends Polymer.Element {
       static get is() { return 'my-view1'; }
+      static get properties() {
+        return {
+          text: String
+        }
+      }
+      ready() {
+        super.ready()
+
+        this.text = ""
+        var self = this
+
+        var scheme = document.location.protocol == "https:" ? "wss" : "ws";
+        var port = document.location.port ? (":" + document.location.port) : "";
+        var wsURL = scheme + "://" + document.location.hostname + port+"/websocket"; 
+
+        var socket = new Ws(wsURL)
+        socket.OnConnect(function () {
+          self.text += "Status: Connected\n";
+        });
+        socket.OnDisconnect(function () {
+          self.text += "Status: Disconnected\n";
+        });
+
+        // read events from the server
+        socket.On("chat", function (msg) {
+          addMessage(msg)
+        });
+
+        function send() {
+          addMessage("Me: " + input.value) // write ourselves
+          socket.Emit("chat", input.value);// send chat event data to the websocket server
+          input.value = ""; // clear the input
+        }
+        
+        function addMessage(msg) {
+          self.text += msg + "\n";
+        }
+      }
     }
+
+
 
     window.customElements.define(MyView1.is, MyView1);
   </script>
