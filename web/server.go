@@ -1,7 +1,8 @@
 package web
 
 import (
-	"github.com/kataras/iris"
+    "github.com/kataras/iris"
+    "github.com/kataras/golog"
 
 	Config "madaoQT/config"
 	controllers "madaoQT/web/controllers"
@@ -11,6 +12,38 @@ import (
 type HttpServer struct {
 	app *iris.Application
 	ws  *websocket.WebsocketServer
+}
+
+var Logger *golog.Logger
+
+func init(){
+	logger := golog.New()
+	Logger = logger
+	Logger.SetLevel("debug")
+	Logger.Info("Rules package init() finished")
+}
+
+func (h *HttpServer)setupRoutes(){
+
+    routers := map[string]string{
+        "/": "index.html",
+        "/login": "login.html",
+        "/test": "test.html",
+    }
+
+    for k,_ := range routers {
+        h.app.Get(k, func(ctx iris.Context) {
+            if err := ctx.View(routers[ctx.Path()]); err != nil {
+                ctx.StatusCode(iris.StatusInternalServerError)
+                ctx.Writef(err.Error())
+            }
+        })
+    }
+}
+
+func (h *HttpServer)setupControllers() {
+
+    h.app.Controller("/helloworld", new(controllers.HelloWorldController))
 }
 
 func (h *HttpServer)SetupHttpServer() {
@@ -37,18 +70,8 @@ func (h *HttpServer)SetupHttpServer() {
     
     h.app.RegisterView(views)
     
-    h.app.Controller("/helloworld", new(controllers.HelloWorldController))
-
-    h.app.Get("/", func(ctx iris.Context) {
-        // Bind: {{.message}} with "Hello world!"
-        // ctx.ViewData("message", "Hello world!")
-        // Render template file: ./views/hello.html
-        // ctx.View("websockets.html")
-        if err := ctx.View("index.html"); err != nil {
-			ctx.StatusCode(iris.StatusInternalServerError)
-			ctx.Writef(err.Error())
-		}
-	})
+    h.setupControllers()
+    h.setupRoutes()
 
 	h.app.Run(iris.Addr(":8080"))
 }

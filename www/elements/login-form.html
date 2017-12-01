@@ -1,0 +1,60 @@
+<link rel="import" href="../bower_components/polymer/polymer-element.html">
+<link rel="import" href="../bower_components/iron-form/iron-form.html">
+<link rel="import" href="../bower_components/paper-input/paper-input.html">
+<link rel="import" href="../bower_components/paper-button/paper-button.html">
+
+<dom-module id="login-form">
+    <template>
+      <style>
+        :host {
+            display: block;
+            width: 300px;
+            margin: 100px auto;
+            background-color: white;
+        }
+        input, paper-input, paper-checkbox {
+            margin-bottom: 8px;
+        }
+        iron-form {
+            @apply --shadow-elevation-2dp;
+            padding: 20px;
+        }
+        paper-button {
+            display: inline-block;
+            width: 45%;
+            text-align: center;
+        }
+        
+        paper-button:not([disabled]) {
+            background: #03a9f4;
+            color: white;
+        }
+      </style>
+
+
+        <iron-form id="loginForm">
+            <form action="/user/login" method="get">
+            <paper-input name="name" label="用户名" value="" required></paper-input>
+            <paper-input name="password" label="密码" value="" required></paper-input>
+            <paper-button raised onclick="loginForm.submit()">Submit</paper-button>
+            <paper-button raised onclick="loginForm.reset()">Reset</paper-button>
+            </form>
+            <div class="output"></div>
+        </iron-form>
+    </template>
+
+    <script>
+        class LoginForm extends Polymer.Element {
+        static get is() { return 'login-form'; }
+        }
+
+        // loginForm.addEventListener('iron-form-presubmit', function(event) {
+        //     this.request.params['sidekick'] = 'Robin';
+        // });
+
+        // loginForm.addEventListener('iron-form-submit', function(event) {
+        //     this.querySelector('.output').innerHTML = JSON.stringify(event.detail);
+        // });
+        window.customElements.define(LoginForm.is, LoginForm);
+    </script>    
+</dom-module>

@@ -83,17 +83,23 @@ func _TestTrade(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(TradeTypeContract)
 
-	config := map[string]interface{} {
-        "symbol": "ltc_usd",
-        "contract_type": "this_week",
-        "price": "80",
-        "amount": "1",
-        "type": "1",
-        "match_price": "0",
-        "lever_rate": "10",
+	// config := map[string]interface{} {
+    //     "symbol": "ltc_usd",
+    //     "contract_type": "this_week",
+    //     "price": "80",
+    //     "amount": "1",
+    //     "type": "1",
+    //     "match_price": "0",
+    //     "lever_rate": "10",
+	// }
+	configs := OrderConfig {
+		Coin: "ltc_usd",
+		Type: OrderTypeOpenLong,
+		Price: 60.01,
+		Amount: 1,
 	}
 
-	err, message := okex.PlaceOrder(config)
+	err, message := okex.PlaceOrder(configs)
 	if err != nil {
 		log.Printf("Error:%v", err)
 		return
@@ -108,27 +114,22 @@ func _TestTrade(t *testing.T) {
 
 }
 
-func TestGetOrderInfo(t *testing.T) {
-	okex := new(OKExAPI)
-	okex.Init(TradeTypeContract)
-	
-	configs := map[string]interface{} {
-		"symbol": "ltc_usd",
-		"order_id": "-1",
-		"contract_type": "this_week",
-		"status": "2",
-		"current_page": "1",
-		"page_length": "1",
-	}
-
-	log.Printf("OrderInfo:%v", okex.GetOrderInfo(configs))	
-}
-
-// func TestGetTradesInfo(t *testing.T) {
+// func TestGetOrderInfo(t *testing.T) {
 // 	okex := new(OKExAPI)
 // 	okex.Init(TradeTypeContract)
-// 	log.Printf("UserInfo:%v", okex.GetTradesInfo())	
+	
+// 	configs := map[string]interface{} {
+// 		"symbol": "ltc_usd",
+// 		"order_id": "-1",
+// 		"contract_type": "this_week",
+// 		"status": "2",
+// 		"current_page": "1",
+// 		"page_length": "1",
+// 	}
+
+// 	log.Printf("OrderInfo:%v", okex.GetOrderInfo(configs))	
 // }
+
 
 func TestGetUserInfo(t *testing.T) {
 	okex := new(OKExAPI)
@@ -140,34 +141,51 @@ func TestCancelOrder(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(TradeTypeContract)
 
-	configs := map[string]interface{} {
-		"order_id": "14318387904",
-		"symbol": "ltc_usd",
-        "contract_type": "this_week",
+	// configs := map[string]interface{} {
+	// 	"order_id": "14318387904",
+	// 	"symbol": "ltc_usd",
+    //     "contract_type": "this_week",
+	// }
+	order := OrderInfo {
+		OrderID: "14566361108",
+		Coin: "ltc_usd",
 	}
-	log.Printf("CancelOrder:%v", okex.CancelOrder(configs))
+
+	log.Printf("CancelOrder:%v", okex.CancelOrder(order))
 }
 
 func TestSpotCancelOrder(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(TradeTypeCurrent)
 
-	configs := map[string]interface{} {
-		"order_id": "58520149",
-		"symbol": "ltc_usdt",
+	// configs := map[string]interface{} {
+	// 	"order_id": "58520149",
+	// 	"symbol": "ltc_usdt",
+	// }
+	order := OrderInfo {
+		OrderID: "60461596",
+		Coin: "ltc_usdt",
 	}
-	log.Printf("CancelOrder:%v", okex.CancelOrder(configs))
+
+	log.Printf("CancelOrder:%v", okex.CancelOrder(order))
 }
 
-func TestSpotOrder(t *testing.T) {
+func _TestSpotOrder(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(TradeTypeCurrent)
 
-	configs := map[string]interface{} {
-		"symbol":"ltc_usdt",
-        "type":"buy",
-        "price":"85",
-        "amount":"1",
+	// configs := map[string]interface{} {
+	// 	"symbol":"ltc_usdt",
+    //     "type":"buy",
+    //     "price":"70",
+    //     "amount":"1",
+	// }
+
+	configs := OrderConfig{
+		Coin: "ltc_usdt",
+		Type: OrderTypeBuy,
+		Price: 60,
+		Amount: 1,
 	}
 
 	err, result := okex.PlaceOrder(configs)

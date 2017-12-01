@@ -20,6 +20,7 @@ func init(){
 
 type TradeType int8
 type EventType int8
+type OrderType int8
 
 const (
 	TradeTypeContract TradeType = iota
@@ -31,6 +32,15 @@ const (
 	EventError
 )
 
+const (
+	OrderTypeOpenLong OrderType = iota
+	OrderTypeOpenShort
+	OrderTypeCloseLong
+	OrderTypeCloseShort
+	OrderTypeBuy
+	OrderTypeSell
+)
+
 type TickerListItem struct{
 	Tag string	// 用户调用者匹配
 	Name string	// 用户交易所匹配
@@ -38,6 +48,9 @@ type TickerListItem struct{
 	Type TradeType	// 合约还是现货
 	Period string // 合约周期
 	Value interface{}
+
+	ticket int64
+	oldticket int64
 }
 
 type DepthListItem struct {
@@ -75,10 +88,19 @@ type TickerValue struct {
 type OrderConfig struct {
 	Coin string
 	/* buy or sell */
-	Type string	
+	Type OrderType	
 	Price float64
-	Amount float64
-	
+	Amount float64	
+}
+
+type OrderInfo struct {
+	Coin string
+	OrderID string
+}
+
+type OrderResult struct {
+	Result string
+	OrderID string
 }
 
 type IExchange interface{
@@ -88,8 +110,8 @@ type IExchange interface{
 	GetTickerValue(tag string) *TickerValue
 	WatchEvent() chan EventType
 	GetDepthValue(coinA string, coinB string, orderQuantity float64) *DepthValue
-	PlaceOrder(configs map[string]interface{}) (error, map[string]interface{})
-	// CancelOrder(config map[string]interface{}) (erros, map[string]interface{})
+	PlaceOrder(configs OrderConfig) (error, map[string]interface{})
+	CancelOrder(order OrderInfo) map[string]interface{}
 }
 
 /* 获取深度价格 */

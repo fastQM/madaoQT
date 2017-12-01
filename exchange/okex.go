@@ -71,7 +71,7 @@ const ChannelSpotCancelOrder = "ok_spot_cancel_order"
 const ChannelSpotUserInfo = "ok_spot_userinfo"
 const ChannelSpotOrderInfo = "ok_spot_orderinfo"
 
-const ShowMessages = false
+const Debug = false
 const DefaultTimeoutSec = 3
 
 
@@ -144,7 +144,7 @@ func (o *OKExAPI)Init(tradeType TradeType){
 				return
 			}
 
-			if ShowMessages {
+			if Debug {
 				Logger.Debugf("recv: %s", message)
 			}
 
@@ -233,6 +233,7 @@ func (o *OKExAPI)Init(tradeType TradeType){
 						if ticker.Name == response[0]["channel"] {
 							// o.tickerList[i].Time = timeHM
 							o.tickerList[i].Value = response[0]["data"]
+							o.tickerList[i].ticket++
 							goto END
 						}
 					}
@@ -314,6 +315,12 @@ func (o *OKExAPI)GetTickerValue(tag string) *TickerValue {
 		if ticker.Tag == tag {
 			if ticker.Value != nil {
 				// return ticker.Value.(map[string]interface{})
+				if ticker.oldticket == ticker.ticket {
+					Logger.Errorf("[%s][%s]Ticker数据未更新", o.GetExchangeName(), ticker.Name)
+				} else {
+					ticker.oldticket = ticker.ticket
+				}
+
 				var lastValue float64
 				tmp := ticker.Value.(map[string]interface{})
 				if o.tradeType == TradeTypeContract {
@@ -532,7 +539,7 @@ func (o *OKExAPI)command(data map[string]string, parameters map[string]string) e
 		   return errors.New("Marshal failed")
 	}
 	
-	if ShowMessages {
+	if Debug {
 		log.Printf("Cmd:%v", string(cmd))
 	}
 
@@ -561,7 +568,7 @@ lever_rate 杠杆倍数 value:10\20 默认10
 错误或者order ID
 
 */
-func (o *OKExAPI) PlaceOrder(configs map[string]interface{}) (error, map[string]interface{}) {
+func (o *OKExAPI) PlaceOrder(configs OrderConfig) (error, map[string]interface{}) {
 
 	var channel string
 	var data,parameters map[string]string
@@ -572,22 +579,26 @@ func (o *OKExAPI) PlaceOrder(configs map[string]interface{}) (error, map[string]
 	
 		parameters = map[string]string {
 			"api_key": constApiKey,
-			// "secret_key": constSecretKey,
-		}
-		for k,v := range configs {
-			parameters[k] = v.(string)
+			"symbol": configs.Coin + "_usd",
+			"contract_type": "this_week",
+			"price": strconv.FormatFloat(configs.Price, 'f', 2, 64),
+			// the exact amount orders is amount/level_rate
+			"amount": strconv.FormatFloat(configs.Amount, 'f', 2, 64),
+			"type": o.getOrderType(configs.Type),
+			"match_price": "0",
+			"lever_rate": "10",
 		}
 		
 	}else if o.tradeType == TradeTypeCurrent {
 
 		channel = ChannelSpotOrder
-	
+
 		parameters = map[string]string {
 			"api_key": constApiKey,
-			// "secret_key": constSecretKey,
-		}
-		for k,v := range configs {
-			parameters[k] = v.(string)
+			"symbol": configs.Coin,
+			"type": o.getOrderType(configs.Type),
+			"price": strconv.FormatFloat(configs.Price, 'f', 2, 64),
+			"amount": strconv.FormatFloat(configs.Amount, 'f', 2, 64),
 		}
 	}
 
@@ -610,7 +621,7 @@ func (o *OKExAPI) PlaceOrder(configs map[string]interface{}) (error, map[string]
 
 }
 
-func (o *OKExAPI) CancelOrder(configs map[string]interface{}) map[string]interface{} {
+func (o *OKExAPI) CancelOrder(order OrderInfo) map[string]interface{} {
 
 	var channel string
 	var data,parameters map[string]string
@@ -621,22 +632,20 @@ func (o *OKExAPI) CancelOrder(configs map[string]interface{}) map[string]interfa
 			
 		parameters = map[string]string {
 			"api_key": constApiKey,
-			// "secret_key": constSecretKey,
-		}
-		for k,v := range configs {
-			parameters[k] = v.(string)
+			"order_id": order.OrderID,
+			"symbol": order.Coin,
+			"contract_type": "this_week",
 		}
 		
 	}else if o.tradeType == TradeTypeCurrent {
 		channel = ChannelSpotCancelOrder
-		
+
 		parameters = map[string]string {
 			"api_key": constApiKey,
-			// "secret_key": constSecretKey,
+			"order_id": order.OrderID,
+			"symbol": order.Coin,
 		}
-		for k,v := range configs {
-			parameters[k] = v.(string)
-		}
+
 	}
 
 	data = map[string]string{
@@ -776,4 +785,25 @@ func (o *OKExAPI) GetUserInfo() interface{} {
 		log.Printf("Timeout to get user info")
 		return nil
 	}
+}
+
+func (o *OKExAPI) getOrderType(orderType OrderType) string {
+
+	switch orderType{
+	case OrderTypeOpenLong:
+		return "1"
+	case OrderTypeOpenShort:
+		return "2"
+	case OrderTypeCloseLong:
+		return "3"
+	case OrderTypeCloseShort:
+		return "4"
+	case OrderTypeBuy:
+		return "buy"
+	case OrderTypeSell:
+		return "sell"
+	}
+
+	Logger.Errorf("[%s]getOrderType: Invalid type", o.GetExchangeName())
+	return ""
 }

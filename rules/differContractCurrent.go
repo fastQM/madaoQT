@@ -149,6 +149,9 @@ func (a *IAnalyzer) Watch() {
 					// 期货判断bids深度
 					exchange := *a.contracts[coin].exchange
 					sell := exchange.GetDepthValue(coin, "", placeOrderQuan[coin])
+					if sell == nil {
+						continue
+					}
 					msg = fmt.Sprintf("[合约买单均格：%.2f 合约买单量:%.2f 操盘资金量：%.2f 下单深度均格：%.2f 下单价格:%.2f]", 
 						sell.BidAverage, sell.BidQty, placeOrderQuan[coin], sell.BidByOrder, sell.BidPrice)
 
@@ -157,6 +160,10 @@ func (a *IAnalyzer) Watch() {
 
 					exchange = *a.currents[coin].exchange
 					buy := exchange.GetDepthValue(coin, "usdt", placeOrderQuan[coin])
+					if buy == nil {
+						continue
+					}
+					
 					msg = fmt.Sprintf("[现货卖单均价：%.2f 现货卖单量:%.2f 操盘资金量:%.2f 下单深度均格：%.2f 下单价格:%.2f]",
 						buy.AskAverage, buy.AskQty, placeOrderQuan[coin], buy.AskByOrder, buy.AskPrice)
 
@@ -175,6 +182,10 @@ func (a *IAnalyzer) Watch() {
 
 					exchange := *a.contracts[coin].exchange
 					buy := exchange.GetDepthValue(coin, "", placeOrderQuan[coin])
+					if buy == nil {
+						continue
+					}
+
 					msg = fmt.Sprintf("[合约卖单均格：%.2f 合约卖单量:%.2f 操盘资金量：%.2f 下单深度均格：%.2f 下单价格:%.2f]", 
 						buy.AskAverage, buy.AskQty, placeOrderQuan[coin], buy.AskByOrder, buy.AskPrice)
 
@@ -183,6 +194,10 @@ func (a *IAnalyzer) Watch() {
 
 					exchange = *a.currents[coin].exchange
 					sell := exchange.GetDepthValue(coin, "usdt", placeOrderQuan[coin])
+					if sell == nil {
+						continue
+					}
+
 					msg = fmt.Sprintf("[现货买单均价：%.2f 现货买单量:%.2f 操盘资金量:%.2f 下单深度均格：%.2f 下单价格:%.2f]",
 						sell.BidAverage, sell.BidQty, placeOrderQuan[coin], sell.BidByOrder, sell.BidPrice)
 
