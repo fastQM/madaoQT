@@ -32,29 +32,44 @@
       </style>
 
 
-        <iron-form id="loginForm">
-            <form action="/user/login" method="get">
+        <iron-form id="form2">
+            <form action="/user/login" method="post">
             <paper-input name="name" label="用户名" value="" required></paper-input>
             <paper-input name="password" label="密码" value="" required></paper-input>
-            <paper-button raised onclick="loginForm.submit()">Submit</paper-button>
-            <paper-button raised onclick="loginForm.reset()">Reset</paper-button>
+            <paper-button raised onclick="this.$.form2.submit()">Submit</paper-button>
+            <paper-button raised onclick="this.$.form2.reset()">Reset</paper-button>
             </form>
             <div class="output"></div>
         </iron-form>
+        <script>
+            form2.addEventListener('iron-form-presubmit', function(event) {
+                this.request.params['sidekick'] = 'Robin';
+            });
+            form2.addEventListener('iron-form-submit', function(event) {
+                this.querySelector('.output').innerHTML = JSON.stringify(event.detail);
+            });
+        </script>
     </template>
 
     <script>
         class LoginForm extends Polymer.Element {
+
         static get is() { return 'login-form'; }
+        ready() {
+            super.ready()
+            this.$.form2.addEventListener('iron-form-presubmit', function(event) {
+                this.request.params['sidekick'] = 'Robin';
+            });
+
+            this.$.form2.addEventListener('iron-form-submit', function(event) {
+                this.querySelector('.output').innerHTML = JSON.stringify(event.detail);
+            });
         }
 
-        // loginForm.addEventListener('iron-form-presubmit', function(event) {
-        //     this.request.params['sidekick'] = 'Robin';
-        // });
+        }
 
-        // loginForm.addEventListener('iron-form-submit', function(event) {
-        //     this.querySelector('.output').innerHTML = JSON.stringify(event.detail);
-        // });
+
+
         window.customElements.define(LoginForm.is, LoginForm);
     </script>    
 </dom-module>

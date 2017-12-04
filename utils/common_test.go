@@ -26,3 +26,11 @@ func TestTimeLocation(t *testing.T) {
 	time := FormatTime(1511680608304)
 	log.Printf(time)
 }
+
+func TestGetRandomString(t *testing.T) {
+	for i:=0;i<10;i++ {
+		string16 := GetRandomHexString(16)
+		string32 := GetRandomHexString(32)
+		log.Printf("string1: %s, string2: %s", string16, string32)
+	}
+}

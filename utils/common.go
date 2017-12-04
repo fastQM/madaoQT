@@ -4,6 +4,7 @@ import (
 	"time"
 	"runtime"
 	"os/exec"
+	"math/rand"
 
 	"github.com/kataras/golog"
 )
@@ -81,4 +82,14 @@ func FormatTime(timestamp_ms int64) string {
 	location,_ := time.LoadLocation("Asia/Shanghai")
 	unixTime := time.Unix(timestamp_ms/1000, 0)
 	return unixTime.In(location).Format(timeFormat)
+}
+
+func GetRandomHexString(length int) string{
+	characters := []byte("abcdef0123456789")
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, length)
+    for i := range b {
+        b[i] = characters[rand.Intn(len(characters))]
+    }
+    return string(b)
 }

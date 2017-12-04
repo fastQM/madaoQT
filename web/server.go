@@ -1,26 +1,35 @@
 package web
 
 import (
+    "time"
+
+	"github.com/kataras/iris/sessions"
     "github.com/kataras/iris"
     "github.com/kataras/golog"
+    "github.com/gorilla/securecookie"
 
 	Config "madaoQT/config"
 	controllers "madaoQT/web/controllers"
-	websocket "madaoQT/web/websocket"
+    websocket "madaoQT/web/websocket"
+    Utils "madaoQT/utils"
 )
 
 type HttpServer struct {
 	app *iris.Application
-	ws  *websocket.WebsocketServer
+    ws  *websocket.WebsocketServer
+    sess *sessions.Sessions
 }
 
+const CookiesName = "madao-sessions"
+
 var Logger *golog.Logger
+
 
 func init(){
 	logger := golog.New()
 	Logger = logger
 	Logger.SetLevel("debug")
-	Logger.Info("Rules package init() finished")
+	Logger.Info("Web package init() finished")
 }
 
 func (h *HttpServer)setupRoutes(){
@@ -41,9 +50,27 @@ func (h *HttpServer)setupRoutes(){
     }
 }
 
+func (h *HttpServer)setupSessions() {
+
+    cookieName := CookiesName
+	// AES only supports key sizes of 16, 24 or 32 bytes.
+	// You either need to provide exactly that amount or you derive the key from what you type in.
+	hashKey := []byte(Utils.GetRandomHexString(32))
+	blockKey := []byte(Utils.GetRandomHexString(32))
+	secureCookie := securecookie.New(hashKey, blockKey)
+
+	h.sess = sessions.New(sessions.Config{
+		Cookie: cookieName,
+		Encode: secureCookie.Encode,
+        Decode: secureCookie.Decode,
+        Expires: time.Minute * 10,
+	})
+}
+
 func (h *HttpServer)setupControllers() {
 
     h.app.Controller("/helloworld", new(controllers.HelloWorldController))
+    h.app.Controller("/user", &controllers.UserController{Sessions: h.sess})
 }
 
 func (h *HttpServer)SetupHttpServer() {
@@ -70,8 +97,9 @@ func (h *HttpServer)SetupHttpServer() {
     
     h.app.RegisterView(views)
     
-    h.setupControllers()
+    h.setupSessions()
     h.setupRoutes()
+    h.setupControllers()
 
 	h.app.Run(iris.Addr(":8080"))
 }
