@@ -1,8 +1,9 @@
 package exchange
 
 import (
-	"github.com/kataras/golog"
 	"log"
+
+	"github.com/kataras/golog"
 )
 
 /*
@@ -10,7 +11,7 @@ import (
 */
 var Logger *golog.Logger
 
-func init(){
+func init() {
 	logger := golog.New()
 	Logger = logger
 	Logger.SetLevel("debug")
@@ -18,9 +19,11 @@ func init(){
 	Logger.Info("Exchange init() finished")
 }
 
+/* 交易类型：买，卖，开多，开空，平多，平空 */
 type TradeType int8
 type EventType int8
 type OrderType int8
+type OrderStatusType int8
 
 const (
 	TradeTypeContract TradeType = iota
@@ -39,85 +42,109 @@ const (
 	OrderTypeCloseShort
 	OrderTypeBuy
 	OrderTypeSell
+	OrderTypeUnknown
 )
 
-type TickerListItem struct{
-	Tag string	// 用户调用者匹配
-	Name string	// 用户交易所匹配
-	Time string
-	Type TradeType	// 合约还是现货
-	Period string // 合约周期
-	Value interface{}
+const (
+	OrderStatusOpen OrderStatusType = iota
+	OrderStatusPartDone
+	OrderStatusDone
+	OrderStatusCanceling
+	OrderStatusCanceled
+	OrderStatusUnknown
+)
 
-	ticket int64
+type InitConfig struct {
+	Api    string
+	Secret string
+	Custom map[string]interface{}
+}
+
+type TickerListItem struct {
+	Tag    string // 用户调用者匹配
+	Name   string // 用户交易所匹配
+	Time   string
+	Type   TradeType // 合约还是现货
+	Period string    // 合约周期
+	Value  interface{}
+
+	ticket    int64
 	oldticket int64
 }
 
 type DepthListItem struct {
-	Coin string
-	Name string
-	Time string
-	Depth string
-	AskAverage float64 
-	AskQty float64
+	Coin       string
+	Name       string
+	Time       string
+	Depth      string
+	AskAverage float64
+	AskQty     float64
 	BidAverage float64
-	BidQty float64
+	BidQty     float64
 	AskByOrder float64
 	BidByOrder float64
 }
 
 type DepthValue struct {
-	Time string
-	AskAverage float64 
-	AskQty float64
+	Time       string
+	AskAverage float64
+	AskQty     float64
 	BidAverage float64
-	BidQty float64
-	AskByOrder float64	// 下单深度均价
-	AskPrice float64	// 下单价格
+	BidQty     float64
+	AskByOrder float64 // 下单深度均价
+	AskPrice   float64 // 下单价格
 	BidByOrder float64
-	BidPrice float64
+	BidPrice   float64
 }
 
 type TickerValue struct {
-	Last float64
-	Time string
-	Type TradeType
+	Last   float64
+	Time   string
+	Type   TradeType
 	Period string // 合约周期
 }
 
-type OrderConfig struct {
+type TradeConfig struct {
 	Coin string
 	/* buy or sell */
-	Type OrderType	
-	Price float64
-	Amount float64	
+	Type   OrderType
+	Price  float64
+	Amount float64
 }
 
 type OrderInfo struct {
-	Coin string
+	Coin    string
+	OrderID string
+	Price   float64
+	Amount  float64
+	Type    OrderType
+	Status  OrderStatusType
+}
+
+type TradeResult struct {
+	Error   error
 	OrderID string
 }
 
-type OrderResult struct {
-	Result string
-	OrderID string
-}
-
-type IExchange interface{
+type IExchange interface {
 	GetExchangeName() string
-	// Init(config interface{}) error
+	Init(config InitConfig) error
 	// AddTicker(coinA string, coinB string, config interface{}, tag string)
 	GetTickerValue(tag string) *TickerValue
 	WatchEvent() chan EventType
 	GetDepthValue(coinA string, coinB string, orderQuantity float64) *DepthValue
-	PlaceOrder(configs OrderConfig) (error, map[string]interface{})
+	GetBalance(coin string) float64
+
+	Trade(configs TradeConfig) *TradeResult
+
 	CancelOrder(order OrderInfo) map[string]interface{}
+	GetOrderInfo(filter map[string]interface{}) []OrderInfo
 }
 
 /* 获取深度价格 */
-type DepthPrice struct{
+type DepthPrice struct {
 	price float64
-	qty float64 
+	qty   float64
 }
 
 const DepthTypeAsks = 0
@@ -128,11 +155,11 @@ func RevertDepthArray(array []DepthPrice) []DepthPrice {
 	var length int
 
 	if len(array)%2 != 0 {
-		length = len(array)/2
+		length = len(array) / 2
 	} else {
-		length = len(array)/2-1
+		length = len(array)/2 - 1
 	}
-	for i:=0;i<=length;i++{
+	for i := 0; i <= length; i++ {
 		tmp = array[i]
 		array[i] = array[len(array)-1-i]
 		array[len(array)-1-i] = tmp
@@ -141,26 +168,26 @@ func RevertDepthArray(array []DepthPrice) []DepthPrice {
 	return array
 }
 
-func GetDepthAveragePrice(items []DepthPrice) (float64,float64) {
-	
+func GetDepthAveragePrice(items []DepthPrice) (float64, float64) {
+
 	if items == nil || len(items) == 0 {
 		return -1, -1
 	}
-	
+
 	var total float64
 	var quantity float64
 
-	for _,item := range items {
+	for _, item := range items {
 		total += item.price * item.qty
 		quantity += item.qty
 	}
 
-	return total/quantity, quantity
+	return total / quantity, quantity
 }
 
-func GetDepthPriceByOrder(depthType int, items []DepthPrice, orderQty float64) (float64,float64) {
+func GetDepthPriceByOrder(depthType int, items []DepthPrice, orderQty float64) (float64, float64) {
 	if items == nil || len(items) == 0 {
-		return -1,-1
+		return -1, -1
 	}
 
 	if depthType == DepthTypeAsks {
@@ -175,36 +202,36 @@ func GetDepthPriceByOrder(depthType int, items []DepthPrice, orderQty float64) (
 
 	if orderQty > total {
 		log.Printf("深度不够：%v", total)
-		return -2,-2
+		return -2, -2
 	}
 
 	var depth int
 	balance := orderQty
 
 	for i, item := range items {
-		if balance - item.qty <= 0 {
+		if balance-item.qty <= 0 {
 			depth = i
 			break
 		} else {
 			balance -= item.qty
 		}
-	} 
+	}
 
 	total = 0
-	for i:=0;i<depth;i++ {
+	for i := 0; i < depth; i++ {
 		total += items[i].price * items[i].qty
 	}
 
 	total += (items[depth].price * balance)
 
-	return total/orderQty,items[depth].price
+	return total / orderQty, items[depth].price
 }
 
 func GetRatio(value1 float64, value2 float64) float64 {
-	
-	var big,small float64
 
-	if value1 >= value2{
+	var big, small float64
+
+	if value1 >= value2 {
 		big = value1
 		small = value2
 	} else {
@@ -214,5 +241,3 @@ func GetRatio(value1 float64, value2 float64) float64 {
 
 	return (big - small) * 100 / small ///????
 }
-
-

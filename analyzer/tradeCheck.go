@@ -48,3 +48,4 @@
 // 	tradeCheck.RegisterTradeCheckServiceServer(s, &Service{})
 // 	s.Serve(lis)
 // }
+
