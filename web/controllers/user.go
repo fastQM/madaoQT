@@ -33,6 +33,7 @@ func (c *UserController) PostLogin() string {
 		c.Ctx.StatusCode(iris.StatusInternalServerError)
 		return err.Error()
 	}
+	
 	Logger.Debugf("Info:%v", info)
 
 	s := c.Sessions.Start(c.Ctx)	
@@ -50,8 +51,6 @@ func (c *UserController) GetInfo() string {
 	name := s.Get("name")
 	password := s.Get("password")
 	return fmt.Sprintf("name:%s, password:%s", name, password)
-	
-
 }
 
 //
