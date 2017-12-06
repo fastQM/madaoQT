@@ -1,10 +1,10 @@
 package utils
 
 import (
-	"time"
-	"runtime"
-	"os/exec"
 	"math/rand"
+	"os/exec"
+	"runtime"
+	"time"
 
 	"github.com/kataras/golog"
 )
@@ -19,10 +19,10 @@ const OS_Unknown = "unknown"
 */
 var Logger *golog.Logger
 
-func init(){
+func init() {
 	logger := golog.New()
 	Logger = logger
-	Logger.SetLevel("debug")
+	Logger.SetTimeFormat("2006-01-02 06:04:05")
 }
 
 func OpenBrowser(url string) {
@@ -42,20 +42,19 @@ func OpenBrowser(url string) {
 		//
 		return
 	}
-	
+
 	err := exec.Command(cmd, url).Start()
 	if err != nil {
 		Logger.Errorf("Fail to OpenBrowser:%v", err)
 	}
-	
+
 }
 
+func SleepAsyncBySecond(sec time.Duration) {
 
-func SleepAsyncBySecond(sec time.Duration){
-
-	select{
-	case <- time.After(sec*time.Second):
-			return;
+	select {
+	case <-time.After(sec * time.Second):
+		return
 	}
 }
 
@@ -64,11 +63,11 @@ func RevertArray(array ...interface{}) []interface{} {
 	var length int
 
 	if len(array)%2 != 0 {
-		length = len(array)/2
+		length = len(array) / 2
 	} else {
-		length = len(array)/2-1
+		length = len(array)/2 - 1
 	}
-	for i:=0;i<=length;i++{
+	for i := 0; i <= length; i++ {
 		tmp = array[i]
 		array[i] = array[len(array)-1-i]
 		array[len(array)-1-i] = tmp
@@ -79,17 +78,17 @@ func RevertArray(array ...interface{}) []interface{} {
 
 func FormatTime(timestamp_ms int64) string {
 	timeFormat := "2006-01-02 06:04:05"
-	location,_ := time.LoadLocation("Asia/Shanghai")
+	location, _ := time.LoadLocation("Asia/Shanghai")
 	unixTime := time.Unix(timestamp_ms/1000, 0)
 	return unixTime.In(location).Format(timeFormat)
 }
 
-func GetRandomHexString(length int) string{
+func GetRandomHexString(length int) string {
 	characters := []byte("abcdef0123456789")
 	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, length)
-    for i := range b {
-        b[i] = characters[rand.Intn(len(characters))]
-    }
-    return string(b)
+	for i := range b {
+		b[i] = characters[rand.Intn(len(characters))]
+	}
+	return string(b)
 }

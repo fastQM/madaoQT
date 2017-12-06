@@ -16,6 +16,8 @@ type UserRecord struct {
 }
 
 type User struct {
+	session    *mgo.Session
+	collection *mgo.Collection
 }
 
 func (t *User) Connect() error {

@@ -7,14 +7,18 @@ import (
 )
 
 type ExchangeRecord struct {
-	Name   string
-	API    string
+	Name string
+	/* User password encrypted */
+	API string
+	/* User password encrypted */
 	Secret string
 	/* corresponding to the user in the users database */
 	User string
 }
 
 type Exchange struct {
+	session    *mgo.Session
+	collection *mgo.Collection
 }
 
 func (t *Exchange) Connect() error {
@@ -24,10 +28,21 @@ func (t *Exchange) Connect() error {
 		return err
 	}
 	session.SetMode(mgo.Monotonic, true)
-	c := session.DB(Database).C(TradeRecordCollection)
+	c := session.DB(Database).C(ExchangeCollection)
 
 	t.session = session
 	t.collection = c
 
+	return nil
+}
+
+func (t *Exchange) Insert(record *ExchangeRecord) error {
+	if t.session != nil {
+		err := t.collection.Insert(record)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
 	return nil
 }

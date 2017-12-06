@@ -108,12 +108,12 @@ func (a *IAnalyzer) Watch() {
 
 		// log.Printf("Type:%v, Coin:%v Value:%v", exchange.Type, exchange.Coin, tmp)
 
-		if exchange.Type == Exchange.TradeTypeContract {
+		if exchange.Type == Exchange.TradeTypeFuture {
 			a.contracts[exchange.Coin] = AnalyzeItem{
 				value:    tmp,
 				exchange: exchange.Exchange,
 			}
-		} else if exchange.Type == Exchange.TradeTypeCurrent {
+		} else if exchange.Type == Exchange.TradeTypeSpot {
 			a.currents[exchange.Coin] = AnalyzeItem{
 				value:    tmp,
 				exchange: exchange.Exchange,

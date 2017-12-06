@@ -15,8 +15,7 @@ func init() {
 	logger := golog.New()
 	Logger = logger
 	Logger.SetLevel("debug")
-
-	Logger.Info("Exchange init() finished")
+	Logger.SetTimeFormat("2006-01-02 06:04:05")
 }
 
 /* 交易类型：买，卖，开多，开空，平多，平空 */
@@ -26,8 +25,8 @@ type OrderType int8
 type OrderStatusType int8
 
 const (
-	TradeTypeContract TradeType = iota
-	TradeTypeCurrent
+	TradeTypeFuture TradeType = iota
+	TradeTypeSpot
 )
 
 const (
@@ -126,9 +125,16 @@ type TradeResult struct {
 	OrderID string
 }
 
+/* 获取深度价格 */
+type DepthPrice struct {
+	price float64
+	qty   float64
+}
+
 type IExchange interface {
 	GetExchangeName() string
-	Init(config InitConfig) error
+	Init(config InitConfig)
+	Start()
 	// AddTicker(coinA string, coinB string, config interface{}, tag string)
 	GetTickerValue(tag string) *TickerValue
 	WatchEvent() chan EventType
@@ -139,12 +145,6 @@ type IExchange interface {
 
 	CancelOrder(order OrderInfo) map[string]interface{}
 	GetOrderInfo(filter map[string]interface{}) []OrderInfo
-}
-
-/* 获取深度价格 */
-type DepthPrice struct {
-	price float64
-	qty   float64
 }
 
 const DepthTypeAsks = 0
@@ -241,3 +241,32 @@ func GetRatio(value1 float64, value2 float64) float64 {
 
 	return (big - small) * 100 / small ///????
 }
+
+type Exchanges struct {
+	exchanges map[string]IExchange
+}
+
+// func (e *Exchanges) Init() {
+// 	/* add exchange list */
+// 	okexfuture := new(OKExAPI)
+// 	okexfuture.Init(InitConfig{
+// 		Api:    constOKEXApiKey,
+// 		Secret: constOEXSecretKey,
+// 		Custom: map[string]interface{}{"tradeType": TradeTypeFuture},
+// 	})
+
+// 	e.exchanges[okexfuture.GetExchangeName()] = okexfuture
+
+// 	okexspot := new(OKExAPI)
+// 	okexspot.Init(InitConfig{
+// 		Api:    constOKEXApiKey,
+// 		Secret: constOEXSecretKey,
+// 		Custom: map[string]interface{}{"tradeType": TradeTypeSpot},
+// 	})
+
+// 	e.exchanges[okexfuture.GetExchangeName()] = okexspot
+// }
+
+// func (e *Exchanges) Start() {
+
+// }

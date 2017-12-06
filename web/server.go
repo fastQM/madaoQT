@@ -1,58 +1,57 @@
 package web
 
 import (
-    "time"
+	"time"
 
+	"github.com/gorilla/securecookie"
+	"github.com/kataras/golog"
+	"github.com/kataras/iris"
 	"github.com/kataras/iris/sessions"
-    "github.com/kataras/iris"
-    "github.com/kataras/golog"
-    "github.com/gorilla/securecookie"
 
 	Config "madaoQT/config"
+	Utils "madaoQT/utils"
 	controllers "madaoQT/web/controllers"
-    websocket "madaoQT/web/websocket"
-    Utils "madaoQT/utils"
+	websocket "madaoQT/web/websocket"
 )
 
 type HttpServer struct {
-	app *iris.Application
-    ws  *websocket.WebsocketServer
-    sess *sessions.Sessions
+	app  *iris.Application
+	ws   *websocket.WebsocketServer
+	sess *sessions.Sessions
 }
 
 const CookiesName = "madao-sessions"
 
 var Logger *golog.Logger
 
-
-func init(){
+func init() {
 	logger := golog.New()
 	Logger = logger
 	Logger.SetLevel("debug")
 	Logger.Info("Web package init() finished")
 }
 
-func (h *HttpServer)setupRoutes(){
+func (h *HttpServer) setupRoutes() {
 
-    routers := map[string]string{
-        "/": "index.html",
-        "/login": "login.html",
-        "/test": "test.html",
-    }
+	routers := map[string]string{
+		"/":      "index.html",
+		"/login": "login.html",
+		"/test":  "test.html",
+	}
 
-    for k,_ := range routers {
-        h.app.Get(k, func(ctx iris.Context) {
-            if err := ctx.View(routers[ctx.Path()]); err != nil {
-                ctx.StatusCode(iris.StatusInternalServerError)
-                ctx.Writef(err.Error())
-            }
-        })
-    }
+	for k, _ := range routers {
+		h.app.Get(k, func(ctx iris.Context) {
+			if err := ctx.View(routers[ctx.Path()]); err != nil {
+				ctx.StatusCode(iris.StatusInternalServerError)
+				ctx.Writef(err.Error())
+			}
+		})
+	}
 }
 
-func (h *HttpServer)setupSessions() {
+func (h *HttpServer) setupSessions() {
 
-    cookieName := CookiesName
+	cookieName := CookiesName
 	// AES only supports key sizes of 16, 24 or 32 bytes.
 	// You either need to provide exactly that amount or you derive the key from what you type in.
 	hashKey := []byte(Utils.GetRandomHexString(32))
@@ -60,46 +59,46 @@ func (h *HttpServer)setupSessions() {
 	secureCookie := securecookie.New(hashKey, blockKey)
 
 	h.sess = sessions.New(sessions.Config{
-		Cookie: cookieName,
-		Encode: secureCookie.Encode,
-        Decode: secureCookie.Decode,
-        Expires: time.Minute * 10,
+		Cookie:  cookieName,
+		Encode:  secureCookie.Encode,
+		Decode:  secureCookie.Decode,
+		Expires: time.Minute * 10,
 	})
 }
 
-func (h *HttpServer)setupControllers() {
+func (h *HttpServer) setupControllers() {
 
-    h.app.Controller("/helloworld", new(controllers.HelloWorldController))
-    h.app.Controller("/user", &controllers.UserController{Sessions: h.sess})
+	h.app.Controller("/helloworld", new(controllers.HelloWorldController))
+	h.app.Controller("/user", &controllers.UserController{Sessions: h.sess})
+	h.app.Controller("/exchange", &controllers.ExchangeController{Sessions: h.sess})
 }
 
-func (h *HttpServer)SetupHttpServer() {
-	
-    h.app = iris.New()
+func (h *HttpServer) SetupHttpServer() {
 
-    // websocket.SetupWebsocket(app)
-    h.ws = new(websocket.WebsocketServer)
-    h.ws.SetupWebsocket(h.app)
+	h.app = iris.New()
 
-    views := iris.HTML("./www/www", ".html")
-    views.Reload(true)  //开发模式，强制每次请求都更新页面
-    
+	// websocket.SetupWebsocket(app)
+	h.ws = new(websocket.WebsocketServer)
+	h.ws.SetupWebsocket(h.app)
 
-    if Config.PRODUCTION_ENV {
-        // h.app.StaticEmbedded("/static", "./views/node_modules", Asset, AssetNames)
+	views := iris.HTML("./www/www", ".html")
+	views.Reload(true) //开发模式，强制每次请求都更新页面
 
-    } else {
-        h.app.StaticWeb("/bower_components", "./www/bower_components")
-        h.app.StaticWeb("/elements", "./www/elements")
-        h.app.StaticWeb("/images", "./www/images")
+	if Config.PRODUCTION_ENV {
+		// h.app.StaticEmbedded("/static", "./views/node_modules", Asset, AssetNames)
 
-    }
-    
-    h.app.RegisterView(views)
-    
-    h.setupSessions()
-    h.setupRoutes()
-    h.setupControllers()
+	} else {
+		h.app.StaticWeb("/bower_components", "./www/bower_components")
+		h.app.StaticWeb("/elements", "./www/elements")
+		h.app.StaticWeb("/images", "./www/images")
+
+	}
+
+	h.app.RegisterView(views)
+
+	h.setupSessions()
+	h.setupRoutes()
+	h.setupControllers()
 
 	h.app.Run(iris.Addr(":8080"))
 }

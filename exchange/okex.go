@@ -9,16 +9,16 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	websocket "github.com/gorilla/websocket"
 )
 
+const NameOKEX = "okex"
+
 const contractUrl = "wss://real.okex.com:10440/websocket/okexapi"
 const currentUrl = "wss://real.okex.com:10441/websocket"
-
-const constApiKey = "a982120e-8505-41db-9ae3-0c62dd27435c"
-const constSecretKey = "71430C7FA63A067724FB622FB3031970"
 
 const X_BTC = "btc"
 const X_LTC = "ltc"
@@ -69,7 +69,7 @@ const ChannelSpotCancelOrder = "ok_spot_cancel_order"
 const ChannelSpotUserInfo = "ok_spot_userinfo"
 const ChannelSpotOrderInfo = "ok_spot_orderinfo"
 
-const Debug = true
+const Debug = false
 const DefaultTimeoutSec = 3
 
 type ContractItemValueIndex int8
@@ -83,14 +83,17 @@ const (
 )
 
 type OKExAPI struct {
-	conn       *websocket.Conn
+	conn      *websocket.Conn
+	apiKey    string
+	secretKey string
+
 	tickerList []TickerListItem
 	depthList  []DepthListItem
 	event      chan EventType
 	tradeType  TradeType
 
 	/* Each channel has a depth */
-	messageChannels map[string]chan interface{}
+	messageChannels sync.Map
 }
 
 func formatTimeOKEX() string {
@@ -101,6 +104,43 @@ func formatTimeOKEX() string {
 	return unixTime.In(location).Format(timeFormat)
 }
 
+var handlderOkexFuture *OKExAPI
+var handlerOkexSpot *OKExAPI
+
+func NewOKExFutureApi(config *InitConfig) *OKExAPI {
+
+	if handlderOkexFuture == nil && config != nil {
+		handlderOkexFuture := new(OKExAPI)
+		futureConfig := InitConfig{
+			Api:    config.Api,
+			Secret: config.Secret,
+			Custom: map[string]interface{}{"tradeType": TradeTypeFuture},
+		}
+		handlderOkexFuture.Init(futureConfig)
+
+		return handlderOkexFuture
+	}
+
+	return handlderOkexFuture
+}
+
+func NewOKExSpotApi(config *InitConfig) *OKExAPI {
+	if handlerOkexSpot == nil && config != nil {
+		handlerOkexSpot := new(OKExAPI)
+		spotConfig := InitConfig{
+			Api:    config.Api,
+			Secret: config.Secret,
+			Custom: map[string]interface{}{"tradeType": TradeTypeSpot},
+		}
+		handlerOkexSpot.Init(spotConfig)
+
+		return handlerOkexSpot
+	}
+
+	return handlerOkexSpot
+
+}
+
 func (o *OKExAPI) WatchEvent() chan EventType {
 	return o.event
 }
@@ -109,25 +149,34 @@ func (o *OKExAPI) triggerEvent(event EventType) {
 	o.event <- event
 }
 
-func (o *OKExAPI) Init(tradeType TradeType) {
+func (o *OKExAPI) Init(config InitConfig) {
 
 	o.tickerList = nil
 	o.depthList = nil
 	o.event = make(chan EventType)
-	o.tradeType = tradeType
+	o.apiKey = config.Api
+	o.secretKey = config.Secret
 
-	o.messageChannels = make(map[string]chan interface{})
+	o.tradeType = config.Custom["tradeType"].(TradeType)
+
+}
+
+func (o *OKExAPI) Start() {
 
 	var url string
-	if tradeType == TradeTypeContract {
+
+	if o.tradeType == TradeTypeFuture {
 		url = contractUrl
-	} else if tradeType == TradeTypeCurrent {
+	} else if o.tradeType == TradeTypeSpot {
 		url = currentUrl
+	} else {
+		Logger.Error("%s")
+		return
 	}
 
 	c, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
-		log.Printf("Fail to dial: %v", err)
+		Logger.Errorf("Fail to dial: %v", err)
 		go o.triggerEvent(EventError)
 		return
 	}
@@ -136,7 +185,7 @@ func (o *OKExAPI) Init(tradeType TradeType) {
 		for {
 			_, message, err := c.ReadMessage()
 			if err != nil {
-				log.Printf("read:%v", err)
+				Logger.Errorf("Fail to read:%v", err)
 				go o.triggerEvent(EventError)
 				return
 			}
@@ -147,7 +196,7 @@ func (o *OKExAPI) Init(tradeType TradeType) {
 
 			var response []map[string]interface{}
 			if err = json.Unmarshal([]byte(message), &response); err != nil {
-				log.Println("Unmarshal:", err)
+				Logger.Errorf("Fail to Unmarshal:%v", err)
 				continue
 			}
 
@@ -156,27 +205,22 @@ func (o *OKExAPI) Init(tradeType TradeType) {
 			if channel == EventAddChannel || channel == EventRemoveChannel {
 
 			} else if channel == ChannelUserInfo || channel == ChannelSpotUserInfo {
-				if o.messageChannels[channel] != nil {
+				if recvChan, ok := o.messageChannels.Load(channel); recvChan != nil && ok {
 					data := response[0]["data"].(map[string]interface{})
 					if data != nil && data["result"] == true {
 						info := data["info"]
 						go func() {
-							o.messageChannels[channel] <- info
-							close(o.messageChannels[channel])
-							delete(o.messageChannels, channel)
+							recvChan.(chan interface{}) <- info
+							close(recvChan.(chan interface{}))
+							o.messageChannels.Delete(channel)
 						}()
 					} else if data["result"] == false {
 						Logger.Errorf("Response Error: %v", message)
+						goto END
 					}
 				}
-				// } else if response[0]["channel"].(string) == ChannelSubTradesInfo {
-				// 	log.Printf("trades: %v", response[0]["data"])
-				// 	go func() {
-				// 		o.messageChannels[ChannelSubTradesInfo] <- response[0]["data"]
-				// 		close(o.messageChannels[ChannelSubTradesInfo])
-				// 		delete(o.messageChannels, ChannelSubTradesInfo)
-				// 	}()
 			} else {
+				// 处理下单取消订单
 				acceptChannels := []string{
 					ChannelOrderInfo,
 					// ChannelUserInfo,
@@ -192,9 +236,11 @@ func (o *OKExAPI) Init(tradeType TradeType) {
 				for _, accept := range acceptChannels {
 					if accept == channel {
 						go func() {
-							o.messageChannels[channel] <- response[0]["data"]
-							close(o.messageChannels[channel])
-							delete(o.messageChannels, channel)
+							if recvChan, ok := o.messageChannels.Load(channel); recvChan != nil && ok {
+								recvChan.(chan interface{}) <- response[0]["data"]
+								close(recvChan.(chan interface{}))
+								o.messageChannels.Delete(channel)
+							}
 						}()
 
 						goto END
@@ -202,7 +248,7 @@ func (o *OKExAPI) Init(tradeType TradeType) {
 				}
 
 				// 处理期货价格深度
-				if o.messageChannels[channel] != nil {
+				if recvChan, ok := o.messageChannels.Load(channel); recvChan != nil && ok {
 
 					// depth := new(DepthValue)
 					data := response[0]["data"].(map[string]interface{})
@@ -217,9 +263,9 @@ func (o *OKExAPI) Init(tradeType TradeType) {
 					}
 
 					go func() {
-						o.messageChannels[channel] <- data
-						close(o.messageChannels[channel])
-						delete(o.messageChannels, channel)
+						recvChan.(chan interface{}) <- response[0]["data"]
+						close(recvChan.(chan interface{}))
+						o.messageChannels.Delete(channel)
 					}()
 
 					goto END
@@ -306,7 +352,7 @@ func (o *OKExAPI) StartCurrentTicker(coinA string, coinB string, tag string) {
 }
 
 func (o *OKExAPI) GetExchangeName() string {
-	return "OKEX"
+	return NameOKEX
 }
 
 func (o *OKExAPI) GetTickerValue(tag string) *TickerValue {
@@ -322,9 +368,9 @@ func (o *OKExAPI) GetTickerValue(tag string) *TickerValue {
 
 				var lastValue float64
 				tmp := ticker.Value.(map[string]interface{})
-				if o.tradeType == TradeTypeContract {
+				if o.tradeType == TradeTypeFuture {
 					lastValue = tmp["last"].(float64)
-				} else if o.tradeType == TradeTypeCurrent {
+				} else if o.tradeType == TradeTypeSpot {
 					value, _ := strconv.ParseFloat(tmp["last"].(string), 64)
 					lastValue = value
 				}
@@ -345,14 +391,6 @@ func (o *OKExAPI) GetTickerValue(tag string) *TickerValue {
 	return nil
 }
 
-func (o *OKExAPI) ping() {
-	data := map[string]string{
-		"event": "ping",
-	}
-
-	o.command(data, nil)
-}
-
 /*
 	① X值为：btc, ltc
 	② Y值为：this_week, next_week, quarter
@@ -367,11 +405,11 @@ func (o *OKExAPI) SwithContractDepth(open bool, coin string, period string, dept
 	var event string
 	if open {
 		event = EventAddChannel
-		o.messageChannels[channel] = make(chan interface{})
+		o.messageChannels.Store(channel, make(chan interface{}))
 
 	} else {
 		event = EventRemoveChannel
-		delete(o.messageChannels, channel)
+		o.messageChannels.Delete(channel)
 	}
 
 	data := map[string]string{
@@ -398,10 +436,10 @@ func (o *OKExAPI) SwitchCurrentDepth(open bool, coinA string, coinB string, dept
 	var event string
 	if open {
 		event = EventAddChannel
-		o.messageChannels[channel] = make(chan interface{})
+		o.messageChannels.Store(channel, make(chan interface{}))
 	} else {
 		event = EventRemoveChannel
-		delete(o.messageChannels, channel)
+		o.messageChannels.Delete(channel)
 	}
 
 	data := map[string]string{
@@ -418,19 +456,21 @@ func (o *OKExAPI) GetDepthValue(coinA string, coinB string, orderQuantity float6
 
 	var channel string
 
-	if o.tradeType == TradeTypeContract {
+	if o.tradeType == TradeTypeFuture {
 		channel = o.SwithContractDepth(true, coinA, "this_week", "20")
 		// defer o.SwithContractDepth(false, coinA, "this_week", "20")
-	} else if o.tradeType == TradeTypeCurrent {
+	} else if o.tradeType == TradeTypeSpot {
 		channel = o.SwitchCurrentDepth(true, coinA, coinB, "20")
 		// defer o.SwitchCurrentDepth(false, coinA, coinB, "20")
 	}
+
+	recvChan, _ := o.messageChannels.Load(channel)
 
 	select {
 	case <-time.After(DefaultTimeoutSec * time.Second):
 		log.Print("timeout to wait for the depths")
 		return nil
-	case recv := <-o.messageChannels[channel]:
+	case recv := <-recvChan.(chan interface{}):
 		depth := new(DepthValue)
 
 		data := recv.(map[string]interface{})
@@ -439,7 +479,7 @@ func (o *OKExAPI) GetDepthValue(coinA string, coinB string, orderQuantity float6
 		asks := data["asks"].([]interface{})
 		bids := data["bids"].([]interface{})
 
-		if o.tradeType == TradeTypeContract {
+		if o.tradeType == TradeTypeFuture {
 			if asks != nil && len(asks) > 0 {
 				askList := make([]DepthPrice, len(asks))
 				for i, ask := range asks {
@@ -464,7 +504,7 @@ func (o *OKExAPI) GetDepthValue(coinA string, coinB string, orderQuantity float6
 				depth.BidByOrder, depth.BidPrice = GetDepthPriceByOrder(DepthTypeBids, bidList, orderQuantity)
 			}
 
-		} else if o.tradeType == TradeTypeCurrent {
+		} else if o.tradeType == TradeTypeSpot {
 			if asks != nil && len(asks) > 0 {
 				askList := make([]DepthPrice, len(asks))
 				for i, ask := range asks {
@@ -509,7 +549,7 @@ func (o *OKExAPI) command(data map[string]string, parameters map[string]string) 
 		var keys []string
 		var signPlain string
 
-		for k, _ := range parameters {
+		for k := range parameters {
 			keys = append(keys, k)
 		}
 
@@ -523,7 +563,7 @@ func (o *OKExAPI) command(data map[string]string, parameters map[string]string) 
 			signPlain += "&"
 		}
 
-		signPlain += ("secret_key=" + constSecretKey)
+		signPlain += ("secret_key=" + o.secretKey)
 
 		// log.Printf("Plain:%v", signPlain)
 		md5Value := fmt.Sprintf("%x", md5.Sum([]byte(signPlain)))
@@ -571,12 +611,12 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 	var channel string
 	var data, parameters map[string]string
 
-	if o.tradeType == TradeTypeContract {
+	if o.tradeType == TradeTypeFuture {
 
 		channel = ChannelContractTrade
 
 		parameters = map[string]string{
-			"api_key":       constApiKey,
+			"api_key":       o.apiKey,
 			"symbol":        configs.Coin + "_usd",
 			"contract_type": "this_week",
 			"price":         strconv.FormatFloat(configs.Price, 'f', 2, 64),
@@ -587,12 +627,12 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 			"lever_rate":  "10",
 		}
 
-	} else if o.tradeType == TradeTypeCurrent {
+	} else if o.tradeType == TradeTypeSpot {
 
 		channel = ChannelSpotOrder
 
 		parameters = map[string]string{
-			"api_key": constApiKey,
+			"api_key": o.apiKey,
 			"symbol":  configs.Coin,
 			"type":    o.getOrderTypeString(configs.Type),
 			"price":   strconv.FormatFloat(configs.Price, 'f', 2, 64),
@@ -605,7 +645,8 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 		"channel": channel,
 	}
 
-	o.messageChannels[channel] = make(chan interface{})
+	recvChan := make(chan interface{})
+	o.messageChannels.Store(channel, recvChan)
 
 	o.command(data, parameters)
 
@@ -614,7 +655,7 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 		return &TradeResult{
 			Error: errors.New("Timeout"),
 		}
-	case recv := <-o.messageChannels[channel]:
+	case recv := <-recvChan:
 		// log.Printf("message:%v", message)
 		if recv != nil {
 			result := recv.(map[string]interface{})["result"]
@@ -644,22 +685,22 @@ func (o *OKExAPI) CancelOrder(order OrderInfo) map[string]interface{} {
 	var channel string
 	var data, parameters map[string]string
 
-	if o.tradeType == TradeTypeContract {
+	if o.tradeType == TradeTypeFuture {
 
 		channel = ChannelContractTradeCancel
 
 		parameters = map[string]string{
-			"api_key":       constApiKey,
+			"api_key":       o.apiKey,
 			"order_id":      order.OrderID,
 			"symbol":        order.Coin,
 			"contract_type": "this_week",
 		}
 
-	} else if o.tradeType == TradeTypeCurrent {
+	} else if o.tradeType == TradeTypeSpot {
 		channel = ChannelSpotCancelOrder
 
 		parameters = map[string]string{
-			"api_key":  constApiKey,
+			"api_key":  o.apiKey,
 			"order_id": order.OrderID,
 			"symbol":   order.Coin,
 		}
@@ -671,14 +712,15 @@ func (o *OKExAPI) CancelOrder(order OrderInfo) map[string]interface{} {
 		"channel": channel,
 	}
 
-	o.messageChannels[channel] = make(chan interface{})
+	recvChan := make(chan interface{})
+	o.messageChannels.Store(channel, recvChan)
 
 	o.command(data, parameters)
 
 	select {
 	case <-time.After(DefaultTimeoutSec * time.Second):
 		return nil
-	case message := <-o.messageChannels[channel]:
+	case message := <-recvChan:
 		// log.Printf("message:%v", message)
 		return message.(map[string]interface{})
 	}
@@ -690,12 +732,12 @@ func (o *OKExAPI) GetOrderInfo(configs map[string]interface{}) []OrderInfo {
 	var channel string
 	var data, parameters map[string]string
 
-	if o.tradeType == TradeTypeContract {
+	if o.tradeType == TradeTypeFuture {
 
 		channel = ChannelOrderInfo
 
 		parameters = map[string]string{
-			"api_key": constApiKey,
+			"api_key": o.apiKey,
 			// "secret_key": constSecretKey,
 		}
 
@@ -703,12 +745,12 @@ func (o *OKExAPI) GetOrderInfo(configs map[string]interface{}) []OrderInfo {
 			parameters[k] = v.(string)
 		}
 
-	} else if o.tradeType == TradeTypeCurrent {
+	} else if o.tradeType == TradeTypeSpot {
 
 		channel = ChannelSpotOrderInfo
 
 		parameters = map[string]string{
-			"api_key": constApiKey,
+			"api_key": o.apiKey,
 			// "secret_key": constSecretKey,
 		}
 
@@ -722,12 +764,13 @@ func (o *OKExAPI) GetOrderInfo(configs map[string]interface{}) []OrderInfo {
 		"channel": channel,
 	}
 
-	o.messageChannels[channel] = make(chan interface{})
+	recvChan := make(chan interface{})
+	o.messageChannels.Store(channel, recvChan)
 
 	o.command(data, parameters)
 
 	select {
-	case recv := <-o.messageChannels[channel]:
+	case recv := <-recvChan:
 		orders := recv.(map[string]interface{})["orders"].([]interface{})
 
 		if len(orders) == 0 {
@@ -762,15 +805,15 @@ func (o *OKExAPI) GetBalance(coin string) float64 {
 	var channel string
 	var data, parameters map[string]string
 
-	if o.tradeType == TradeTypeContract {
+	if o.tradeType == TradeTypeFuture {
 		channel = ChannelUserInfo
 
-	} else if o.tradeType == TradeTypeCurrent {
+	} else if o.tradeType == TradeTypeSpot {
 		channel = ChannelSpotUserInfo
 	}
 
 	parameters = map[string]string{
-		"api_key": constApiKey,
+		"api_key": o.apiKey,
 		// "secret_key": constSecretKey,
 	}
 
@@ -779,14 +822,14 @@ func (o *OKExAPI) GetBalance(coin string) float64 {
 		"channel": channel,
 	}
 
-	o.messageChannels[channel] = make(chan interface{})
+	recvChan := make(chan interface{})
+	o.messageChannels.Store(channel, recvChan)
 
 	o.command(data, parameters)
 
 	select {
-	case recv := <-o.messageChannels[channel]:
-		Logger.Debugf("recv:%v", recv)
-		if o.tradeType == TradeTypeContract {
+	case recv := <-recvChan:
+		if o.tradeType == TradeTypeFuture {
 			if recv != nil {
 				values := recv.(map[string]interface{})[coin]
 				if values != nil {
@@ -798,7 +841,7 @@ func (o *OKExAPI) GetBalance(coin string) float64 {
 			}
 			return -1
 
-		} else if o.tradeType == TradeTypeCurrent {
+		} else if o.tradeType == TradeTypeSpot {
 			if recv != nil {
 				funds := recv.(map[string]interface{})["funds"]
 				if funds != nil {
