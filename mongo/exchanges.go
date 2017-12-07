@@ -16,12 +16,12 @@ type ExchangeRecord struct {
 	User string
 }
 
-type Exchange struct {
+type ExchangeDB struct {
 	session    *mgo.Session
 	collection *mgo.Collection
 }
 
-func (t *Exchange) Connect() error {
+func (t *ExchangeDB) Connect() error {
 	session, err := mgo.Dial(MongoURL)
 	if err != nil {
 		fmt.Println("Connect to redis error", err)
@@ -36,7 +36,7 @@ func (t *Exchange) Connect() error {
 	return nil
 }
 
-func (t *Exchange) Insert(record *ExchangeRecord) error {
+func (t *ExchangeDB) Insert(record *ExchangeRecord) error {
 	if t.session != nil {
 		err := t.collection.Insert(record)
 		if err != nil {

@@ -10,28 +10,79 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
 <link rel="import" href="../bower_components/polymer/polymer-element.html">
 <link rel="import" href="shared-styles.html">
+<link rel="import" href="../bower_components/polymer/polymer-element.html">
+<link rel="import" href="../bower_components/iron-form/iron-form.html">
+<link rel="import" href="../bower_components/paper-input/paper-input.html">
+<link rel="import" href="../bower_components/paper-button/paper-button.html">
 
 <dom-module id="my-view2">
   <template>
     <style include="shared-styles">
       :host {
-        display: block;
-
+        display: table;
         padding: 10px;
+      }
+
+      iron-form {
+        padding: 20px;
+        display: inline;
+        margin: 0px auto;
+      }
+
+      .exchange-name, paper-input, paper-button{
+        float: left;
+        margin: 0px 30px;
+      }
+
+      paper-input {
+        min-width: 400px;
+      }
+
+      .exchange-name {
+        font-weight: bold;
+        color: black;
+        width: 100px;
+        margin: 10px;
+      }
+
+      paper-button {
+        width:100px
       }
     </style>
 
     <div class="card">
-      <div class="circle">2</div>
-      <h1>View Two</h1>
-      <p>Ea duis bonorum nec, falli paulo aliquid ei eum.</p>
-      <p>Id nam odio natum malorum, tibique copiosae expetenda mel ea.Detracto suavitate repudiandae no eum. Id adhuc minim soluta nam.Id nam odio natum malorum, tibique copiosae expetenda mel ea.</p>
+      <div class="">添加交易所访问令牌</div>
+        <iron-form id="formAddExchange">
+          <form action="/user/exchange/addkey" method="post">
+          <p class="exchange-name">OKEX</p>
+          <paper-input name="APIKey" type="" placeholder="api key" required no-label-float></paper-input>
+          <paper-input name="SecretKey" type="" placeholder="secret key" required no-label-float></paper-input>
+          <paper-button raised onclick="formAddExchange.submit()">Submit</paper-button>
+          </form>
+        </iron-form>
     </div>
   </template>
 
   <script>
     class MyView2 extends Polymer.Element {
       static get is() { return 'my-view2'; }
+
+      ready(){
+        super.ready()
+        this.$.formAddExchange.addEventListener("iron-form-response", function(event){
+          var response = event.detail.parseResponse()
+          if(response.result){
+            console.log("add successfully!")
+          }else{
+            console.log("Error:" + response.error)
+          }
+        });
+
+        this.$.formAddExchange.addEventListener('iron-form-presubmit', function() {
+          this.request.params["Name"] = "OKEX"
+          console.log("Paras:" + JSON.stringify(this.request.params))    
+        });
+      }
     }
 
     window.customElements.define(MyView2.is, MyView2);

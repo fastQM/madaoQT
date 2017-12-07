@@ -250,26 +250,28 @@ func (o *OKExAPI) Start() {
 				// 处理期货价格深度
 				if recvChan, ok := o.messageChannels.Load(channel); recvChan != nil && ok {
 
-					// depth := new(DepthValue)
+					/*
+						1. OKEX will send the message periodly, and if we remove the channel, the socket will be closed;
+						2. There is possiblity that more than single routine will be called at the same time, so we will need to remove the channel here
+					*/
+					o.messageChannels.Delete(channel)
+
 					data := response[0]["data"].(map[string]interface{})
 
 					// unitTime := time.Unix(int64(data["timestamp"].(float64))/1000, 0)
 					// timeHM := unitTime.Format("2006-01-02 03:04:05")
 					// o.depthList[i].Time = timeHM
 					if data["asks"] == nil {
-						log.Printf("Recv Invalid data from %s:%v",
-							o.GetExchangeName(), response)
+						log.Printf("Recv Invalid data from %s:%v", o.GetExchangeName(), response)
 						goto END
 					}
 
 					go func() {
 						recvChan.(chan interface{}) <- response[0]["data"]
 						close(recvChan.(chan interface{}))
-						o.messageChannels.Delete(channel)
 					}()
 
 					goto END
-
 				}
 
 				// 处理现货价格
@@ -396,16 +398,18 @@ func (o *OKExAPI) GetTickerValue(tag string) *TickerValue {
 	② Y值为：this_week, next_week, quarter
 	③ Z值为：5, 10, 20(获取深度条数)
 */
-func (o *OKExAPI) SwithContractDepth(open bool, coin string, period string, depth string) string {
+func (o *OKExAPI) SwithContractDepth(open bool, coin string, period string, depth string) chan interface{} {
 
 	channel := strings.Replace(ChannelContractDepth, "X", coin, 1)
 	channel = strings.Replace(channel, "Y", period, 1)
 	channel = strings.Replace(channel, "Z", depth, 1)
 
 	var event string
+	recvChan := make(chan interface{})
+
 	if open {
 		event = EventAddChannel
-		o.messageChannels.Store(channel, make(chan interface{}))
+		o.messageChannels.Store(channel, recvChan)
 
 	} else {
 		event = EventRemoveChannel
@@ -419,7 +423,7 @@ func (o *OKExAPI) SwithContractDepth(open bool, coin string, period string, dept
 
 	o.command(data, nil)
 
-	return channel
+	return recvChan
 }
 
 /*
@@ -428,15 +432,17 @@ ltc_usdt etc_usdt bch_usdt etc_eth bt1_btc bt2_btc btg_btc
 qtum_btc hsr_btc neo_btc gas_btc qtum_usdt hsr_usdt neo_usdt gas_usdt
 Y值为: 5, 10, 20(获取深度条数)
 */
-func (o *OKExAPI) SwitchCurrentDepth(open bool, coinA string, coinB string, depth string) string {
+func (o *OKExAPI) SwitchCurrentDepth(open bool, coinA string, coinB string, depth string) chan interface{} {
 	pair := (coinA + "_" + coinB)
 	channel := strings.Replace(ChannelCurrentDepth, "X", pair, 1)
 	channel = strings.Replace(channel, "Y", depth, 1)
 
 	var event string
+	recvChan := make(chan interface{})
+
 	if open {
 		event = EventAddChannel
-		o.messageChannels.Store(channel, make(chan interface{}))
+		o.messageChannels.Store(channel, recvChan)
 	} else {
 		event = EventRemoveChannel
 		o.messageChannels.Delete(channel)
@@ -448,29 +454,31 @@ func (o *OKExAPI) SwitchCurrentDepth(open bool, coinA string, coinB string, dept
 	}
 
 	o.command(data, nil)
-	return channel
+	return recvChan
 
 }
 
 func (o *OKExAPI) GetDepthValue(coinA string, coinB string, orderQuantity float64) *DepthValue {
 
-	var channel string
+	var recvChan chan interface{}
 
 	if o.tradeType == TradeTypeFuture {
-		channel = o.SwithContractDepth(true, coinA, "this_week", "20")
+		recvChan = o.SwithContractDepth(true, coinA, "this_week", "20")
 		// defer o.SwithContractDepth(false, coinA, "this_week", "20")
 	} else if o.tradeType == TradeTypeSpot {
-		channel = o.SwitchCurrentDepth(true, coinA, coinB, "20")
+		recvChan = o.SwitchCurrentDepth(true, coinA, coinB, "20")
 		// defer o.SwitchCurrentDepth(false, coinA, coinB, "20")
 	}
 
-	recvChan, _ := o.messageChannels.Load(channel)
+	// o.depthList = append(o.depthList, DepthListItem{
+	// 	Name: channel,
+	// })
 
 	select {
 	case <-time.After(DefaultTimeoutSec * time.Second):
 		log.Print("timeout to wait for the depths")
 		return nil
-	case recv := <-recvChan.(chan interface{}):
+	case recv := <-recvChan:
 		depth := new(DepthValue)
 
 		data := recv.(map[string]interface{})

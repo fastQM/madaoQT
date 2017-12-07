@@ -59,7 +59,6 @@
     <link rel="import" href="bower_components/iron-form/iron-form.html">
     <link rel="import" href="bower_components/paper-input/paper-input.html">
     <link rel="import" href="bower_components/paper-button/paper-button.html">
-
     <!-- Add any global styles for body, document, etc. -->
     <style>
       body {
@@ -68,6 +67,27 @@
         line-height: 1.5;
         min-height: 100vh;
         background-color: #eeeeee;
+      }
+      input, paper-input, paper-checkbox {
+          margin-bottom: 8px;
+      }
+      iron-form {
+          @apply --shadow-elevation-2dp;
+          padding: 20px;
+          display: block;
+          width: 300px;
+          margin: 100px auto;
+          background-color: white;
+      }
+      paper-button {
+          display: inline-block;
+          width: 45%;
+          text-align: center;
+      }
+      
+      paper-button:not([disabled]) {
+          background: #03a9f4;
+          color: white;
       }
     </style>
   </head>
@@ -81,27 +101,7 @@
                   margin: 100px auto;
                   background-color: white;
               } */
-              input, paper-input, paper-checkbox {
-                  margin-bottom: 8px;
-              }
-              iron-form {
-                  @apply --shadow-elevation-2dp;
-                  padding: 20px;
-                  display: block;
-                  width: 300px;
-                  margin: 100px auto;
-                  background-color: white;
-              }
-              paper-button {
-                  display: inline-block;
-                  width: 45%;
-                  text-align: center;
-              }
               
-              paper-button:not([disabled]) {
-                  background: #03a9f4;
-                  color: white;
-              }
             </style>
       
       
@@ -111,15 +111,21 @@
                   <paper-input name="Password" label="密码" type="password" value="" required></paper-input>
                   <paper-button raised onclick="form2.submit()">Submit</paper-button>
                   <paper-button raised onclick="form2.reset()">Reset</paper-button>
+                  <input value="{{.lastPage}}" name="LastPage" hidden>
                   </form>
-                  <div class="output"></div>
               </iron-form>
               <script>
                   form2.addEventListener('iron-form-presubmit', function(event) {
                       
                   });
-                  form2.addEventListener('iron-form-submit', function(event) {
-                      this.querySelector('.output').innerHTML = JSON.stringify(event.detail);
+
+                  form2.addEventListener("iron-form-response", function(event){
+                    var response = event.detail.parseResponse()
+                    if(!response.result){
+                        console.log("Login failed:" + response.error)
+                    }else{
+                        window.location.href="/";
+                    }
                   });
 
               </script>

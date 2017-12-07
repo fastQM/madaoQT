@@ -7,6 +7,8 @@ import (
 	"github.com/kataras/iris/mvc"
 
 	"github.com/kataras/iris/sessions"
+
+	Mongo "madaoQT/mongo"
 )
 
 type UserController struct {
@@ -22,27 +24,55 @@ type UserController struct {
 type UserControllerLoginInfo struct {
 	Name     string
 	Password string
+	LastPage string
 }
 
-func (c *UserController) PostLogin() string {
+type ExchangeInfo struct {
+	Name      string
+	APIKey    string
+	SecretKey string
+}
 
+// basic user interfaces
+
+func (c *UserController) GetLoginBy(lastPage string) mvc.Result {
+	Logger.Debugf("Last Page:%s", lastPage)
+	return mvc.View{
+		Name: "login.html",
+		Data: map[string]interface{}{
+			"lastPage": lastPage,
+		},
+	}
+}
+
+func (c *UserController) PostLogin() iris.Map {
+
+	var errMsg string
+	var session *sessions.Session
 	info := UserControllerLoginInfo{}
 	err := c.Ctx.ReadForm(&info)
 	if err != nil {
 		c.Ctx.StatusCode(iris.StatusInternalServerError)
-		return err.Error()
+		errMsg = err.Error()
+		goto _ERROR
 	}
 
 	Logger.Debugf("Info:%v", info)
 
-	s := c.Sessions.Start(c.Ctx)
-	s.Set("name", info.Name)
-	s.Set("password", info.Password)
-	return "This is my default action..."
-}
+	session = c.Sessions.Start(c.Ctx)
+	session.Set("name", info.Name)
+	session.Set("password", info.Password)
 
-func (c *UserController) GetBy(name string) string {
-	return "Hello " + name
+	return iris.Map{
+		"result": true,
+		"last":   info.LastPage,
+	}
+
+_ERROR:
+	return iris.Map{
+		"result": false,
+		"error":  errMsg,
+	}
 }
 
 func (c *UserController) GetInfo() string {
@@ -51,6 +81,59 @@ func (c *UserController) GetInfo() string {
 	// password := s.Get("password")
 	// return fmt.Sprintf("name:%s, password:%s", name, password)
 	return fmt.Sprintf("Hellow, %s!", name)
+}
+
+// user's exchanges interfaces
+
+// POST: /user/exchange/addkey
+
+func (c *UserController) PostExchangeAddkey() iris.Map {
+	var errMsg string
+	var err error
+	s := c.Sessions.Start(c.Ctx)
+	username := s.Get("name")
+
+	exchangesDB := Mongo.ExchangeDB{}
+
+	info := ExchangeInfo{}
+
+	if username == nil {
+		errMsg = "Invalid Session"
+		goto _ERROR
+	}
+
+	err = c.Ctx.ReadForm(&info)
+	if err != nil {
+		errMsg = err.Error()
+		goto _ERROR
+	}
+
+	Logger.Debugf("KEY:%v", info)
+
+	if err = exchangesDB.Connect(); err != nil {
+		errMsg = err.Error()
+		goto _ERROR
+	}
+
+	if err = exchangesDB.Insert(&Mongo.ExchangeRecord{
+		Name:   info.Name,
+		API:    info.APIKey,
+		Secret: info.SecretKey,
+		User:   username.(string),
+	}); err != nil {
+		errMsg = "Fail to insert record into database"
+		goto _ERROR
+	}
+
+	return iris.Map{
+		"result": true,
+	}
+
+_ERROR:
+	return iris.Map{
+		"result": false,
+		"error":  errMsg,
+	}
 }
 
 //

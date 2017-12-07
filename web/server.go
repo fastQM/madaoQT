@@ -70,7 +70,6 @@ func (h *HttpServer) setupControllers() {
 
 	h.app.Controller("/helloworld", new(controllers.HelloWorldController))
 	h.app.Controller("/user", &controllers.UserController{Sessions: h.sess})
-	h.app.Controller("/exchange", &controllers.ExchangeController{Sessions: h.sess})
 }
 
 func (h *HttpServer) SetupHttpServer() {
