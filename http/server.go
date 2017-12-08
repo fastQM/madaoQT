@@ -9,9 +9,9 @@ import (
 	"github.com/kataras/iris/sessions"
 
 	Config "madaoQT/config"
+	controllers "madaoQT/http/controllers"
+	websocket "madaoQT/http/websocket"
 	Utils "madaoQT/utils"
-	controllers "madaoQT/web/controllers"
-	websocket "madaoQT/web/websocket"
 )
 
 type HttpServer struct {

@@ -94,6 +94,9 @@ type DepthValue struct {
 	AskPrice   float64 // 下单价格
 	BidByOrder float64
 	BidPrice   float64
+
+	LimitTradePrice  float64
+	LimitTradeAmount float64
 }
 
 type TickerValue struct {
@@ -109,6 +112,7 @@ type TradeConfig struct {
 	Type   OrderType
 	Price  float64
 	Amount float64
+	Limit  float64
 }
 
 type OrderInfo struct {
@@ -138,7 +142,7 @@ type IExchange interface {
 	// AddTicker(coinA string, coinB string, config interface{}, tag string)
 	GetTickerValue(tag string) *TickerValue
 	WatchEvent() chan EventType
-	GetDepthValue(coinA string, coinB string, orderQuantity float64) *DepthValue
+	GetDepthValue(coinA string, coinB string, price float64, limit float64, orderQuantity float64, tradeType OrderType) *DepthValue
 	GetBalance(coin string) float64
 
 	Trade(configs TradeConfig) *TradeResult
@@ -168,6 +172,9 @@ func RevertDepthArray(array []DepthPrice) []DepthPrice {
 	return array
 }
 
+/*
+	实际意义不大
+*/
 func GetDepthAveragePrice(items []DepthPrice) (float64, float64) {
 
 	if items == nil || len(items) == 0 {
@@ -185,6 +192,9 @@ func GetDepthAveragePrice(items []DepthPrice) (float64, float64) {
 	return total / quantity, quantity
 }
 
+/*
+	返回：（下单均价，下单价格）
+*/
 func GetDepthPriceByOrder(depthType int, items []DepthPrice, orderQty float64) (float64, float64) {
 	if items == nil || len(items) == 0 {
 		return -1, -1
@@ -196,13 +206,16 @@ func GetDepthPriceByOrder(depthType int, items []DepthPrice, orderQty float64) (
 	}
 	// log.Printf("Depth:%v", items)
 	var total float64
+	var amount float64
 	for _, item := range items {
 		total += item.qty
+		amount += (item.qty * item.price)
 	}
 
 	if orderQty > total {
 		log.Printf("深度不够：%v", total)
-		return -2, -2
+		return amount / total, -2
+
 	}
 
 	var depth int
@@ -225,6 +238,44 @@ func GetDepthPriceByOrder(depthType int, items []DepthPrice, orderQty float64) (
 	total += (items[depth].price * balance)
 
 	return total / orderQty, items[depth].price
+}
+
+/*
+	返回：（下单价格，下单数量）
+*/
+func GetDepthPriceByPrice(depthType int, items []DepthPrice, price float64, limit float64, quantity float64) (float64, float64) {
+	if items == nil || len(items) == 0 || limit <= 0 {
+		return -1, -1
+	}
+
+	limitPriceHigh := price * (1 + limit)
+	limitPriceLow := price * (1 - limit)
+
+	if depthType == DepthTypeAsks {
+		// 倒序
+		items = RevertDepthArray(items)
+	}
+
+	var tradePrice float64
+	var tradeQuantity float64
+	for _, item := range items {
+		if item.price >= limitPriceLow && item.price <= limitPriceHigh {
+
+			tradePrice = item.price
+			tradeQuantity += item.qty
+
+			if tradeQuantity > quantity {
+				break
+			}
+
+		} else {
+			Logger.Debugf("超出价格范围")
+			break
+		}
+	}
+
+	Logger.Debugf("限价买入价格：%v 限价买入数量：%v", tradePrice, tradeQuantity)
+	return tradePrice, tradeQuantity
 }
 
 func GetRatio(value1 float64, value2 float64) float64 {

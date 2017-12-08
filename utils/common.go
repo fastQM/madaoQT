@@ -50,10 +50,10 @@ func OpenBrowser(url string) {
 
 }
 
-func SleepAsyncBySecond(sec time.Duration) {
+func SleepAsyncBySecond(sec int64) {
 
 	select {
-	case <-time.After(sec * time.Second):
+	case <-time.After(time.Duration(sec) * time.Second):
 		return
 	}
 }

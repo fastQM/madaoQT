@@ -458,7 +458,7 @@ func (o *OKExAPI) SwitchCurrentDepth(open bool, coinA string, coinB string, dept
 
 }
 
-func (o *OKExAPI) GetDepthValue(coinA string, coinB string, orderQuantity float64) *DepthValue {
+func (o *OKExAPI) GetDepthValue(coinA string, coinB string, price float64, limit float64, orderQuantity float64, tradeType OrderType) *DepthValue {
 
 	var recvChan chan interface{}
 
@@ -487,7 +487,10 @@ func (o *OKExAPI) GetDepthValue(coinA string, coinB string, orderQuantity float6
 		asks := data["asks"].([]interface{})
 		bids := data["bids"].([]interface{})
 
+		var list []DepthPrice
+
 		if o.tradeType == TradeTypeFuture {
+
 			if asks != nil && len(asks) > 0 {
 				askList := make([]DepthPrice, len(asks))
 				for i, ask := range asks {
@@ -498,6 +501,9 @@ func (o *OKExAPI) GetDepthValue(coinA string, coinB string, orderQuantity float6
 
 				depth.AskAverage, depth.AskQty = GetDepthAveragePrice(askList)
 				depth.AskByOrder, depth.AskPrice = GetDepthPriceByOrder(DepthTypeAsks, askList, orderQuantity)
+				if tradeType == OrderTypeOpenLong || tradeType == OrderTypeCloseShort {
+					list = askList
+				}
 			}
 
 			if bids != nil && len(bids) > 0 {
@@ -510,6 +516,10 @@ func (o *OKExAPI) GetDepthValue(coinA string, coinB string, orderQuantity float6
 
 				depth.BidAverage, depth.BidQty = GetDepthAveragePrice(bidList)
 				depth.BidByOrder, depth.BidPrice = GetDepthPriceByOrder(DepthTypeBids, bidList, orderQuantity)
+
+				if tradeType == OrderTypeOpenShort || tradeType == OrderTypeCloseLong {
+					list = bidList
+				}
 			}
 
 		} else if o.tradeType == TradeTypeSpot {
@@ -523,6 +533,11 @@ func (o *OKExAPI) GetDepthValue(coinA string, coinB string, orderQuantity float6
 
 				depth.AskAverage, depth.AskQty = GetDepthAveragePrice(askList)
 				depth.AskByOrder, depth.AskPrice = GetDepthPriceByOrder(DepthTypeAsks, askList, orderQuantity)
+
+				if tradeType == OrderTypeBuy {
+					list = askList
+				}
+
 			}
 
 			if bids != nil && len(bids) > 0 {
@@ -535,9 +550,14 @@ func (o *OKExAPI) GetDepthValue(coinA string, coinB string, orderQuantity float6
 
 				depth.BidAverage, depth.BidQty = GetDepthAveragePrice(bidList)
 				depth.BidByOrder, depth.BidPrice = GetDepthPriceByOrder(DepthTypeBids, bidList, orderQuantity)
+
+				if tradeType == OrderTypeSell {
+					list = bidList
+				}
 			}
 		}
 
+		depth.LimitTradePrice, depth.LimitTradeAmount = GetDepthPriceByPrice(DepthTypeAsks, list, price, limit, orderQuantity)
 		// log.Printf("Result:%v", depth)
 		return depth
 	}

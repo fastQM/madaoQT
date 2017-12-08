@@ -35,7 +35,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       }
 
       paper-input {
-        min-width: 400px;
+        min-width: 100px;
       }
 
       .exchange-name {
@@ -57,7 +57,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           <p class="exchange-name">OKEX</p>
           <paper-input name="APIKey" type="" placeholder="api key" required no-label-float></paper-input>
           <paper-input name="SecretKey" type="" placeholder="secret key" required no-label-float></paper-input>
-          <paper-button raised onclick="formAddExchange.submit()">Submit</paper-button>
+          <paper-button raised on-click="AddExchangeKey">Submit</paper-button>
           </form>
         </iron-form>
     </div>
@@ -83,6 +83,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           console.log("Paras:" + JSON.stringify(this.request.params))    
         });
       }
+
+      AddExchangeKey(){
+        this.$.formAddExchange.submit()
+      }
+
     }
 
     window.customElements.define(MyView2.is, MyView2);

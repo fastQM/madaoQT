@@ -6,9 +6,9 @@ import (
 	"time"
 
 	Exchange "madaoQT/exchange"
-	Rules "madaoQT/rules"
+	Http "madaoQT/http"
+	Task "madaoQT/task"
 	Utils "madaoQT/utils"
-	Web "madaoQT/web"
 
 	"github.com/kataras/golog"
 )
@@ -41,7 +41,7 @@ func main() {
 
 	go handleCmd()
 
-	analyzer := new(Rules.IAnalyzer)
+	analyzer := new(Task.IAnalyzer)
 	analyzer.Init(nil)
 
 	Logger.Info("启动OKEx合约监视程序")
@@ -62,7 +62,7 @@ func main() {
 	})
 	okexCurrent.Start()
 
-	http := new(Web.HttpServer)
+	http := new(Http.HttpServer)
 	go http.SetupHttpServer()
 	go Utils.OpenBrowser("http://localhost:8080")
 
@@ -71,7 +71,7 @@ func main() {
 		for {
 			select {
 			case event := <-analyzer.WatchEvent():
-				if event.EventType == Rules.EventTypeTrigger {
+				if event.EventType == Task.EventTypeTrigger {
 					http.BroadcastByWebsocket(event.Msg)
 				}
 			}
