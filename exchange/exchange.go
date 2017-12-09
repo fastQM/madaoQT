@@ -142,17 +142,14 @@ type IExchange interface {
 	// AddTicker(coinA string, coinB string, config interface{}, tag string)
 	GetTickerValue(tag string) *TickerValue
 	WatchEvent() chan EventType
-	GetDepthValue(coinA string, coinB string, price float64, limit float64, orderQuantity float64, tradeType OrderType) *DepthValue
+	GetDepthValue(coin string, price float64, limit float64, orderQuantity float64, tradeType OrderType) *DepthValue
 	GetBalance(coin string) float64
 
 	Trade(configs TradeConfig) *TradeResult
 
-	CancelOrder(order OrderInfo) map[string]interface{}
+	CancelOrder(order OrderInfo) *TradeResult
 	GetOrderInfo(filter map[string]interface{}) []OrderInfo
 }
-
-const DepthTypeAsks = 0
-const DepthTypeBids = 1
 
 func RevertDepthArray(array []DepthPrice) []DepthPrice {
 	var tmp DepthPrice
@@ -195,15 +192,11 @@ func GetDepthAveragePrice(items []DepthPrice) (float64, float64) {
 /*
 	返回：（下单均价，下单价格）
 */
-func GetDepthPriceByOrder(depthType int, items []DepthPrice, orderQty float64) (float64, float64) {
+func GetDepthPriceByOrder(items []DepthPrice, orderQty float64) (float64, float64) {
 	if items == nil || len(items) == 0 {
 		return -1, -1
 	}
 
-	if depthType == DepthTypeAsks {
-		// 倒序
-		items = RevertDepthArray(items)
-	}
 	// log.Printf("Depth:%v", items)
 	var total float64
 	var amount float64
@@ -243,18 +236,14 @@ func GetDepthPriceByOrder(depthType int, items []DepthPrice, orderQty float64) (
 /*
 	返回：（下单价格，下单数量）
 */
-func GetDepthPriceByPrice(depthType int, items []DepthPrice, price float64, limit float64, quantity float64) (float64, float64) {
+func GetDepthPriceByPrice(items []DepthPrice, price float64, limit float64, quantity float64) (float64, float64) {
 	if items == nil || len(items) == 0 || limit <= 0 {
 		return -1, -1
 	}
 
 	limitPriceHigh := price * (1 + limit)
 	limitPriceLow := price * (1 - limit)
-
-	if depthType == DepthTypeAsks {
-		// 倒序
-		items = RevertDepthArray(items)
-	}
+	Logger.Debugf("有效价格范围：%v-%v", limitPriceLow, limitPriceHigh)
 
 	var tradePrice float64
 	var tradeQuantity float64
@@ -265,6 +254,7 @@ func GetDepthPriceByPrice(depthType int, items []DepthPrice, price float64, limi
 			tradeQuantity += item.qty
 
 			if tradeQuantity > quantity {
+				tradeQuantity = quantity
 				break
 			}
 

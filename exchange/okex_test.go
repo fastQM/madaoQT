@@ -16,11 +16,11 @@ func _TestGetAveragePrice(t *testing.T) {
 		{price: 155, qty: 10},
 	}
 
-	value1, value2 := GetDepthPriceByOrder(0, values, 25)
+	value1, value2 := GetDepthPriceByOrder(values, 25)
 	log.Printf("Ave:%v%v", value1, value2)
 }
 
-func TestGetContractDepth(t *testing.T) {
+func _TestGetContractDepth(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(InitConfig{
 		Api:    constApiKey,
@@ -28,11 +28,12 @@ func TestGetContractDepth(t *testing.T) {
 		Custom: map[string]interface{}{"tradeType": TradeTypeFuture},
 	})
 
-	value := okex.GetDepthValue("btc", "", 1)
+	okex.Start()
+	value := okex.GetDepthValue("btc", 100, 0.1, 1, OrderTypeOpenLong)
 	log.Printf("Value:%v", value)
 }
 
-func TestGetCurrentDepth(t *testing.T) {
+func _TestGetCurrentDepth(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(InitConfig{
 		Api:    constApiKey,
@@ -40,7 +41,9 @@ func TestGetCurrentDepth(t *testing.T) {
 		Custom: map[string]interface{}{"tradeType": TradeTypeSpot},
 	})
 
-	value := okex.GetDepthValue("btc", "usdt", 1)
+	okex.Start()
+
+	value := okex.GetDepthValue("btc_usdt", 100, 0.1, 1, OrderTypeBuy)
 	Logger.Infof("Value:%v", value)
 }
 
@@ -52,12 +55,14 @@ func _TestOKEXContractTicker(t *testing.T) {
 		Custom: map[string]interface{}{"tradeType": TradeTypeFuture},
 	})
 
+	okex.Start()
+
 	okex.StartContractTicker("ltc", "this_week", "ltc_contract")
 
 	counter := 3
 	for {
 		select {
-		case <-time.After(5 * time.Second):
+		case <-time.After(1 * time.Second):
 			values := okex.GetTickerValue("ltc_contract")
 			if values != nil {
 				log.Printf("Value:%v", values)
@@ -71,7 +76,7 @@ func _TestOKEXContractTicker(t *testing.T) {
 	}
 }
 
-func _TestOKEXCurrentTicker(t *testing.T) {
+func TestOKEXCurrentTicker(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(InitConfig{
 		Api:    constApiKey,
@@ -79,12 +84,13 @@ func _TestOKEXCurrentTicker(t *testing.T) {
 		Custom: map[string]interface{}{"tradeType": TradeTypeSpot},
 	})
 
+	okex.Start()
 	okex.StartCurrentTicker("btc", "usdt", "btc_current")
 
 	counter := 3
 	for {
 		select {
-		case <-time.After(5 * time.Second):
+		case <-time.After(1 * time.Second):
 			values := okex.GetTickerValue("btc_current")
 			if values != nil {
 				log.Printf("Value:%v", values)
@@ -125,10 +131,11 @@ func TestGetUserInfo(t *testing.T) {
 		Secret: constSecretKey,
 		Custom: map[string]interface{}{"tradeType": TradeTypeFuture},
 	})
+	okex.Start()
 	log.Printf("balance:%v", okex.GetBalance("ltc"))
 }
 
-func TestCancelFutureOrder(t *testing.T) {
+func _TestCancelFutureOrder(t *testing.T) {
 	okex := new(OKExAPI)
 
 	okex.Init(InitConfig{
@@ -145,7 +152,7 @@ func TestCancelFutureOrder(t *testing.T) {
 	log.Printf("CancelOrder:%v", okex.CancelOrder(order))
 }
 
-func TestSpotCancelOrder(t *testing.T) {
+func _TestSpotCancelOrder(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(InitConfig{
 		Api:    constApiKey,
@@ -180,7 +187,7 @@ func _TestSpotOrder(t *testing.T) {
 	Logger.Debugf("Result:%v", result)
 }
 
-func TestSpotGetOrderInfo(t *testing.T) {
+func _TestSpotGetOrderInfo(t *testing.T) {
 	okex := new(OKExAPI)
 
 	okex.Init(InitConfig{
@@ -197,6 +204,25 @@ func TestSpotGetOrderInfo(t *testing.T) {
 	log.Printf("OrderInfo:%v", okex.GetOrderInfo(configs))
 }
 
+func TestFutureGetOrderInfo(t *testing.T) {
+	okex := new(OKExAPI)
+
+	okex.Init(InitConfig{
+		Api:    constApiKey,
+		Secret: constSecretKey,
+		Custom: map[string]interface{}{"tradeType": TradeTypeFuture},
+	})
+
+	okex.Start()
+
+	configs := map[string]interface{}{
+		"order_id": "15188890865",
+		"symbol":   "ltc_usd",
+	}
+
+	log.Printf("OrderInfo:%v", okex.GetOrderInfo(configs))
+}
+
 func TestSpotGetUserInfo(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(InitConfig{
@@ -205,15 +231,18 @@ func TestSpotGetUserInfo(t *testing.T) {
 		Custom: map[string]interface{}{"tradeType": TradeTypeSpot},
 	})
 
+	okex.Start()
+
 	log.Printf("Balance:%v", okex.GetBalance("usdt"))
+	log.Printf("Balance:%v", okex.GetBalance("ltc"))
 }
 
-func TestGetOrderType(t *testing.T) {
+func _TestGetOrderType(t *testing.T) {
 	okex := new(OKExAPI)
-	log.Printf("Type:%d", okex.getOrderType("buy"))
+	log.Printf("Type:%d", okex.getOrderTypeByString("buy"))
 }
 
-func TestGetOrderStatus(t *testing.T) {
+func _TestGetOrderStatus(t *testing.T) {
 	okex := new(OKExAPI)
 	log.Printf("Type:%d", okex.getStatus(1))
 }

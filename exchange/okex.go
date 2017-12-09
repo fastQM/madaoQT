@@ -69,7 +69,7 @@ const ChannelSpotCancelOrder = "ok_spot_cancel_order"
 const ChannelSpotUserInfo = "ok_spot_userinfo"
 const ChannelSpotOrderInfo = "ok_spot_orderinfo"
 
-const Debug = false
+const Debug = true
 const DefaultTimeoutSec = 3
 
 type ContractItemValueIndex int8
@@ -170,7 +170,7 @@ func (o *OKExAPI) Start() {
 	} else if o.tradeType == TradeTypeSpot {
 		url = currentUrl
 	} else {
-		Logger.Error("%s")
+		Logger.Error("Invalid type")
 		return
 	}
 
@@ -191,7 +191,22 @@ func (o *OKExAPI) Start() {
 			}
 
 			if Debug {
-				Logger.Debugf("recv: %s", message)
+				filters := []string{
+					"depth",
+					"ticker",
+				}
+
+				var filtered = false
+				for _, filter := range filters {
+					if strings.Contains(string(message), filter) {
+						filtered = true
+					}
+				}
+
+				if !filtered {
+					Logger.Debugf("recv: %s", message)
+				}
+
 			}
 
 			var response []map[string]interface{}
@@ -368,17 +383,14 @@ func (o *OKExAPI) GetTickerValue(tag string) *TickerValue {
 					ticker.oldticket = ticker.ticket
 				}
 
-				var lastValue float64
 				tmp := ticker.Value.(map[string]interface{})
-				if o.tradeType == TradeTypeFuture {
-					lastValue = tmp["last"].(float64)
-				} else if o.tradeType == TradeTypeSpot {
-					value, _ := strconv.ParseFloat(tmp["last"].(string), 64)
-					lastValue = value
-				}
-
-				// unitTime := time.Unix(int64(tmp["timestamp"].(float64))/1000, 0)
-				// timeHM := unitTime.Format("2006-01-02 06:04:05")
+				// if o.tradeType == TradeTypeFuture {
+				// 	lastValue = tmp["last"].(float64)
+				// } else if o.tradeType == TradeTypeSpot {
+				// 	value, _ := strconv.ParseFloat(tmp["last"].(string), 64)
+				// 	lastValue = value
+				// }
+				lastValue, _ := strconv.ParseFloat(tmp["last"].(string), 64)
 
 				tickerValue := &TickerValue{
 					Last: lastValue,
@@ -399,7 +411,7 @@ func (o *OKExAPI) GetTickerValue(tag string) *TickerValue {
 	③ Z值为：5, 10, 20(获取深度条数)
 */
 func (o *OKExAPI) SwithContractDepth(open bool, coin string, period string, depth string) chan interface{} {
-
+	coin = strings.TrimSuffix(coin, "_usd")
 	channel := strings.Replace(ChannelContractDepth, "X", coin, 1)
 	channel = strings.Replace(channel, "Y", period, 1)
 	channel = strings.Replace(channel, "Z", depth, 1)
@@ -432,8 +444,7 @@ ltc_usdt etc_usdt bch_usdt etc_eth bt1_btc bt2_btc btg_btc
 qtum_btc hsr_btc neo_btc gas_btc qtum_usdt hsr_usdt neo_usdt gas_usdt
 Y值为: 5, 10, 20(获取深度条数)
 */
-func (o *OKExAPI) SwitchCurrentDepth(open bool, coinA string, coinB string, depth string) chan interface{} {
-	pair := (coinA + "_" + coinB)
+func (o *OKExAPI) SwitchCurrentDepth(open bool, pair string, depth string) chan interface{} {
 	channel := strings.Replace(ChannelCurrentDepth, "X", pair, 1)
 	channel = strings.Replace(channel, "Y", depth, 1)
 
@@ -458,15 +469,15 @@ func (o *OKExAPI) SwitchCurrentDepth(open bool, coinA string, coinB string, dept
 
 }
 
-func (o *OKExAPI) GetDepthValue(coinA string, coinB string, price float64, limit float64, orderQuantity float64, tradeType OrderType) *DepthValue {
+func (o *OKExAPI) GetDepthValue(coin string, price float64, limit float64, orderQuantity float64, tradeType OrderType) *DepthValue {
 
 	var recvChan chan interface{}
 
 	if o.tradeType == TradeTypeFuture {
-		recvChan = o.SwithContractDepth(true, coinA, "this_week", "20")
+		recvChan = o.SwithContractDepth(true, coin, "this_week", "20")
 		// defer o.SwithContractDepth(false, coinA, "this_week", "20")
 	} else if o.tradeType == TradeTypeSpot {
-		recvChan = o.SwitchCurrentDepth(true, coinA, coinB, "20")
+		recvChan = o.SwitchCurrentDepth(true, coin, "20")
 		// defer o.SwitchCurrentDepth(false, coinA, coinB, "20")
 	}
 
@@ -495,14 +506,16 @@ func (o *OKExAPI) GetDepthValue(coinA string, coinB string, price float64, limit
 				askList := make([]DepthPrice, len(asks))
 				for i, ask := range asks {
 					values := ask.([]interface{})
-					askList[i].price, _ = strconv.ParseFloat(values[UsdPriceIndex].(string), 64)
-					askList[i].qty, _ = strconv.ParseFloat(values[CoinQuantity].(string), 64)
+					// askList[i].price, _ = strconv.ParseFloat(values[UsdPriceIndex].(string), 64)
+					// askList[i].qty, _ = strconv.ParseFloat(values[CoinQuantity].(string), 64)
+					askList[i].price = values[UsdPriceIndex].(float64)
+					askList[i].qty = values[CoinQuantity].(float64)
 				}
 
 				depth.AskAverage, depth.AskQty = GetDepthAveragePrice(askList)
-				depth.AskByOrder, depth.AskPrice = GetDepthPriceByOrder(DepthTypeAsks, askList, orderQuantity)
+				depth.AskByOrder, depth.AskPrice = GetDepthPriceByOrder(askList, orderQuantity)
 				if tradeType == OrderTypeOpenLong || tradeType == OrderTypeCloseShort {
-					list = askList
+					list = RevertDepthArray(askList)
 				}
 			}
 
@@ -510,12 +523,14 @@ func (o *OKExAPI) GetDepthValue(coinA string, coinB string, price float64, limit
 				bidList := make([]DepthPrice, len(bids))
 				for i, bid := range bids {
 					values := bid.([]interface{})
-					bidList[i].price, _ = strconv.ParseFloat(values[UsdPriceIndex].(string), 64)
-					bidList[i].qty, _ = strconv.ParseFloat(values[CoinQuantity].(string), 64)
+					// bidList[i].price, _ = strconv.ParseFloat(values[UsdPriceIndex].(string), 64)
+					// bidList[i].qty, _ = strconv.ParseFloat(values[CoinQuantity].(string), 64)
+					bidList[i].price = values[UsdPriceIndex].(float64)
+					bidList[i].qty = values[CoinQuantity].(float64)
 				}
 
 				depth.BidAverage, depth.BidQty = GetDepthAveragePrice(bidList)
-				depth.BidByOrder, depth.BidPrice = GetDepthPriceByOrder(DepthTypeBids, bidList, orderQuantity)
+				depth.BidByOrder, depth.BidPrice = GetDepthPriceByOrder(bidList, orderQuantity)
 
 				if tradeType == OrderTypeOpenShort || tradeType == OrderTypeCloseLong {
 					list = bidList
@@ -532,10 +547,10 @@ func (o *OKExAPI) GetDepthValue(coinA string, coinB string, price float64, limit
 				}
 
 				depth.AskAverage, depth.AskQty = GetDepthAveragePrice(askList)
-				depth.AskByOrder, depth.AskPrice = GetDepthPriceByOrder(DepthTypeAsks, askList, orderQuantity)
+				depth.AskByOrder, depth.AskPrice = GetDepthPriceByOrder(askList, orderQuantity)
 
 				if tradeType == OrderTypeBuy {
-					list = askList
+					list = RevertDepthArray(askList)
 				}
 
 			}
@@ -549,7 +564,7 @@ func (o *OKExAPI) GetDepthValue(coinA string, coinB string, price float64, limit
 				}
 
 				depth.BidAverage, depth.BidQty = GetDepthAveragePrice(bidList)
-				depth.BidByOrder, depth.BidPrice = GetDepthPriceByOrder(DepthTypeBids, bidList, orderQuantity)
+				depth.BidByOrder, depth.BidPrice = GetDepthPriceByOrder(bidList, orderQuantity)
 
 				if tradeType == OrderTypeSell {
 					list = bidList
@@ -557,7 +572,7 @@ func (o *OKExAPI) GetDepthValue(coinA string, coinB string, price float64, limit
 			}
 		}
 
-		depth.LimitTradePrice, depth.LimitTradeAmount = GetDepthPriceByPrice(DepthTypeAsks, list, price, limit, orderQuantity)
+		depth.LimitTradePrice, depth.LimitTradeAmount = GetDepthPriceByPrice(list, price, limit, orderQuantity)
 		// log.Printf("Result:%v", depth)
 		return depth
 	}
@@ -708,7 +723,7 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 
 }
 
-func (o *OKExAPI) CancelOrder(order OrderInfo) map[string]interface{} {
+func (o *OKExAPI) CancelOrder(order OrderInfo) *TradeResult {
 
 	var channel string
 	var data, parameters map[string]string
@@ -748,9 +763,26 @@ func (o *OKExAPI) CancelOrder(order OrderInfo) map[string]interface{} {
 	select {
 	case <-time.After(DefaultTimeoutSec * time.Second):
 		return nil
-	case message := <-recvChan:
-		// log.Printf("message:%v", message)
-		return message.(map[string]interface{})
+	case recv := <-recvChan:
+		if recv != nil {
+			result := recv.(map[string]interface{})["result"]
+			if result != nil && result.(bool) {
+				orderId := recv.(map[string]interface{})["order_id"].(string)
+				return &TradeResult{
+					Error:   nil,
+					OrderID: orderId,
+				}
+			} else {
+				errorCode := strconv.FormatFloat(recv.(map[string]interface{})["error_code"].(float64), 'f', 0, 64)
+				return &TradeResult{
+					Error: errors.New("errorCode:" + errorCode),
+				}
+			}
+		}
+
+		return &TradeResult{
+			Error: errors.New("Invalid response"),
+		}
 	}
 
 }
@@ -767,6 +799,10 @@ func (o *OKExAPI) GetOrderInfo(configs map[string]interface{}) []OrderInfo {
 		parameters = map[string]string{
 			"api_key": o.apiKey,
 			// "secret_key": constSecretKey,
+			"contract_type": "this_week",
+			// "status":        "1",
+			"current_page": "1",
+			"page_length":  "1",
 		}
 
 		for k, v := range configs {
@@ -809,13 +845,20 @@ func (o *OKExAPI) GetOrderInfo(configs map[string]interface{}) []OrderInfo {
 
 		for i, tmp := range orders {
 			order := tmp.(map[string]interface{})
+
+			var orderType OrderType
+			if o.tradeType == TradeTypeFuture {
+				orderType = o.getOrderTypeByFloat(order["type"].(float64))
+			} else if o.tradeType == TradeTypeSpot {
+				orderType = o.getOrderTypeByString(order["type"].(string))
+			}
 			item := OrderInfo{
 				Coin:    order["symbol"].(string),
 				OrderID: strconv.FormatFloat(order["order_id"].(float64), 'f', 0, 64),
 				// OrderID: strconv.FormatInt(order["order_id"].(int64), 64),
 				Price:  order["price"].(float64),
 				Amount: order["amount"].(float64),
-				Type:   o.getOrderType(order["type"].(string)),
+				Type:   orderType,
 				Status: o.getStatus(order["status"].(float64)),
 			}
 			result[i] = item
@@ -907,7 +950,7 @@ func (o *OKExAPI) getStatus(status float64) OrderStatusType {
 	return OrderStatusUnknown
 }
 
-func (o *OKExAPI) getOrderType(orderType string) OrderType {
+func (o *OKExAPI) getOrderTypeByString(orderType string) OrderType {
 	switch orderType {
 	case "1":
 		return OrderTypeOpenLong
@@ -921,6 +964,21 @@ func (o *OKExAPI) getOrderType(orderType string) OrderType {
 		return OrderTypeBuy
 	case "sell":
 		return OrderTypeSell
+	}
+
+	return OrderTypeUnknown
+}
+
+func (o *OKExAPI) getOrderTypeByFloat(orderType float64) OrderType {
+	switch orderType {
+	case 1:
+		return OrderTypeOpenLong
+	case 2:
+		return OrderTypeOpenShort
+	case 3:
+		return OrderTypeCloseLong
+	case 4:
+		return OrderTypeCloseShort
 	}
 
 	return OrderTypeUnknown
