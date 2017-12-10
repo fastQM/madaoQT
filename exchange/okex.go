@@ -323,8 +323,11 @@ func (o *OKExAPI) Close() {
 ① X值为：btc, ltc
 ② Y值为：this_week, next_week, quarter
 */
-func (o *OKExAPI) StartContractTicker(coin string, period string, tag string) {
-	channel := strings.Replace(ChannelContractTicker, "X", coin, 1)
+func (o *OKExAPI) StartContractTicker(pair string, period string, tag string) {
+
+	coins := ParseCoins(pair)
+
+	channel := strings.Replace(ChannelContractTicker, "X", coins[0], 1)
 	channel = strings.Replace(channel, "Y", period, 1)
 
 	ticker := TickerListItem{
@@ -348,10 +351,9 @@ eth_usdt ltc_usdt etc_usdt bch_usdt etc_eth bt1_btc
 bt2_btc btg_btc qtum_btc hsr_btc neo_btc gas_btc
 qtum_usdt hsr_usdt neo_usdt gas_usdt
 */
-func (o *OKExAPI) StartCurrentTicker(coinA string, coinB string, tag string) {
-	pair := (coinA + "_" + coinB)
-
-	channel := strings.Replace(ChannelCurrentChannelTicker, "X", pair, 1)
+func (o *OKExAPI) StartCurrentTicker(pair string, tag string) {
+	coins := ParseCoins(pair)
+	channel := strings.Replace(ChannelCurrentChannelTicker, "X", coins[0]+"_"+coins[1], 1)
 
 	ticker := TickerListItem{
 		Tag:  tag,
@@ -472,12 +474,13 @@ func (o *OKExAPI) SwitchCurrentDepth(open bool, pair string, depth string) chan 
 func (o *OKExAPI) GetDepthValue(coin string, price float64, limit float64, orderQuantity float64, tradeType OrderType) *DepthValue {
 
 	var recvChan chan interface{}
+	coins := ParseCoins(coin)
 
 	if o.tradeType == TradeTypeFuture {
-		recvChan = o.SwithContractDepth(true, coin, "this_week", "20")
+		recvChan = o.SwithContractDepth(true, coins[0], "this_week", "20")
 		// defer o.SwithContractDepth(false, coinA, "this_week", "20")
 	} else if o.tradeType == TradeTypeSpot {
-		recvChan = o.SwitchCurrentDepth(true, coin, "20")
+		recvChan = o.SwitchCurrentDepth(true, coins[0]+"_"+coins[1], "20")
 		// defer o.SwitchCurrentDepth(false, coinA, coinB, "20")
 	}
 
@@ -654,13 +657,15 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 	var channel string
 	var data, parameters map[string]string
 
+	coins := ParseCoins(configs.Coin)
+
 	if o.tradeType == TradeTypeFuture {
 
 		channel = ChannelContractTrade
 
 		parameters = map[string]string{
 			"api_key":       o.apiKey,
-			"symbol":        configs.Coin + "_usd",
+			"symbol":        coins[0] + "_usd",
 			"contract_type": "this_week",
 			"price":         strconv.FormatFloat(configs.Price, 'f', 2, 64),
 			// the exact amount orders is amount/level_rate
@@ -676,7 +681,7 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 
 		parameters = map[string]string{
 			"api_key": o.apiKey,
-			"symbol":  configs.Coin,
+			"symbol":  coins[0] + "_" + coins[1],
 			"type":    o.getOrderTypeString(configs.Type),
 			"price":   strconv.FormatFloat(configs.Price, 'f', 2, 64),
 			"amount":  strconv.FormatFloat(configs.Amount, 'f', 2, 64),
@@ -728,6 +733,8 @@ func (o *OKExAPI) CancelOrder(order OrderInfo) *TradeResult {
 	var channel string
 	var data, parameters map[string]string
 
+	coins := ParseCoins(order.Coin)
+
 	if o.tradeType == TradeTypeFuture {
 
 		channel = ChannelContractTradeCancel
@@ -735,7 +742,7 @@ func (o *OKExAPI) CancelOrder(order OrderInfo) *TradeResult {
 		parameters = map[string]string{
 			"api_key":       o.apiKey,
 			"order_id":      order.OrderID,
-			"symbol":        order.Coin,
+			"symbol":        coins[0] + "_" + coins[1],
 			"contract_type": "this_week",
 		}
 
@@ -745,7 +752,7 @@ func (o *OKExAPI) CancelOrder(order OrderInfo) *TradeResult {
 		parameters = map[string]string{
 			"api_key":  o.apiKey,
 			"order_id": order.OrderID,
-			"symbol":   order.Coin,
+			"symbol":   coins[0] + "_" + coins[1],
 		}
 
 	}
@@ -787,10 +794,12 @@ func (o *OKExAPI) CancelOrder(order OrderInfo) *TradeResult {
 
 }
 
-func (o *OKExAPI) GetOrderInfo(configs map[string]interface{}) []OrderInfo {
+func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 
 	var channel string
 	var data, parameters map[string]string
+
+	coins := ParseCoins(filter.Coin)
 
 	if o.tradeType == TradeTypeFuture {
 
@@ -803,10 +812,8 @@ func (o *OKExAPI) GetOrderInfo(configs map[string]interface{}) []OrderInfo {
 			// "status":        "1",
 			"current_page": "1",
 			"page_length":  "1",
-		}
-
-		for k, v := range configs {
-			parameters[k] = v.(string)
+			"order_id":     filter.OrderID,
+			"symbol":       coins[0] + "_" + coins[1],
 		}
 
 	} else if o.tradeType == TradeTypeSpot {
@@ -816,11 +823,10 @@ func (o *OKExAPI) GetOrderInfo(configs map[string]interface{}) []OrderInfo {
 		parameters = map[string]string{
 			"api_key": o.apiKey,
 			// "secret_key": constSecretKey,
+			"order_id": filter.OrderID,
+			"symbol":   coins[0] + "_" + coins[1],
 		}
 
-		for k, v := range configs {
-			parameters[k] = v.(string)
-		}
 	}
 
 	data = map[string]string{
@@ -856,10 +862,11 @@ func (o *OKExAPI) GetOrderInfo(configs map[string]interface{}) []OrderInfo {
 				Coin:    order["symbol"].(string),
 				OrderID: strconv.FormatFloat(order["order_id"].(float64), 'f', 0, 64),
 				// OrderID: strconv.FormatInt(order["order_id"].(int64), 64),
-				Price:  order["price"].(float64),
-				Amount: order["amount"].(float64),
-				Type:   orderType,
-				Status: o.getStatus(order["status"].(float64)),
+				Price:      order["price"].(float64),
+				Amount:     order["amount"].(float64),
+				Type:       orderType,
+				Status:     o.getStatus(order["status"].(float64)),
+				DealAmount: order["deal_amount"].(float64),
 			}
 			result[i] = item
 		}

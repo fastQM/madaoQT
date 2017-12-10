@@ -7,6 +7,7 @@ package task
 import (
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	Exchange "madaoQT/exchange"
@@ -17,7 +18,8 @@ const Explanation = "To make profit from the difference between the future`s pri
 type StatusType int
 
 const (
-	StatusProcessing StatusType = iota
+	StatusNone StatusType = iota
+	StatusProcessing
 	StatusOrdering
 	StatusError
 )
@@ -46,6 +48,7 @@ type OperationItem struct {
 
 type AnalyzerConfig struct {
 	Trigger    map[string]float64
+	Close      map[string]float64
 	LimitArea  float64
 	LimitClose float64
 }
@@ -55,8 +58,12 @@ var defaultConfig = AnalyzerConfig{
 		"btc": 1.6,
 		"ltc": 3,
 	},
-	LimitClose: 0.03, // 平仓幅度
-	LimitArea:  0.003,
+	Close: map[string]float64{
+		"btc": 0.5,
+		"ltc": 1.5,
+	},
+	LimitClose: 0.03,  // 止损幅度
+	LimitArea:  0.005, // 允许操作价格的波动范围
 }
 
 func (a *IAnalyzer) GetExplanation() string {
@@ -81,9 +88,10 @@ func (a *IAnalyzer) Init(config *AnalyzerConfig) {
 		a.config = a.defaultConfig()
 	}
 
+	// 监视币种以及余额
 	a.coins = map[string]float64{
-		// "btc",
-		"ltc": 1,
+		// "btc": 0,
+		"ltc/usdt": 1,
 	}
 
 	a.status = StatusProcessing
@@ -124,7 +132,7 @@ func (a *IAnalyzer) Init(config *AnalyzerConfig) {
 				if event == Exchange.EventConnected {
 
 					for k := range a.coins {
-						spotExchange.StartCurrentTicker(k, "usdt", k+"spot")
+						spotExchange.StartCurrentTicker(k, k+"spot")
 					}
 
 					a.spot = spotExchange
@@ -132,25 +140,35 @@ func (a *IAnalyzer) Init(config *AnalyzerConfig) {
 					spotExchange.Start()
 				}
 			case <-time.After(10 * time.Second):
-				a.Watch()
+				if !a.Watch() {
+					return
+				}
 			}
 		}
 	}()
 }
 
-func (a *IAnalyzer) Watch() {
+func (a *IAnalyzer) Watch() bool {
 
 	for coinName, _ := range a.coins {
 
 		if a.status == StatusError {
 			Logger.Debug("状态异常")
-			return
+			return false
 		}
 
 		valuefuture := a.future.GetTickerValue(coinName + "future")
 		valueCurrent := a.spot.GetTickerValue(coinName + "spot")
 
-		if a.checkPosition(valuefuture.Last, valueCurrent.Last) {
+		difference := (valuefuture.Last - valueCurrent.Last) * 100 / valueCurrent.Last
+		msg := fmt.Sprintf("币种:%s, 合约价格：%.2f, 现货价格：%.2f, 价差：%.2f%%",
+			coinName, valuefuture.Last, valueCurrent.Last, difference)
+
+		Logger.Info(msg)
+
+		a.triggerEvent(EventTypeTrigger, msg)
+
+		if a.checkPosition(coinName, valuefuture.Last, valueCurrent.Last) {
 			Logger.Info("持仓中...不做交易")
 			continue
 		}
@@ -158,14 +176,6 @@ func (a *IAnalyzer) Watch() {
 		if valuefuture != nil && valueCurrent != nil {
 
 			a.triggerEvent(EventTypeTrigger, "===============================")
-
-			difference := (valuefuture.Last - valueCurrent.Last) * 100 / valueCurrent.Last
-			msg := fmt.Sprintf("币种:%s, 合约价格：%.2f, 现货价格：%.2f, 价差：%.2f%%",
-				coinName, valuefuture.Last, valueCurrent.Last, difference)
-
-			Logger.Info(msg)
-
-			a.triggerEvent(EventTypeTrigger, msg)
 
 			if math.Abs(difference) > a.config.Trigger[coinName] {
 				if valuefuture.Last > valueCurrent.Last {
@@ -210,6 +220,8 @@ func (a *IAnalyzer) Watch() {
 		}
 	}
 
+	return true
+
 }
 
 /*
@@ -223,90 +235,144 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 		return
 	}
 
-	if true {
-		return
-	}
-
 	channelFuture := ProcessTradeRoutine(future, futureConfig)
 	channelSpot := ProcessTradeRoutine(spot, spotConfig)
 
+	var waitGroup sync.WaitGroup
 	var futureResult, spotResult TradeResult
-	count := 0
-	for {
+
+	waitGroup.Add(1)
+	go func() {
 		select {
 		case futureResult = <-channelFuture:
-			count++
-		case spotResult = <-channelSpot:
-			count++
+			Logger.Debugf("合约交易结果:%v", futureResult)
+			waitGroup.Done()
 		}
+	}()
 
-		if count >= 2 {
-			break
+	waitGroup.Add(1)
+	go func() {
+		select {
+		case spotResult = <-channelSpot:
+			Logger.Debugf("现货交易结果:%v", spotResult)
+			waitGroup.Done()
 		}
+	}()
+
+	waitGroup.Wait()
+	operation := OperationItem{}
+
+	if futureConfig.Type == Exchange.OrderTypeOpenLong {
+		futureConfig.Type = Exchange.OrderTypeCloseLong
+	} else if futureConfig.Type == Exchange.OrderTypeOpenShort {
+		futureConfig.Type = Exchange.OrderTypeCloseShort
+	} else {
+		Logger.Error("Invalid Operation for the future")
+		return
 	}
 
-	if futureResult.Error == nil && spotResult.Error == nil {
-		operation := OperationItem{}
-
-		if futureConfig.Type == Exchange.OrderTypeOpenLong {
-			futureConfig.Type = Exchange.OrderTypeCloseLong
-		} else if futureConfig.Type == Exchange.OrderTypeOpenShort {
-			futureConfig.Type = Exchange.OrderTypeCloseShort
-		} else {
-			Logger.Error("Invalid Operation for the future")
-			return
-		}
-
-		if spotConfig.Type == Exchange.OrderTypeSell {
-			spotConfig.Type = Exchange.OrderTypeBuy
-		} else if spotConfig.Type == Exchange.OrderTypeBuy {
-			spotConfig.Type = Exchange.OrderTypeSell
-		} else {
-			Logger.Error("Invalid Operation for the future")
-			return
-		}
-
-		operation.futureConfig = futureConfig
-		operation.spotConfig = spotConfig
-
-		a.ops = append(a.ops, operation)
-
+	if spotConfig.Type == Exchange.OrderTypeSell {
+		spotConfig.Type = Exchange.OrderTypeBuy
+	} else if spotConfig.Type == Exchange.OrderTypeBuy {
+		spotConfig.Type = Exchange.OrderTypeSell
+	} else {
+		Logger.Error("Invalid Operation for the future")
 		return
+	}
+
+	// futureConfig.Amount = futureResult.Balance
+	spotConfig.Amount = spotResult.Balance
+
+	operation.futureConfig = futureConfig
+	operation.spotConfig = spotConfig
+
+	if futureResult.Error == nil && spotResult.Error == nil {
+		Logger.Debug("锁仓成功")
+		a.ops = append(a.ops, operation)
+		return
+	} else if futureResult.Error == nil && spotResult.Error != nil {
+		channelSpot = ProcessTradeRoutine(spot, operation.spotConfig)
+
+		select {
+
+		case spotResult = <-channelSpot:
+			Logger.Debugf("现货平仓结果:%v", spotResult)
+			if spotResult.Error != nil {
+				Logger.Errorf("平仓失败，请手工检查:%v", spotResult)
+				a.status = StatusError
+			}
+		}
+	} else if futureResult.Error != nil && spotResult.Error == nil {
+		channelFuture = ProcessTradeRoutine(spot, operation.futureConfig)
+
+		select {
+
+		case futureResult = <-channelFuture:
+			Logger.Debugf("合约平仓结果:%v", futureResult)
+			if futureResult.Error != nil {
+				Logger.Errorf("平仓失败，请手工检查:%v", futureResult)
+				a.status = StatusError
+			}
+		}
+	} else {
+		Logger.Errorf("无法建立仓位：%v, %v", futureResult, spotResult)
+		a.status = StatusError
 	}
 
 	return
 
 }
 
-func (a *IAnalyzer) checkPosition(futurePrice float64, spotPrice float64) bool {
+func (a *IAnalyzer) checkPosition(coin string, futurePrice float64, spotPrice float64) bool {
 	if a.ops != nil {
 		for _, op := range a.ops {
 
-			if !InPriceArea(futurePrice, op.futureConfig.Price, a.config.LimitClose) || !InPriceArea(spotPrice, op.spotConfig.Price, a.config.LimitClose) {
-				Logger.Error("价格波动过大，平仓...")
-				channelFuture := ProcessTradeRoutine(a.future, op.futureConfig)
-				channelSpot := ProcessTradeRoutine(a.spot, op.spotConfig)
+			closeConditions := []bool{
+				!InPriceArea(futurePrice, op.futureConfig.Price, a.config.LimitClose), // 防止爆仓
+				// !InPriceArea(spotPrice, op.spotConfig.Price, a.config.LimitClose),
+				math.Abs((futurePrice-spotPrice)*100/spotPrice) < a.config.Close[coin],
+			}
 
-				var futureResult, spotResult TradeResult
-				count := 0
-				for {
-					select {
-					case futureResult = <-channelFuture:
-						count++
-					case spotResult = <-channelSpot:
-						count++
+			Logger.Debugf("Conditions:%v", closeConditions)
+
+			for _, condition := range closeConditions {
+
+				if condition {
+					Logger.Error("条件平仓...")
+					op.futureConfig.Price = futurePrice
+					op.spotConfig.Price = spotPrice
+					channelFuture := ProcessTradeRoutine(a.future, op.futureConfig)
+					channelSpot := ProcessTradeRoutine(a.spot, op.spotConfig)
+
+					var waitGroup sync.WaitGroup
+					var futureResult, spotResult TradeResult
+
+					waitGroup.Add(1)
+					go func() {
+						select {
+						case futureResult = <-channelFuture:
+							Logger.Debugf("合约交易结果:%v", futureResult)
+							waitGroup.Done()
+						}
+					}()
+
+					waitGroup.Add(1)
+					go func() {
+						select {
+						case spotResult = <-channelSpot:
+							Logger.Debugf("现货交易结果:%v", spotResult)
+							waitGroup.Done()
+						}
+					}()
+
+					waitGroup.Wait()
+
+					if futureResult.Error == nil && spotResult.Error == nil {
+						Logger.Info("平仓完成")
+					} else {
+						Logger.Error("平仓失败，请手工检查")
+						a.status = StatusError
 					}
-
-					if count >= 2 {
-						break
-					}
-				}
-
-				if futureResult.Error == nil && spotResult.Error == nil {
-
-				} else {
-					Logger.Error("平仓失败，请手工检查")
-					a.status = StatusError
 				}
 
 			}

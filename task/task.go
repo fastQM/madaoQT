@@ -37,12 +37,14 @@ type RulesEvent struct {
 }
 
 type TradeResult struct {
-	Error      error
-	AmountLeft float64
+	Error   error
+	Balance float64 // 成交后余额
 }
 
 func ProcessTradeRoutine(exchange Exchange.IExchange, tradeConfig Exchange.TradeConfig) chan TradeResult {
 
+	var balance float64 // 实际余额后台返回为准
+	coin := Exchange.ParseCoins(tradeConfig.Coin)[0]
 	channel := make(chan TradeResult)
 	stopTime := time.Now().Add(1 * time.Minute)
 
@@ -55,16 +57,17 @@ func ProcessTradeRoutine(exchange Exchange.IExchange, tradeConfig Exchange.Trade
 			if time.Now().After(stopTime) {
 				Logger.Debugf("超出操作时间")
 				channel <- TradeResult{
-					Error:      errors.New("timeout"),
-					AmountLeft: tradeConfig.Amount,
+					Error:   errors.New("timeout"),
+					Balance: tradeConfig.Amount,
 				}
 				return
 			}
 
+			var dealAmount float64
 			var result *Exchange.TradeResult
 			depth := exchange.GetDepthValue(tradeConfig.Coin, tradeConfig.Price, tradeConfig.Limit, tradeConfig.Amount, tradeConfig.Type)
 
-			Logger.Debugf("Depth:%v", depth)
+			Logger.Debugf("深度信息:%v 下单信息：%v", depth, tradeConfig)
 
 			if depth == nil || depth.LimitTradeAmount == 0 || depth.LimitTradePrice == 0 {
 				Logger.Debugf("无操作价格:%v", depth)
@@ -82,22 +85,13 @@ func ProcessTradeRoutine(exchange Exchange.IExchange, tradeConfig Exchange.Trade
 				loop := 10
 				for {
 					utils.SleepAsyncBySecond(1)
-					info := exchange.GetOrderInfo(map[string]interface{}{
-						"order_id": result.OrderID,
-						"symbol":   tradeConfig.Coin,
+					info := exchange.GetOrderInfo(Exchange.OrderInfo{
+						OrderID: result.OrderID,
+						Coin:    tradeConfig.Coin,
 					})
 					if info[0].Status == Exchange.OrderStatusDone {
-						tradeConfig.Amount -= depth.LimitTradeAmount
-						Logger.Debugf("成交:%v 未成交:%v", depth.LimitTradeAmount, tradeConfig.Amount)
-						if tradeConfig.Amount > 0 {
-							goto _NEXTLOOP
-						}
-						// else
-						Logger.Debug("交易完成")
-						channel <- TradeResult{
-							Error: nil,
-						}
-						return
+						dealAmount = depth.LimitTradeAmount
+						goto __CheckDealAmount
 					}
 
 					loop--
@@ -111,16 +105,25 @@ func ProcessTradeRoutine(exchange Exchange.IExchange, tradeConfig Exchange.Trade
 						})
 
 						if result != nil && result.Error == nil {
-							Logger.Debugf("成功取消订单：%v", info[0].OrderID)
+
+							info := exchange.GetOrderInfo(Exchange.OrderInfo{
+								OrderID: result.OrderID,
+								Coin:    tradeConfig.Coin,
+							})
+
+							dealAmount = info[0].DealAmount
+							Logger.Debugf("成功取消订单：%v, 已成交金额:%v", info[0].OrderID, dealAmount)
+
+							goto __CheckDealAmount
+
 						} else {
 							Logger.Errorf("取消订单：%v失败，请手动操作", info[0].OrderID)
+
 							channel <- TradeResult{
 								Error: errors.New("取消订单失败，操作异常"),
 							}
 							return
 						}
-
-						goto _NEXTLOOP
 					}
 				}
 			} else {
@@ -131,9 +134,28 @@ func ProcessTradeRoutine(exchange Exchange.IExchange, tradeConfig Exchange.Trade
 				return
 			}
 
+		__CheckBalance:
+			balance = exchange.GetBalance(coin)
+			Logger.Debugf("交易完成，余额：%v", balance)
+			channel <- TradeResult{
+				Error:   nil,
+				Balance: balance,
+			}
+			return
+
+		__CheckDealAmount:
+			tradeConfig.Amount -= dealAmount
+			Logger.Debugf("成交:%v 未成交:%v", dealAmount, tradeConfig.Amount)
+			if tradeConfig.Amount > 0 {
+				goto _NEXTLOOP
+			}
+			// else
+			goto __CheckBalance
+
 		_NEXTLOOP:
 			// 	延时
 			utils.SleepAsyncBySecond(1)
+			continue
 		}
 	}()
 

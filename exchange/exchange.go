@@ -2,6 +2,7 @@ package exchange
 
 import (
 	"log"
+	"strings"
 
 	"github.com/kataras/golog"
 )
@@ -116,12 +117,13 @@ type TradeConfig struct {
 }
 
 type OrderInfo struct {
-	Coin    string
-	OrderID string
-	Price   float64
-	Amount  float64
-	Type    OrderType
-	Status  OrderStatusType
+	Coin       string
+	OrderID    string
+	Price      float64
+	Amount     float64
+	DealAmount float64
+	Type       OrderType
+	Status     OrderStatusType
 }
 
 type TradeResult struct {
@@ -148,7 +150,7 @@ type IExchange interface {
 	Trade(configs TradeConfig) *TradeResult
 
 	CancelOrder(order OrderInfo) *TradeResult
-	GetOrderInfo(filter map[string]interface{}) []OrderInfo
+	GetOrderInfo(filter OrderInfo) []OrderInfo
 }
 
 func RevertDepthArray(array []DepthPrice) []DepthPrice {
@@ -264,7 +266,7 @@ func GetDepthPriceByPrice(items []DepthPrice, price float64, limit float64, quan
 		}
 	}
 
-	Logger.Debugf("限价买入价格：%v 限价买入数量：%v", tradePrice, tradeQuantity)
+	Logger.Debugf("限价价格：%v 限价数量：%v", tradePrice, tradeQuantity)
 	return tradePrice, tradeQuantity
 }
 
@@ -281,6 +283,11 @@ func GetRatio(value1 float64, value2 float64) float64 {
 	}
 
 	return (big - small) * 100 / small ///????
+}
+
+// Example: ETH/USDT
+func ParseCoins(pair string) []string {
+	return strings.Split(pair, "/")
 }
 
 type Exchanges struct {

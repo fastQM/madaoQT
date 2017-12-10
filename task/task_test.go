@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+const pair = "ltc/usdt"
+
 func TestProcessFutureTrade(t *testing.T) {
 	okexFuture := new(Exchange.OKExAPI)
 	okexFuture.Init(Exchange.InitConfig{
@@ -15,7 +17,7 @@ func TestProcessFutureTrade(t *testing.T) {
 
 	okexFuture.Start()
 
-	okexFuture.StartContractTicker("ltc", "this_week", "ltc_contract_this_week")
+	okexFuture.StartContractTicker(pair, "this_week", "ltc_contract_this_week")
 
 	var tickerValue *Exchange.TickerValue
 	for {
@@ -27,8 +29,8 @@ func TestProcessFutureTrade(t *testing.T) {
 	}
 
 	resultChan := ProcessTradeRoutine(okexFuture, Exchange.TradeConfig{
-		Coin:   "ltc_usd",
-		Type:   Exchange.OrderTypeCloseLong,
+		Coin:   pair,
+		Type:   Exchange.OrderTypeOpenLong,
 		Price:  tickerValue.Last,
 		Amount: 1,
 		Limit:  0.003,
@@ -40,7 +42,7 @@ func TestProcessFutureTrade(t *testing.T) {
 	}
 }
 
-func _TestProcessSpotTrade(t *testing.T) {
+func TestProcessSpotTrade(t *testing.T) {
 	okexSpot := new(Exchange.OKExAPI)
 	okexSpot.Init(Exchange.InitConfig{
 		Api:    constOKEXApiKey,
@@ -50,7 +52,7 @@ func _TestProcessSpotTrade(t *testing.T) {
 
 	okexSpot.Start()
 
-	okexSpot.StartCurrentTicker("ltc", "usdt", "ltc_spot_this_week")
+	okexSpot.StartCurrentTicker(pair, "ltc_spot_this_week")
 
 	var tickerValue *Exchange.TickerValue
 	for {
@@ -62,10 +64,10 @@ func _TestProcessSpotTrade(t *testing.T) {
 	}
 
 	resultChan := ProcessTradeRoutine(okexSpot, Exchange.TradeConfig{
-		Coin:   "ltc_usdt",
-		Type:   Exchange.OrderTypeSell,
+		Coin:   pair,
+		Type:   Exchange.OrderTypeBuy,
 		Price:  tickerValue.Last,
-		Amount: 0.99,
+		Amount: 0.01,
 		Limit:  0.003,
 	})
 
