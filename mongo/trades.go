@@ -1,27 +1,34 @@
 package mongo
 
 import (
-  "fmt"
-  "time"
-  "errors"
+	"errors"
+	"fmt"
+	"time"
 
-  mgo "gopkg.in/mgo.v2"
-//   bson "gopkg.in/mgo.v2/bson"
+	mgo "gopkg.in/mgo.v2"
+	//   bson "gopkg.in/mgo.v2/bson"
 )
 
 type TradesRecord struct {
-	Time time.Time
-	Oper	string	// buy,sell
+	Time     time.Time
+	Oper     string // buy,sell
 	Exchange string
-	Coin string
+	Coin     string
+	Price    float64
 	Quantity float64
-	OrderID string
-	Details string
+	OrderID  string
+	Details  string
 }
 
 type Trades struct {
-	session *mgo.Session
+	session    *mgo.Session
 	collection *mgo.Collection
+
+	Config *DBConfig
+}
+
+var defaultTradeDBConfig = &DBConfig{
+	CollectionName: TradeRecordCollection,
 }
 
 func (t *Trades) Connect() error {
@@ -31,7 +38,11 @@ func (t *Trades) Connect() error {
 		return err
 	}
 	session.SetMode(mgo.Monotonic, true)
-	c := session.DB(Database).C(TradeRecordCollection)
+	if t.Config == nil {
+		t.Config = defaultTradeDBConfig
+	}
+
+	c := session.DB(Database).C(t.Config.CollectionName)
 
 	t.session = session
 	t.collection = c
@@ -56,7 +67,7 @@ func (t *Trades) Insert(record *TradesRecord) error {
 	return nil
 }
 
-func (t *Trades) FindAll() (error,[]TradesRecord) {
+func (t *Trades) FindAll() (error, []TradesRecord) {
 	var result []TradesRecord
 	if t.session != nil {
 		err := t.collection.Find(nil).All(&result)
@@ -69,4 +80,3 @@ func (t *Trades) FindAll() (error,[]TradesRecord) {
 
 	return errors.New("Connection is lost"), nil
 }
-

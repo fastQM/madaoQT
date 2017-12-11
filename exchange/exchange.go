@@ -20,14 +20,14 @@ func init() {
 }
 
 /* 交易类型：买，卖，开多，开空，平多，平空 */
-type TradeType int8
+type ExchangeType int8
 type EventType int8
-type OrderType int8
+type TradeType int8
 type OrderStatusType int8
 
 const (
-	TradeTypeFuture TradeType = iota
-	TradeTypeSpot
+	ExchangeTypeFuture ExchangeType = iota
+	ExchangeTypeSpot
 )
 
 const (
@@ -36,14 +36,35 @@ const (
 )
 
 const (
-	OrderTypeOpenLong OrderType = iota
-	OrderTypeOpenShort
-	OrderTypeCloseLong
-	OrderTypeCloseShort
-	OrderTypeBuy
-	OrderTypeSell
-	OrderTypeUnknown
+	TradeTypeOpenLong TradeType = iota
+	TradeTypeOpenShort
+	TradeTypeCloseLong
+	TradeTypeCloseShort
+	TradeTypeBuy
+	TradeTypeSell
+	TradeTypeCancel
+	TradeTypeUnknown
 )
+
+func GetTradeTypeString(tradeType TradeType) string {
+	switch tradeType {
+	case TradeTypeOpenLong:
+		return "OpenLong"
+	case TradeTypeOpenShort:
+		return "OpenShort"
+	case TradeTypeCloseLong:
+		return "CloseLong"
+	case TradeTypeCloseShort:
+		return "CloseShort"
+	case TradeTypeBuy:
+		return "Buy"
+	case TradeTypeSell:
+		return "Sell"
+	case TradeTypeCancel:
+		return "cancel"
+	}
+	return "Unknown"
+}
 
 const (
 	OrderStatusOpen OrderStatusType = iota
@@ -64,8 +85,7 @@ type TickerListItem struct {
 	Tag    string // 用户调用者匹配
 	Name   string // 用户交易所匹配
 	Time   string
-	Type   TradeType // 合约还是现货
-	Period string    // 合约周期
+	Period string // 合约周期
 	Value  interface{}
 
 	ticket    int64
@@ -103,14 +123,13 @@ type DepthValue struct {
 type TickerValue struct {
 	Last   float64
 	Time   string
-	Type   TradeType
 	Period string // 合约周期
 }
 
 type TradeConfig struct {
 	Coin string
 	/* buy or sell */
-	Type   OrderType
+	Type   TradeType
 	Price  float64
 	Amount float64
 	Limit  float64
@@ -122,7 +141,8 @@ type OrderInfo struct {
 	Price      float64
 	Amount     float64
 	DealAmount float64
-	Type       OrderType
+	AvgPrice   float64
+	Type       TradeType
 	Status     OrderStatusType
 }
 
@@ -144,7 +164,7 @@ type IExchange interface {
 	// AddTicker(coinA string, coinB string, config interface{}, tag string)
 	GetTickerValue(tag string) *TickerValue
 	WatchEvent() chan EventType
-	GetDepthValue(coin string, price float64, limit float64, orderQuantity float64, tradeType OrderType) *DepthValue
+	GetDepthValue(coin string, price float64, limit float64, orderQuantity float64, tradeType TradeType) *DepthValue
 	GetBalance(coin string) float64
 
 	Trade(configs TradeConfig) *TradeResult
@@ -300,7 +320,7 @@ type Exchanges struct {
 // 	okexfuture.Init(InitConfig{
 // 		Api:    constOKEXApiKey,
 // 		Secret: constOEXSecretKey,
-// 		Custom: map[string]interface{}{"tradeType": TradeTypeFuture},
+// 		Custom: map[string]interface{}{"tradeType": ExchangeTypeFuture},
 // 	})
 
 // 	e.exchanges[okexfuture.GetExchangeName()] = okexfuture
@@ -309,7 +329,7 @@ type Exchanges struct {
 // 	okexspot.Init(InitConfig{
 // 		Api:    constOKEXApiKey,
 // 		Secret: constOEXSecretKey,
-// 		Custom: map[string]interface{}{"tradeType": TradeTypeSpot},
+// 		Custom: map[string]interface{}{"tradeType": ExchangeTypeSpot},
 // 	})
 
 // 	e.exchanges[okexfuture.GetExchangeName()] = okexspot

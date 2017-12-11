@@ -3,6 +3,7 @@ package task
 import (
 	"errors"
 	Exchange "madaoQT/exchange"
+	Mongo "madaoQT/mongo"
 	"madaoQT/utils"
 	"time"
 
@@ -37,11 +38,12 @@ type RulesEvent struct {
 }
 
 type TradeResult struct {
-	Error   error
-	Balance float64 // 成交后余额
+	Error    error
+	Balance  float64 // 成交后余额
+	AvgPrice float64 // 成交均价
 }
 
-func ProcessTradeRoutine(exchange Exchange.IExchange, tradeConfig Exchange.TradeConfig) chan TradeResult {
+func ProcessTradeRoutine(exchange Exchange.IExchange, tradeConfig Exchange.TradeConfig, db *Mongo.Trades) chan TradeResult {
 
 	var balance float64 // 实际余额后台返回为准
 	coin := Exchange.ParseCoins(tradeConfig.Coin)[0]
@@ -63,8 +65,10 @@ func ProcessTradeRoutine(exchange Exchange.IExchange, tradeConfig Exchange.Trade
 				return
 			}
 
-			var dealAmount float64
-			var result *Exchange.TradeResult
+			var dealAmount, totalCost, avePrice float64
+			var trade *Exchange.TradeResult
+
+			// 1. 根据深度情况计算价格下单
 			depth := exchange.GetDepthValue(tradeConfig.Coin, tradeConfig.Price, tradeConfig.Limit, tradeConfig.Amount, tradeConfig.Type)
 
 			Logger.Debugf("深度信息:%v 下单信息：%v", depth, tradeConfig)
@@ -74,23 +78,38 @@ func ProcessTradeRoutine(exchange Exchange.IExchange, tradeConfig Exchange.Trade
 				goto _NEXTLOOP
 			}
 
-			result = exchange.Trade(Exchange.TradeConfig{
+			trade = exchange.Trade(Exchange.TradeConfig{
 				Coin:   tradeConfig.Coin,
 				Type:   tradeConfig.Type,
 				Amount: depth.LimitTradeAmount,
 				Price:  depth.LimitTradePrice,
 			})
 
-			if result != nil && result.Error == nil {
+			if trade != nil && trade.Error == nil {
+
+				if err := db.Insert(&Mongo.TradesRecord{
+					Time:     time.Now(),
+					Oper:     Exchange.GetTradeTypeString(tradeConfig.Type),
+					Exchange: exchange.GetExchangeName(),
+					Coin:     tradeConfig.Coin,
+					Quantity: depth.LimitTradeAmount,
+					Price:    depth.LimitTradePrice,
+					OrderID:  trade.OrderID,
+				}); err != nil {
+					Logger.Errorf("保存交易操作失败:%v", err)
+				}
+
 				loop := 10
+
 				for {
 					utils.SleepAsyncBySecond(1)
 					info := exchange.GetOrderInfo(Exchange.OrderInfo{
-						OrderID: result.OrderID,
+						OrderID: trade.OrderID,
 						Coin:    tradeConfig.Coin,
 					})
 					if info[0].Status == Exchange.OrderStatusDone {
-						dealAmount = depth.LimitTradeAmount
+						dealAmount += info[0].DealAmount
+						totalCost += (info[0].AvgPrice * info[0].DealAmount) //手续费如何？
 						goto __CheckDealAmount
 					}
 
@@ -99,19 +118,20 @@ func ProcessTradeRoutine(exchange Exchange.IExchange, tradeConfig Exchange.Trade
 					if loop == 0 {
 						Logger.Debugf("超时，取消订单...")
 						// cancle the order, if it is traded when we cancle?
-						result := exchange.CancelOrder(Exchange.OrderInfo{
+						trade := exchange.CancelOrder(Exchange.OrderInfo{
 							Coin:    tradeConfig.Coin,
 							OrderID: info[0].OrderID,
 						})
 
-						if result != nil && result.Error == nil {
+						if trade != nil && trade.Error == nil {
 
 							info := exchange.GetOrderInfo(Exchange.OrderInfo{
-								OrderID: result.OrderID,
+								OrderID: trade.OrderID,
 								Coin:    tradeConfig.Coin,
 							})
 
-							dealAmount = info[0].DealAmount
+							dealAmount += info[0].DealAmount
+							totalCost += (info[0].AvgPrice * info[0].DealAmount)
 							Logger.Debugf("成功取消订单：%v, 已成交金额:%v", info[0].OrderID, dealAmount)
 
 							goto __CheckDealAmount
@@ -127,7 +147,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange, tradeConfig Exchange.Trade
 					}
 				}
 			} else {
-				Logger.Errorf("交易失败：%v", result)
+				Logger.Errorf("交易失败：%v", trade.Error)
 				channel <- TradeResult{
 					Error: errors.New("交易失败"),
 				}
@@ -136,17 +156,18 @@ func ProcessTradeRoutine(exchange Exchange.IExchange, tradeConfig Exchange.Trade
 
 		__CheckBalance:
 			balance = exchange.GetBalance(coin)
-			Logger.Debugf("交易完成，余额：%v", balance)
+			avePrice = totalCost / dealAmount
+			Logger.Debugf("交易完成，余额：%v 成交均价：%v", balance, avePrice)
 			channel <- TradeResult{
-				Error:   nil,
-				Balance: balance,
+				Error:    nil,
+				Balance:  balance,
+				AvgPrice: avePrice,
 			}
 			return
 
 		__CheckDealAmount:
-			tradeConfig.Amount -= dealAmount
-			Logger.Debugf("成交:%v 未成交:%v", dealAmount, tradeConfig.Amount)
-			if tradeConfig.Amount > 0 {
+			Logger.Debugf("已成交:%v 总量:%v", dealAmount, tradeConfig.Amount)
+			if tradeConfig.Amount-dealAmount > 0 {
 				goto _NEXTLOOP
 			}
 			// else

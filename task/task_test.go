@@ -1,13 +1,15 @@
 package task
 
 import (
+	"log"
 	Exchange "madaoQT/exchange"
+	"math"
 	"testing"
 )
 
 const pair = "ltc/usdt"
 
-func TestProcessFutureTrade(t *testing.T) {
+func _TestProcessFutureTrade(t *testing.T) {
 	okexFuture := new(Exchange.OKExAPI)
 	okexFuture.Init(Exchange.InitConfig{
 		Api:    constOKEXApiKey,
@@ -42,7 +44,7 @@ func TestProcessFutureTrade(t *testing.T) {
 	}
 }
 
-func TestProcessSpotTrade(t *testing.T) {
+func _TestProcessSpotTrade(t *testing.T) {
 	okexSpot := new(Exchange.OKExAPI)
 	okexSpot.Init(Exchange.InitConfig{
 		Api:    constOKEXApiKey,
@@ -75,4 +77,11 @@ func TestProcessSpotTrade(t *testing.T) {
 	case result := <-resultChan:
 		Logger.Debugf("result:%v", result)
 	}
+}
+
+func TestMathTrunc(t *testing.T) {
+	tmp1 := math.Trunc(1.234)
+	tmp2 := math.Trunc(1.834)
+
+	log.Printf("Value:%v %v", tmp1, tmp2)
 }

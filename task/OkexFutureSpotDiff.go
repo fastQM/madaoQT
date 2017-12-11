@@ -11,6 +11,7 @@ import (
 	"time"
 
 	Exchange "madaoQT/exchange"
+	Mongo "madaoQT/mongo"
 )
 
 const Explanation = "To make profit from the difference between the future`s price and the current`s"
@@ -38,7 +39,10 @@ type IAnalyzer struct {
 
 	status StatusType
 
-	ops []OperationItem
+	ops     map[uint]*OperationItem
+	opIndex uint
+
+	tradeDB Mongo.Trades
 }
 
 type OperationItem struct {
@@ -94,15 +98,28 @@ func (a *IAnalyzer) Init(config *AnalyzerConfig) {
 		"ltc/usdt": 1,
 	}
 
+	a.ops = make(map[uint]*OperationItem)
 	a.status = StatusProcessing
 	a.event = make(chan RulesEvent)
+
+	a.tradeDB = Mongo.Trades{
+		Config: &Mongo.DBConfig{
+			CollectionName: "DiffOKExFutureSpot",
+		},
+	}
+
+	err := a.tradeDB.Connect()
+	if err != nil {
+		Logger.Errorf("DB error:%v", err)
+		return
+	}
 
 	Logger.Info("启动OKEx合约监视程序")
 	futureExchange := new(Exchange.OKExAPI)
 	futureExchange.Init(Exchange.InitConfig{
 		Api:    constOKEXApiKey,
 		Secret: constOEXSecretKey,
-		Custom: map[string]interface{}{"tradeType": Exchange.TradeTypeFuture},
+		Custom: map[string]interface{}{"tradeType": Exchange.ExchangeTypeFuture},
 	})
 	futureExchange.Start()
 
@@ -111,7 +128,7 @@ func (a *IAnalyzer) Init(config *AnalyzerConfig) {
 	spotExchange.Init(Exchange.InitConfig{
 		Api:    constOKEXApiKey,
 		Secret: constOEXSecretKey,
-		Custom: map[string]interface{}{"tradeType": Exchange.TradeTypeSpot},
+		Custom: map[string]interface{}{"tradeType": Exchange.ExchangeTypeSpot},
 	})
 	spotExchange.Start()
 
@@ -183,14 +200,14 @@ func (a *IAnalyzer) Watch() bool {
 
 					a.placeOrdersByQuantity(a.future, Exchange.TradeConfig{
 						Coin:   coinName,
-						Type:   Exchange.OrderTypeOpenShort,
+						Type:   Exchange.TradeTypeOpenShort,
 						Price:  valuefuture.Last,
 						Amount: 5,
 						Limit:  a.config.LimitArea,
 					},
 						a.spot, Exchange.TradeConfig{
 							Coin:   coinName,
-							Type:   Exchange.OrderTypeBuy,
+							Type:   Exchange.TradeTypeBuy,
 							Price:  valueCurrent.Last,
 							Amount: 50 / valueCurrent.Last,
 							Limit:  a.config.LimitArea,
@@ -201,14 +218,14 @@ func (a *IAnalyzer) Watch() bool {
 
 					a.placeOrdersByQuantity(a.future, Exchange.TradeConfig{
 						Coin:   coinName,
-						Type:   Exchange.OrderTypeOpenLong,
+						Type:   Exchange.TradeTypeOpenLong,
 						Price:  valuefuture.Last,
 						Amount: 5,
 						Limit:  a.config.LimitArea,
 					},
 						a.spot, Exchange.TradeConfig{
 							Coin:   coinName,
-							Type:   Exchange.OrderTypeSell,
+							Type:   Exchange.TradeTypeSell,
 							Price:  valueCurrent.Last,
 							Amount: 50 / valueCurrent.Last,
 							Limit:  a.config.LimitArea,
@@ -235,8 +252,8 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 		return
 	}
 
-	channelFuture := ProcessTradeRoutine(future, futureConfig)
-	channelSpot := ProcessTradeRoutine(spot, spotConfig)
+	channelFuture := ProcessTradeRoutine(future, futureConfig, &a.tradeDB)
+	channelSpot := ProcessTradeRoutine(spot, spotConfig, &a.tradeDB)
 
 	var waitGroup sync.WaitGroup
 	var futureResult, spotResult TradeResult
@@ -262,33 +279,37 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 	waitGroup.Wait()
 	operation := OperationItem{}
 
-	if futureConfig.Type == Exchange.OrderTypeOpenLong {
-		futureConfig.Type = Exchange.OrderTypeCloseLong
-	} else if futureConfig.Type == Exchange.OrderTypeOpenShort {
-		futureConfig.Type = Exchange.OrderTypeCloseShort
+	if futureConfig.Type == Exchange.TradeTypeOpenLong {
+		futureConfig.Type = Exchange.TradeTypeCloseLong
+	} else if futureConfig.Type == Exchange.TradeTypeOpenShort {
+		futureConfig.Type = Exchange.TradeTypeCloseShort
 	} else {
 		Logger.Error("Invalid Operation for the future")
 		return
 	}
 
-	if spotConfig.Type == Exchange.OrderTypeSell {
-		spotConfig.Type = Exchange.OrderTypeBuy
-	} else if spotConfig.Type == Exchange.OrderTypeBuy {
-		spotConfig.Type = Exchange.OrderTypeSell
+	if spotConfig.Type == Exchange.TradeTypeSell {
+		spotConfig.Type = Exchange.TradeTypeBuy
+	} else if spotConfig.Type == Exchange.TradeTypeBuy {
+		spotConfig.Type = Exchange.TradeTypeSell
 	} else {
 		Logger.Error("Invalid Operation for the future")
 		return
 	}
 
 	// futureConfig.Amount = futureResult.Balance
-	spotConfig.Amount = spotResult.Balance
+	spotConfig.Amount = math.Trunc(spotResult.Balance*100) / 100
+
+	Logger.Debugf("spotConfig.Amount:%v", spotConfig.Amount)
 
 	operation.futureConfig = futureConfig
 	operation.spotConfig = spotConfig
 
 	if futureResult.Error == nil && spotResult.Error == nil {
 		Logger.Debug("锁仓成功")
-		a.ops = append(a.ops, operation)
+		// a.ops = append(a.ops, operation)
+		a.ops[a.opIndex] = &operation
+		a.opIndex++
 		return
 	} else if futureResult.Error == nil && spotResult.Error != nil {
 		channelSpot = ProcessTradeRoutine(spot, operation.spotConfig)
@@ -324,8 +345,13 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 }
 
 func (a *IAnalyzer) checkPosition(coin string, futurePrice float64, spotPrice float64) bool {
-	if a.ops != nil {
-		for _, op := range a.ops {
+	if len(a.ops) != 0 {
+		for index, op := range a.ops {
+
+			if op == nil {
+				Logger.Debug("Invalid operation")
+				continue
+			}
 
 			closeConditions := []bool{
 				!InPriceArea(futurePrice, op.futureConfig.Price, a.config.LimitClose), // 防止爆仓
@@ -369,6 +395,7 @@ func (a *IAnalyzer) checkPosition(coin string, futurePrice float64, spotPrice fl
 
 					if futureResult.Error == nil && spotResult.Error == nil {
 						Logger.Info("平仓完成")
+						delete(a.ops, index)
 					} else {
 						Logger.Error("平仓失败，请手工检查")
 						a.status = StatusError

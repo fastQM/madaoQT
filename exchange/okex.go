@@ -90,7 +90,7 @@ type OKExAPI struct {
 	tickerList []TickerListItem
 	depthList  []DepthListItem
 	event      chan EventType
-	tradeType  TradeType
+	tradeType  ExchangeType
 
 	/* Each channel has a depth */
 	messageChannels sync.Map
@@ -114,7 +114,7 @@ func NewOKExFutureApi(config *InitConfig) *OKExAPI {
 		futureConfig := InitConfig{
 			Api:    config.Api,
 			Secret: config.Secret,
-			Custom: map[string]interface{}{"tradeType": TradeTypeFuture},
+			Custom: map[string]interface{}{"tradeType": ExchangeTypeFuture},
 		}
 		handlderOkexFuture.Init(futureConfig)
 
@@ -130,7 +130,7 @@ func NewOKExSpotApi(config *InitConfig) *OKExAPI {
 		spotConfig := InitConfig{
 			Api:    config.Api,
 			Secret: config.Secret,
-			Custom: map[string]interface{}{"tradeType": TradeTypeSpot},
+			Custom: map[string]interface{}{"tradeType": ExchangeTypeSpot},
 		}
 		handlerOkexSpot.Init(spotConfig)
 
@@ -157,7 +157,7 @@ func (o *OKExAPI) Init(config InitConfig) {
 	o.apiKey = config.Api
 	o.secretKey = config.Secret
 
-	o.tradeType = config.Custom["tradeType"].(TradeType)
+	o.tradeType = config.Custom["tradeType"].(ExchangeType)
 
 }
 
@@ -165,9 +165,9 @@ func (o *OKExAPI) Start() {
 
 	var url string
 
-	if o.tradeType == TradeTypeFuture {
+	if o.tradeType == ExchangeTypeFuture {
 		url = contractUrl
-	} else if o.tradeType == TradeTypeSpot {
+	} else if o.tradeType == ExchangeTypeSpot {
 		url = currentUrl
 	} else {
 		Logger.Error("Invalid type")
@@ -386,9 +386,9 @@ func (o *OKExAPI) GetTickerValue(tag string) *TickerValue {
 				}
 
 				tmp := ticker.Value.(map[string]interface{})
-				// if o.tradeType == TradeTypeFuture {
+				// if o.tradeType == ExchangeTypeFuture {
 				// 	lastValue = tmp["last"].(float64)
-				// } else if o.tradeType == TradeTypeSpot {
+				// } else if o.tradeType == ExchangeTypeSpot {
 				// 	value, _ := strconv.ParseFloat(tmp["last"].(string), 64)
 				// 	lastValue = value
 				// }
@@ -471,15 +471,15 @@ func (o *OKExAPI) SwitchCurrentDepth(open bool, pair string, depth string) chan 
 
 }
 
-func (o *OKExAPI) GetDepthValue(coin string, price float64, limit float64, orderQuantity float64, tradeType OrderType) *DepthValue {
+func (o *OKExAPI) GetDepthValue(coin string, price float64, limit float64, orderQuantity float64, tradeType TradeType) *DepthValue {
 
 	var recvChan chan interface{}
 	coins := ParseCoins(coin)
 
-	if o.tradeType == TradeTypeFuture {
+	if o.tradeType == ExchangeTypeFuture {
 		recvChan = o.SwithContractDepth(true, coins[0], "this_week", "20")
 		// defer o.SwithContractDepth(false, coinA, "this_week", "20")
-	} else if o.tradeType == TradeTypeSpot {
+	} else if o.tradeType == ExchangeTypeSpot {
 		recvChan = o.SwitchCurrentDepth(true, coins[0]+"_"+coins[1], "20")
 		// defer o.SwitchCurrentDepth(false, coinA, coinB, "20")
 	}
@@ -503,7 +503,7 @@ func (o *OKExAPI) GetDepthValue(coin string, price float64, limit float64, order
 
 		var list []DepthPrice
 
-		if o.tradeType == TradeTypeFuture {
+		if o.tradeType == ExchangeTypeFuture {
 
 			if asks != nil && len(asks) > 0 {
 				askList := make([]DepthPrice, len(asks))
@@ -517,7 +517,7 @@ func (o *OKExAPI) GetDepthValue(coin string, price float64, limit float64, order
 
 				depth.AskAverage, depth.AskQty = GetDepthAveragePrice(askList)
 				depth.AskByOrder, depth.AskPrice = GetDepthPriceByOrder(askList, orderQuantity)
-				if tradeType == OrderTypeOpenLong || tradeType == OrderTypeCloseShort {
+				if tradeType == TradeTypeOpenLong || tradeType == TradeTypeCloseShort {
 					list = RevertDepthArray(askList)
 				}
 			}
@@ -535,12 +535,12 @@ func (o *OKExAPI) GetDepthValue(coin string, price float64, limit float64, order
 				depth.BidAverage, depth.BidQty = GetDepthAveragePrice(bidList)
 				depth.BidByOrder, depth.BidPrice = GetDepthPriceByOrder(bidList, orderQuantity)
 
-				if tradeType == OrderTypeOpenShort || tradeType == OrderTypeCloseLong {
+				if tradeType == TradeTypeOpenShort || tradeType == TradeTypeCloseLong {
 					list = bidList
 				}
 			}
 
-		} else if o.tradeType == TradeTypeSpot {
+		} else if o.tradeType == ExchangeTypeSpot {
 			if asks != nil && len(asks) > 0 {
 				askList := make([]DepthPrice, len(asks))
 				for i, ask := range asks {
@@ -552,7 +552,7 @@ func (o *OKExAPI) GetDepthValue(coin string, price float64, limit float64, order
 				depth.AskAverage, depth.AskQty = GetDepthAveragePrice(askList)
 				depth.AskByOrder, depth.AskPrice = GetDepthPriceByOrder(askList, orderQuantity)
 
-				if tradeType == OrderTypeBuy {
+				if tradeType == TradeTypeBuy {
 					list = RevertDepthArray(askList)
 				}
 
@@ -569,7 +569,7 @@ func (o *OKExAPI) GetDepthValue(coin string, price float64, limit float64, order
 				depth.BidAverage, depth.BidQty = GetDepthAveragePrice(bidList)
 				depth.BidByOrder, depth.BidPrice = GetDepthPriceByOrder(bidList, orderQuantity)
 
-				if tradeType == OrderTypeSell {
+				if tradeType == TradeTypeSell {
 					list = bidList
 				}
 			}
@@ -659,7 +659,7 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 
 	coins := ParseCoins(configs.Coin)
 
-	if o.tradeType == TradeTypeFuture {
+	if o.tradeType == ExchangeTypeFuture {
 
 		channel = ChannelContractTrade
 
@@ -670,19 +670,19 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 			"price":         strconv.FormatFloat(configs.Price, 'f', 2, 64),
 			// the exact amount orders is amount/level_rate
 			"amount":      strconv.FormatFloat(configs.Amount, 'f', 2, 64),
-			"type":        o.getOrderTypeString(configs.Type),
+			"type":        o.getTradeTypeString(configs.Type),
 			"match_price": "0",
 			"lever_rate":  "10",
 		}
 
-	} else if o.tradeType == TradeTypeSpot {
+	} else if o.tradeType == ExchangeTypeSpot {
 
 		channel = ChannelSpotOrder
 
 		parameters = map[string]string{
 			"api_key": o.apiKey,
 			"symbol":  coins[0] + "_" + coins[1],
-			"type":    o.getOrderTypeString(configs.Type),
+			"type":    o.getTradeTypeString(configs.Type),
 			"price":   strconv.FormatFloat(configs.Price, 'f', 2, 64),
 			"amount":  strconv.FormatFloat(configs.Amount, 'f', 2, 64),
 		}
@@ -735,7 +735,7 @@ func (o *OKExAPI) CancelOrder(order OrderInfo) *TradeResult {
 
 	coins := ParseCoins(order.Coin)
 
-	if o.tradeType == TradeTypeFuture {
+	if o.tradeType == ExchangeTypeFuture {
 
 		channel = ChannelContractTradeCancel
 
@@ -746,7 +746,7 @@ func (o *OKExAPI) CancelOrder(order OrderInfo) *TradeResult {
 			"contract_type": "this_week",
 		}
 
-	} else if o.tradeType == TradeTypeSpot {
+	} else if o.tradeType == ExchangeTypeSpot {
 		channel = ChannelSpotCancelOrder
 
 		parameters = map[string]string{
@@ -801,7 +801,7 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 
 	coins := ParseCoins(filter.Coin)
 
-	if o.tradeType == TradeTypeFuture {
+	if o.tradeType == ExchangeTypeFuture {
 
 		channel = ChannelOrderInfo
 
@@ -816,7 +816,7 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 			"symbol":       coins[0] + "_" + coins[1],
 		}
 
-	} else if o.tradeType == TradeTypeSpot {
+	} else if o.tradeType == ExchangeTypeSpot {
 
 		channel = ChannelSpotOrderInfo
 
@@ -852,11 +852,14 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 		for i, tmp := range orders {
 			order := tmp.(map[string]interface{})
 
-			var orderType OrderType
-			if o.tradeType == TradeTypeFuture {
-				orderType = o.getOrderTypeByFloat(order["type"].(float64))
-			} else if o.tradeType == TradeTypeSpot {
-				orderType = o.getOrderTypeByString(order["type"].(string))
+			var orderType TradeType
+			var avgPrice float64
+			if o.tradeType == ExchangeTypeFuture {
+				orderType = o.getTradeTypeByFloat(order["type"].(float64))
+				avgPrice = order["price_avg"].(float64)
+			} else if o.tradeType == ExchangeTypeSpot {
+				orderType = o.getTradeTypeByString(order["type"].(string))
+				avgPrice = order["avg_price"].(float64)
 			}
 			item := OrderInfo{
 				Coin:    order["symbol"].(string),
@@ -867,6 +870,7 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 				Type:       orderType,
 				Status:     o.getStatus(order["status"].(float64)),
 				DealAmount: order["deal_amount"].(float64),
+				AvgPrice:   avgPrice,
 			}
 			result[i] = item
 		}
@@ -883,10 +887,10 @@ func (o *OKExAPI) GetBalance(coin string) float64 {
 	var channel string
 	var data, parameters map[string]string
 
-	if o.tradeType == TradeTypeFuture {
+	if o.tradeType == ExchangeTypeFuture {
 		channel = ChannelUserInfo
 
-	} else if o.tradeType == TradeTypeSpot {
+	} else if o.tradeType == ExchangeTypeSpot {
 		channel = ChannelSpotUserInfo
 	}
 
@@ -907,7 +911,7 @@ func (o *OKExAPI) GetBalance(coin string) float64 {
 
 	select {
 	case recv := <-recvChan:
-		if o.tradeType == TradeTypeFuture {
+		if o.tradeType == ExchangeTypeFuture {
 			if recv != nil {
 				values := recv.(map[string]interface{})[coin]
 				if values != nil {
@@ -919,7 +923,7 @@ func (o *OKExAPI) GetBalance(coin string) float64 {
 			}
 			return -1
 
-		} else if o.tradeType == TradeTypeSpot {
+		} else if o.tradeType == ExchangeTypeSpot {
 			if recv != nil {
 				funds := recv.(map[string]interface{})["funds"]
 				if funds != nil {
@@ -957,57 +961,57 @@ func (o *OKExAPI) getStatus(status float64) OrderStatusType {
 	return OrderStatusUnknown
 }
 
-func (o *OKExAPI) getOrderTypeByString(orderType string) OrderType {
+func (o *OKExAPI) getTradeTypeByString(orderType string) TradeType {
 	switch orderType {
 	case "1":
-		return OrderTypeOpenLong
+		return TradeTypeOpenLong
 	case "2":
-		return OrderTypeOpenShort
+		return TradeTypeOpenShort
 	case "3":
-		return OrderTypeCloseLong
+		return TradeTypeCloseLong
 	case "4":
-		return OrderTypeCloseShort
+		return TradeTypeCloseShort
 	case "buy":
-		return OrderTypeBuy
+		return TradeTypeBuy
 	case "sell":
-		return OrderTypeSell
+		return TradeTypeSell
 	}
 
-	return OrderTypeUnknown
+	return TradeTypeUnknown
 }
 
-func (o *OKExAPI) getOrderTypeByFloat(orderType float64) OrderType {
+func (o *OKExAPI) getTradeTypeByFloat(orderType float64) TradeType {
 	switch orderType {
 	case 1:
-		return OrderTypeOpenLong
+		return TradeTypeOpenLong
 	case 2:
-		return OrderTypeOpenShort
+		return TradeTypeOpenShort
 	case 3:
-		return OrderTypeCloseLong
+		return TradeTypeCloseLong
 	case 4:
-		return OrderTypeCloseShort
+		return TradeTypeCloseShort
 	}
 
-	return OrderTypeUnknown
+	return TradeTypeUnknown
 }
 
-func (o *OKExAPI) getOrderTypeString(orderType OrderType) string {
+func (o *OKExAPI) getTradeTypeString(orderType TradeType) string {
 
 	switch orderType {
-	case OrderTypeOpenLong:
+	case TradeTypeOpenLong:
 		return "1"
-	case OrderTypeOpenShort:
+	case TradeTypeOpenShort:
 		return "2"
-	case OrderTypeCloseLong:
+	case TradeTypeCloseLong:
 		return "3"
-	case OrderTypeCloseShort:
+	case TradeTypeCloseShort:
 		return "4"
-	case OrderTypeBuy:
+	case TradeTypeBuy:
 		return "buy"
-	case OrderTypeSell:
+	case TradeTypeSell:
 		return "sell"
 	}
 
-	Logger.Errorf("[%s]getOrderType: Invalid type", o.GetExchangeName())
+	Logger.Errorf("[%s]getTradeType: Invalid type", o.GetExchangeName())
 	return ""
 }
