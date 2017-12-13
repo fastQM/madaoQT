@@ -2,9 +2,11 @@ package task
 
 import (
 	"log"
-	Exchange "madaoQT/exchange"
 	"math"
 	"testing"
+
+	Exchange "madaoQT/exchange"
+	Utils "madaoQT/utils"
 )
 
 const pair = "ltc/usdt"
@@ -14,7 +16,7 @@ func _TestProcessFutureTrade(t *testing.T) {
 	okexFuture.Init(Exchange.InitConfig{
 		Api:    constOKEXApiKey,
 		Secret: constOEXSecretKey,
-		Custom: map[string]interface{}{"tradeType": Exchange.TradeTypeFuture},
+		Custom: map[string]interface{}{"exchangeType": Exchange.ExchangeTypeFuture},
 	})
 
 	okexFuture.Start()
@@ -32,11 +34,11 @@ func _TestProcessFutureTrade(t *testing.T) {
 
 	resultChan := ProcessTradeRoutine(okexFuture, Exchange.TradeConfig{
 		Coin:   pair,
-		Type:   Exchange.OrderTypeOpenLong,
+		Type:   Exchange.TradeTypeOpenLong,
 		Price:  tickerValue.Last,
 		Amount: 1,
 		Limit:  0.003,
-	})
+	}, nil, nil)
 
 	select {
 	case result := <-resultChan:
@@ -49,7 +51,7 @@ func _TestProcessSpotTrade(t *testing.T) {
 	okexSpot.Init(Exchange.InitConfig{
 		Api:    constOKEXApiKey,
 		Secret: constOEXSecretKey,
-		Custom: map[string]interface{}{"tradeType": Exchange.TradeTypeSpot},
+		Custom: map[string]interface{}{"exchangeType": Exchange.ExchangeTypeSpot},
 	})
 
 	okexSpot.Start()
@@ -67,11 +69,11 @@ func _TestProcessSpotTrade(t *testing.T) {
 
 	resultChan := ProcessTradeRoutine(okexSpot, Exchange.TradeConfig{
 		Coin:   pair,
-		Type:   Exchange.OrderTypeBuy,
+		Type:   Exchange.TradeTypeBuy,
 		Price:  tickerValue.Last,
 		Amount: 0.01,
 		Limit:  0.003,
-	})
+	}, nil, nil)
 
 	select {
 	case result := <-resultChan:
@@ -84,4 +86,32 @@ func TestMathTrunc(t *testing.T) {
 	tmp2 := math.Trunc(1.834)
 
 	log.Printf("Value:%v %v", tmp1, tmp2)
+}
+
+func TestCheckStruct(t *testing.T) {
+	type Test struct {
+		S1 string
+		S2 string
+	}
+
+	var value = Test{
+		"hello",
+		"world",
+	}
+
+	log.Printf("1:%v", value.S1)
+	log.Printf("2:%v", value.S2)
+}
+
+func TestStartTask(t *testing.T) {
+	task := Task{}
+	err := task.InstallTaskAndRun("okexdiff", "monrnig")
+	if err != nil {
+		log.Printf("Error:%v", err)
+		return
+	}
+
+	Utils.SleepAsyncBySecond(10)
+
+	task.ExitTask()
 }

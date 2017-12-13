@@ -22,10 +22,14 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     </style>
 
     <div class="card">
-      <div class="circle">3</div>
-      <h1>View Three</h1>
-      <p>Modus commodo minimum eum te, vero utinam assueverit per eu.</p>
-      <p>Ea duis bonorum nec, falli paulo aliquid ei eum.Has at minim mucius aliquam, est id tempor laoreet.Pro saepe pertinax ei, ad pri animal labores suscipiantur.</p>
+      <div class="">策略参数设置</div>
+      <iron-form id="TaskEditForm">
+        <form action="/task/run" method="post">
+        <paper-input name="APIKey" type="" placeholder="api key" required no-label-float></paper-input>
+        <paper-input name="SecretKey" type="" placeholder="secret key" required no-label-float></paper-input>
+        <paper-button raised on-click="AddExchangeKey">Submit</paper-button>
+        </form>
+      </iron-form>
     </div>
   </template>
 

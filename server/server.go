@@ -1,6 +1,7 @@
-package web
+package server
 
 import (
+	"sync"
 	"time"
 
 	"github.com/gorilla/securecookie"
@@ -9,15 +10,18 @@ import (
 	"github.com/kataras/iris/sessions"
 
 	Config "madaoQT/config"
-	controllers "madaoQT/http/controllers"
-	websocket "madaoQT/http/websocket"
+	Exchange "madaoQT/exchange"
+	Controllers "madaoQT/server/controllers"
+	Websocket "madaoQT/server/websocket"
+	Task "madaoQT/task"
 	Utils "madaoQT/utils"
 )
 
 type HttpServer struct {
-	app  *iris.Application
-	ws   *websocket.WebsocketServer
-	sess *sessions.Sessions
+	app   *iris.Application
+	ws    *Websocket.WebsocketServer
+	sess  *sessions.Sessions
+	Tasks *sync.Map
 }
 
 const CookiesName = "madao-sessions"
@@ -68,22 +72,23 @@ func (h *HttpServer) setupSessions() {
 
 func (h *HttpServer) setupControllers() {
 
-	h.app.Controller("/helloworld", new(controllers.HelloWorldController))
-	h.app.Controller("/user", &controllers.UserController{Sessions: h.sess})
+	h.app.Controller("/helloworld", new(Controllers.HelloWorldController))
+	h.app.Controller("/user", &Controllers.UserController{Sessions: h.sess})
+	h.app.Controller("/task", &Controllers.TaskController{Sessions: h.sess, Tasks: h.Tasks})
 }
 
 func (h *HttpServer) SetupHttpServer() {
 
 	h.app = iris.New()
 
-	// websocket.SetupWebsocket(app)
-	h.ws = new(websocket.WebsocketServer)
+	// Websocket.SetupWebsocket(app)
+	h.ws = new(Websocket.WebsocketServer)
 	h.ws.SetupWebsocket(h.app)
 
 	views := iris.HTML("./www/www", ".html")
 	views.Reload(true) //开发模式，强制每次请求都更新页面
 
-	if Config.PRODUCTION_ENV {
+	if Config.ProductionEnv {
 		// h.app.StaticEmbedded("/static", "./views/node_modules", Asset, AssetNames)
 
 	} else {
@@ -95,6 +100,11 @@ func (h *HttpServer) SetupHttpServer() {
 
 	h.app.RegisterView(views)
 
+	// task
+	h.setupExchanges()
+	h.setupTasks()
+
+	// http
 	h.setupSessions()
 	h.setupRoutes()
 	h.setupControllers()
@@ -102,6 +112,39 @@ func (h *HttpServer) SetupHttpServer() {
 	h.app.Run(iris.Addr(":8080"))
 }
 
-func (h *HttpServer) BroadcastByWebsocket(msg interface{}) {
-	h.ws.BroadcastAll(msg)
+// func (h *HttpServer) BroadcastByWebsocket(msg interface{}) {
+// 	h.ws.BroadcastAll(msg)
+// }
+
+func (h *HttpServer) setupExchanges() {
+	okexspot := Exchange.NewOKExSpotApi(&Exchange.InitConfig{
+		Ticker: Exchange.ITicker(h.ws),
+	})
+
+	okexspot.Start()
+
+	go func() {
+		for {
+			select {
+			case event := <-okexspot.WatchEvent():
+				if event == Exchange.EventConnected {
+					okexspot.StartCurrentTicker("ltc/usdt", "hello")
+
+				} else if event == Exchange.EventError {
+					okexspot.Start()
+				}
+			}
+		}
+	}()
+}
+
+func (h *HttpServer) setupTasks() {
+
+	if h.Tasks == nil {
+		h.Tasks = &sync.Map{}
+	}
+	// load default task
+	h.Tasks.Store("okexdiff", &Task.Task{
+		Name: "okexdiff",
+	})
 }

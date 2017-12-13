@@ -3,9 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
 
-	Http "madaoQT/http"
-	Task "madaoQT/task"
+	Config "madaoQT/config"
+	Server "madaoQT/server"
 	Utils "madaoQT/utils"
 
 	"github.com/kataras/golog"
@@ -32,26 +33,31 @@ func handleCmd() {
 
 }
 
-const constOKEXApiKey = "a982120e-8505-41db-9ae3-0c62dd27435c"
-const constOEXSecretKey = "71430C7FA63A067724FB622FB3031970"
-
 func main() {
 
 	go handleCmd()
 
-	analyzer := new(Task.IAnalyzer)
-	analyzer.Init(nil)
-
-	http := new(Http.HttpServer)
+	http := new(Server.HttpServer)
 	go http.SetupHttpServer()
-	go Utils.OpenBrowser("http://localhost:8080")
+
+	if Config.ProductionEnv {
+		go Utils.OpenBrowser("http://localhost:" + Config.ServerPort)
+	}
+
+	kill := make(chan os.Signal, 1)
+	signal.Notify(kill, os.Interrupt, os.Kill)
 
 	for {
 		select {
-		case event := <-analyzer.WatchEvent():
-			if event.EventType == Task.EventTypeTrigger {
-				http.BroadcastByWebsocket(event.Msg)
-			}
+		// case event := <-analyzer.WatchEvent():
+		// 	if event.EventType == Task.EventTypeTrigger {
+		// 		http.BroadcastByWebsocket(event.Msg)
+		// 	}
+		case <-kill:
+			Logger.Infof("interrupt")
+			Utils.SleepAsyncBySecond(3)
+			os.Exit(0)
+
 		}
 	}
 

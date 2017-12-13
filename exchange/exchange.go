@@ -46,24 +46,15 @@ const (
 	TradeTypeUnknown
 )
 
-func GetTradeTypeString(tradeType TradeType) string {
-	switch tradeType {
-	case TradeTypeOpenLong:
-		return "OpenLong"
-	case TradeTypeOpenShort:
-		return "OpenShort"
-	case TradeTypeCloseLong:
-		return "CloseLong"
-	case TradeTypeCloseShort:
-		return "CloseShort"
-	case TradeTypeBuy:
-		return "Buy"
-	case TradeTypeSell:
-		return "Sell"
-	case TradeTypeCancel:
-		return "cancel"
-	}
-	return "Unknown"
+var TradeTypeString = map[TradeType]string{
+	TradeTypeOpenLong:   "OpenLong",
+	TradeTypeOpenShort:  "OpenShort",
+	TradeTypeCloseLong:  "CloseLong",
+	TradeTypeCloseShort: "CloseShort",
+	TradeTypeBuy:        "Buy",
+	TradeTypeSell:       "Sell",
+	TradeTypeCancel:     "cancel",
+	TradeTypeUnknown:    "Unknown_TradeType",
 }
 
 const (
@@ -75,10 +66,24 @@ const (
 	OrderStatusUnknown
 )
 
+var OrderStatusString = map[OrderStatusType]string{
+	OrderStatusOpen:      "Open",
+	OrderStatusPartDone:  "PartDone",
+	OrderStatusDone:      "Done",
+	OrderStatusCanceling: "Canceling",
+	OrderStatusCanceled:  "Canceled",
+	OrderStatusUnknown:   "Unknown_OrderStatus",
+}
+
 type InitConfig struct {
 	Api    string
 	Secret string
+	Ticker ITicker
 	Custom map[string]interface{}
+}
+
+type ITicker interface {
+	Ticker(exchange string, value TickerValue)
 }
 
 type TickerListItem struct {
@@ -121,13 +126,18 @@ type DepthValue struct {
 }
 
 type TickerValue struct {
+	High   float64
+	Low    float64
+	Volume float64
 	Last   float64
 	Time   string
 	Period string // 合约周期
 }
 
 type TradeConfig struct {
-	Coin string
+	Batch string
+	Coin  string
+
 	/* buy or sell */
 	Type   TradeType
 	Price  float64
@@ -171,6 +181,23 @@ type IExchange interface {
 
 	CancelOrder(order OrderInfo) *TradeResult
 	GetOrderInfo(filter OrderInfo) []OrderInfo
+}
+
+func RevertTradeType(tradeType TradeType) TradeType {
+	switch tradeType {
+	case TradeTypeOpenLong:
+		return TradeTypeCloseLong
+	case TradeTypeOpenShort:
+		return TradeTypeCloseShort
+	// case TradeTypeCloseLong:
+	// case TradeTypeCloseShort:
+	case TradeTypeBuy:
+		return TradeTypeSell
+	case TradeTypeSell:
+		return TradeTypeBuy
+	}
+
+	return TradeTypeUnknown
 }
 
 func RevertDepthArray(array []DepthPrice) []DepthPrice {

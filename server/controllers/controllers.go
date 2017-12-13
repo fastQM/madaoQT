@@ -4,6 +4,13 @@ import (
 	"github.com/kataras/golog"
 )
 
+type errorCode int
+
+const (
+	errorCodeSuccess errorCode = iota
+	errorCodeInvalidSession
+)
+
 var Logger *golog.Logger
 
 func init() {

@@ -15,7 +15,8 @@ import (
 	websocket "github.com/gorilla/websocket"
 )
 
-const NameOKEX = "okex"
+const NameOKEXSpot = "OkexSpot"
+const NameOKEXFuture = "OkexFuture"
 
 const contractUrl = "wss://real.okex.com:10440/websocket/okexapi"
 const currentUrl = "wss://real.okex.com:10441/websocket"
@@ -83,14 +84,16 @@ const (
 )
 
 type OKExAPI struct {
+	Ticker ITicker
+
 	conn      *websocket.Conn
 	apiKey    string
 	secretKey string
 
-	tickerList []TickerListItem
-	depthList  []DepthListItem
-	event      chan EventType
-	tradeType  ExchangeType
+	tickerList   []TickerListItem
+	depthList    []DepthListItem
+	event        chan EventType
+	exchangeType ExchangeType
 
 	/* Each channel has a depth */
 	messageChannels sync.Map
@@ -104,40 +107,39 @@ func formatTimeOKEX() string {
 	return unixTime.In(location).Format(timeFormat)
 }
 
-var handlderOkexFuture *OKExAPI
-var handlerOkexSpot *OKExAPI
+const constOKEXApiKey = "a982120e-8505-41db-9ae3-0c62dd27435c"
+const constOEXSecretKey = "71430C7FA63A067724FB622FB3031970"
 
 func NewOKExFutureApi(config *InitConfig) *OKExAPI {
 
-	if handlderOkexFuture == nil && config != nil {
-		handlderOkexFuture := new(OKExAPI)
-		futureConfig := InitConfig{
-			Api:    config.Api,
-			Secret: config.Secret,
-			Custom: map[string]interface{}{"tradeType": ExchangeTypeFuture},
+	if config == nil {
+		config = &InitConfig{
+			Api:    constOKEXApiKey,
+			Secret: constOEXSecretKey,
 		}
-		handlderOkexFuture.Init(futureConfig)
-
-		return handlderOkexFuture
 	}
 
-	return handlderOkexFuture
+	config.Custom = map[string]interface{}{"exchangeType": ExchangeTypeFuture}
+	future := new(OKExAPI)
+	future.Init(*config)
+
+	return future
 }
 
 func NewOKExSpotApi(config *InitConfig) *OKExAPI {
-	if handlerOkexSpot == nil && config != nil {
-		handlerOkexSpot := new(OKExAPI)
-		spotConfig := InitConfig{
-			Api:    config.Api,
-			Secret: config.Secret,
-			Custom: map[string]interface{}{"tradeType": ExchangeTypeSpot},
-		}
-		handlerOkexSpot.Init(spotConfig)
 
-		return handlerOkexSpot
+	if config == nil {
+		config = &InitConfig{
+			Api:    constOKEXApiKey,
+			Secret: constOEXSecretKey,
+		}
 	}
 
-	return handlerOkexSpot
+	config.Custom = map[string]interface{}{"exchangeType": ExchangeTypeFuture}
+	spot := new(OKExAPI)
+	spot.Init(*config)
+
+	return spot
 
 }
 
@@ -151,13 +153,13 @@ func (o *OKExAPI) triggerEvent(event EventType) {
 
 func (o *OKExAPI) Init(config InitConfig) {
 
+	o.Ticker = config.Ticker
 	o.tickerList = nil
 	o.depthList = nil
 	o.event = make(chan EventType)
 	o.apiKey = config.Api
 	o.secretKey = config.Secret
-
-	o.tradeType = config.Custom["tradeType"].(ExchangeType)
+	o.exchangeType = config.Custom["exchangeType"].(ExchangeType)
 
 }
 
@@ -165,9 +167,9 @@ func (o *OKExAPI) Start() {
 
 	var url string
 
-	if o.tradeType == ExchangeTypeFuture {
+	if o.exchangeType == ExchangeTypeFuture {
 		url = contractUrl
-	} else if o.tradeType == ExchangeTypeSpot {
+	} else if o.exchangeType == ExchangeTypeSpot {
 		url = currentUrl
 	} else {
 		Logger.Error("Invalid type")
@@ -296,6 +298,16 @@ func (o *OKExAPI) Start() {
 							// o.tickerList[i].Time = timeHM
 							o.tickerList[i].Value = response[0]["data"]
 							o.tickerList[i].ticket++
+
+							tmp := o.tickerList[i].Value.(map[string]interface{})
+							lastValue, _ := strconv.ParseFloat(tmp["last"].(string), 64)
+							tickerValue := TickerValue{
+								Last: lastValue,
+								Time: formatTimeOKEX(),
+							}
+							if o.Ticker != nil {
+								o.Ticker.Ticker(o.GetExchangeName(), tickerValue)
+							}
 							goto END
 						}
 					}
@@ -371,7 +383,13 @@ func (o *OKExAPI) StartCurrentTicker(pair string, tag string) {
 }
 
 func (o *OKExAPI) GetExchangeName() string {
-	return NameOKEX
+	if o.exchangeType == ExchangeTypeFuture {
+		return NameOKEXFuture
+	} else if o.exchangeType == ExchangeTypeSpot {
+		return NameOKEXSpot
+	}
+
+	return "Invalid Exchange type"
 }
 
 func (o *OKExAPI) GetTickerValue(tag string) *TickerValue {
@@ -386,9 +404,9 @@ func (o *OKExAPI) GetTickerValue(tag string) *TickerValue {
 				}
 
 				tmp := ticker.Value.(map[string]interface{})
-				// if o.tradeType == ExchangeTypeFuture {
+				// if o.exchangeType == ExchangeTypeFuture {
 				// 	lastValue = tmp["last"].(float64)
-				// } else if o.tradeType == ExchangeTypeSpot {
+				// } else if o.exchangeType == ExchangeTypeSpot {
 				// 	value, _ := strconv.ParseFloat(tmp["last"].(string), 64)
 				// 	lastValue = value
 				// }
@@ -476,10 +494,10 @@ func (o *OKExAPI) GetDepthValue(coin string, price float64, limit float64, order
 	var recvChan chan interface{}
 	coins := ParseCoins(coin)
 
-	if o.tradeType == ExchangeTypeFuture {
+	if o.exchangeType == ExchangeTypeFuture {
 		recvChan = o.SwithContractDepth(true, coins[0], "this_week", "20")
 		// defer o.SwithContractDepth(false, coinA, "this_week", "20")
-	} else if o.tradeType == ExchangeTypeSpot {
+	} else if o.exchangeType == ExchangeTypeSpot {
 		recvChan = o.SwitchCurrentDepth(true, coins[0]+"_"+coins[1], "20")
 		// defer o.SwitchCurrentDepth(false, coinA, coinB, "20")
 	}
@@ -503,7 +521,7 @@ func (o *OKExAPI) GetDepthValue(coin string, price float64, limit float64, order
 
 		var list []DepthPrice
 
-		if o.tradeType == ExchangeTypeFuture {
+		if o.exchangeType == ExchangeTypeFuture {
 
 			if asks != nil && len(asks) > 0 {
 				askList := make([]DepthPrice, len(asks))
@@ -540,7 +558,7 @@ func (o *OKExAPI) GetDepthValue(coin string, price float64, limit float64, order
 				}
 			}
 
-		} else if o.tradeType == ExchangeTypeSpot {
+		} else if o.exchangeType == ExchangeTypeSpot {
 			if asks != nil && len(asks) > 0 {
 				askList := make([]DepthPrice, len(asks))
 				for i, ask := range asks {
@@ -659,7 +677,7 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 
 	coins := ParseCoins(configs.Coin)
 
-	if o.tradeType == ExchangeTypeFuture {
+	if o.exchangeType == ExchangeTypeFuture {
 
 		channel = ChannelContractTrade
 
@@ -675,7 +693,7 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 			"lever_rate":  "10",
 		}
 
-	} else if o.tradeType == ExchangeTypeSpot {
+	} else if o.exchangeType == ExchangeTypeSpot {
 
 		channel = ChannelSpotOrder
 
@@ -735,7 +753,7 @@ func (o *OKExAPI) CancelOrder(order OrderInfo) *TradeResult {
 
 	coins := ParseCoins(order.Coin)
 
-	if o.tradeType == ExchangeTypeFuture {
+	if o.exchangeType == ExchangeTypeFuture {
 
 		channel = ChannelContractTradeCancel
 
@@ -746,7 +764,7 @@ func (o *OKExAPI) CancelOrder(order OrderInfo) *TradeResult {
 			"contract_type": "this_week",
 		}
 
-	} else if o.tradeType == ExchangeTypeSpot {
+	} else if o.exchangeType == ExchangeTypeSpot {
 		channel = ChannelSpotCancelOrder
 
 		parameters = map[string]string{
@@ -801,7 +819,7 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 
 	coins := ParseCoins(filter.Coin)
 
-	if o.tradeType == ExchangeTypeFuture {
+	if o.exchangeType == ExchangeTypeFuture {
 
 		channel = ChannelOrderInfo
 
@@ -816,7 +834,7 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 			"symbol":       coins[0] + "_" + coins[1],
 		}
 
-	} else if o.tradeType == ExchangeTypeSpot {
+	} else if o.exchangeType == ExchangeTypeSpot {
 
 		channel = ChannelSpotOrderInfo
 
@@ -854,10 +872,10 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 
 			var orderType TradeType
 			var avgPrice float64
-			if o.tradeType == ExchangeTypeFuture {
+			if o.exchangeType == ExchangeTypeFuture {
 				orderType = o.getTradeTypeByFloat(order["type"].(float64))
 				avgPrice = order["price_avg"].(float64)
-			} else if o.tradeType == ExchangeTypeSpot {
+			} else if o.exchangeType == ExchangeTypeSpot {
 				orderType = o.getTradeTypeByString(order["type"].(string))
 				avgPrice = order["avg_price"].(float64)
 			}
@@ -887,10 +905,10 @@ func (o *OKExAPI) GetBalance(coin string) float64 {
 	var channel string
 	var data, parameters map[string]string
 
-	if o.tradeType == ExchangeTypeFuture {
+	if o.exchangeType == ExchangeTypeFuture {
 		channel = ChannelUserInfo
 
-	} else if o.tradeType == ExchangeTypeSpot {
+	} else if o.exchangeType == ExchangeTypeSpot {
 		channel = ChannelSpotUserInfo
 	}
 
@@ -911,7 +929,7 @@ func (o *OKExAPI) GetBalance(coin string) float64 {
 
 	select {
 	case recv := <-recvChan:
-		if o.tradeType == ExchangeTypeFuture {
+		if o.exchangeType == ExchangeTypeFuture {
 			if recv != nil {
 				values := recv.(map[string]interface{})[coin]
 				if values != nil {
@@ -923,7 +941,7 @@ func (o *OKExAPI) GetBalance(coin string) float64 {
 			}
 			return -1
 
-		} else if o.tradeType == ExchangeTypeSpot {
+		} else if o.exchangeType == ExchangeTypeSpot {
 			if recv != nil {
 				funds := recv.(map[string]interface{})["funds"]
 				if funds != nil {

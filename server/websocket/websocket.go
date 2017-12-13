@@ -3,20 +3,22 @@ package websocket
 import (
 	"fmt"
 	// "log"
-	
+
 	"github.com/kataras/iris"
-	"github.com/kataras/iris/websocket"	
+	"github.com/kataras/iris/websocket"
+
+	Exchange "madaoQT/exchange"
 )
 
 type WebsocketServer struct {
 	ws *websocket.Server
 }
 
-func (w *WebsocketServer)SetupWebsocket(app *iris.Application) {
+func (w *WebsocketServer) SetupWebsocket(app *iris.Application) {
 	// create our echo websocket server
 	w.ws = websocket.New(websocket.Config{
-		// ReadBufferSize:  1024,
-		// WriteBufferSize: 1024,
+	// ReadBufferSize:  1024,
+	// WriteBufferSize: 1024,
 	})
 
 	w.ws.OnConnection(w.handleConnection)
@@ -32,7 +34,7 @@ func (w *WebsocketServer)SetupWebsocket(app *iris.Application) {
 	})
 }
 
-func (w *WebsocketServer)BroadcastAll(msg interface{}){
+func (w *WebsocketServer) BroadcastAll(msg interface{}) {
 
 	connections := w.ws.GetConnections()
 	if connections != nil && len(connections) != 0 {
@@ -42,7 +44,11 @@ func (w *WebsocketServer)BroadcastAll(msg interface{}){
 	return
 }
 
-func (w *WebsocketServer)handleConnection(c websocket.Connection) {
+func (w *WebsocketServer) Ticker(exchange string, tickerValue Exchange.TickerValue) {
+	w.BroadcastAll(fmt.Sprintf("%v", tickerValue))
+}
+
+func (w *WebsocketServer) handleConnection(c websocket.Connection) {
 
 	// Read events from browser
 	c.On("chat", func(msg string) {
@@ -51,5 +57,13 @@ func (w *WebsocketServer)handleConnection(c websocket.Connection) {
 		// Write message back to the client message owner:
 		// c.Emit("chat", msg)
 		c.To(websocket.Broadcast).Emit("chat", msg)
+	})
+
+	c.On(MsgCmdPublish, func(msg string) {
+		// not allowed by connections
+	})
+
+	c.On(MsgCmdSubscribe, func(msg string) {
+
 	})
 }

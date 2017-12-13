@@ -1,4 +1,15 @@
 package config
 
+/*
+	static configuration
+*/
 
-const PRODUCTION_ENV = false
+// ProductionEnv indicate test or production enviroment
+const ProductionEnv = false
+
+/*
+	dynamic configuration
+*/
+
+// ServerPort indication the port of the server
+var ServerPort = "8080"

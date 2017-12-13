@@ -1,20 +1,39 @@
-package task
+package main
 
 /*
 	该策略用于在现货期货做差价
 */
 
 import (
+	"flag"
 	"fmt"
 	"math"
 	"sync"
 	"time"
+	// "time"
 
 	Exchange "madaoQT/exchange"
 	Mongo "madaoQT/mongo"
+	Task "madaoQT/task"
+	Utils "madaoQT/utils"
+
+	Websocket "github.com/gorilla/websocket"
+	"github.com/kataras/golog"
 )
 
 const Explanation = "To make profit from the difference between the future`s price and the current`s"
+
+/*
+	初始化日志句柄
+*/
+var Logger *golog.Logger
+
+func init() {
+	logger := golog.New()
+	Logger = logger
+	Logger.SetLevel("debug")
+	Logger.SetTimeFormat("2006-01-02 06:04:05")
+}
 
 type StatusType int
 
@@ -22,6 +41,7 @@ const (
 	StatusNone StatusType = iota
 	StatusProcessing
 	StatusOrdering
+	StatusQuit
 	StatusError
 )
 
@@ -35,14 +55,13 @@ type IAnalyzer struct {
 	future Exchange.IExchange
 	spot   Exchange.IExchange
 
-	event chan RulesEvent
-
 	status StatusType
 
 	ops     map[uint]*OperationItem
 	opIndex uint
 
-	tradeDB Mongo.Trades
+	tradeDB *Mongo.Trades
+	orderDB *Mongo.Orders
 }
 
 type OperationItem struct {
@@ -51,45 +70,68 @@ type OperationItem struct {
 }
 
 type AnalyzerConfig struct {
-	Trigger    map[string]float64
-	Close      map[string]float64
+	APIKey     string
+	SecretKey  string
+	Area       map[string]TriggerArea
 	LimitArea  float64
 	LimitClose float64
 }
 
+type TriggerArea struct {
+	Start float64
+	Close float64
+}
+
 var defaultConfig = AnalyzerConfig{
-	Trigger: map[string]float64{
-		"btc": 1.6,
-		"ltc": 3,
-	},
-	Close: map[string]float64{
-		"btc": 0.5,
-		"ltc": 1.5,
+	// Trigger: map[string]float64{
+	// 	"btc": 1.6,
+	// 	"ltc": 3,
+	// },
+	// Close: map[string]float64{
+	// 	"btc": 0.5,
+	// 	"ltc": 1.5,
+	// },
+	Area: map[string]TriggerArea{
+		"btc": {1.6, 0.5},
+		"ltc": {3, 1.5},
 	},
 	LimitClose: 0.03,  // 止损幅度
 	LimitArea:  0.005, // 允许操作价格的波动范围
 }
 
-func (a *IAnalyzer) GetExplanation() string {
-	return Explanation
+func (a *IAnalyzer) GetTaskExplanation() *Task.TaskExplanation {
+	return &Task.TaskExplanation{"OkexDiff", "OkexDiff"}
 }
 
-func (a *IAnalyzer) WatchEvent() chan RulesEvent {
-	return a.event
-}
-
-func (a *IAnalyzer) triggerEvent(event EventType, msg interface{}) {
-	a.event <- RulesEvent{EventType: event, Msg: msg}
-}
-
-func (a *IAnalyzer) defaultConfig() *AnalyzerConfig {
+func (a *IAnalyzer) GetDefaultConfig() *AnalyzerConfig {
 	return &defaultConfig
+}
+
+func (a *IAnalyzer) connectTicker() {
+	url := "ws://localhost:8080/websocket"
+	c, _, err := Websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		Logger.Errorf("Fail to dial: %v", err)
+		return
+	}
+
+	go func() {
+		for {
+			_, message, err := c.ReadMessage()
+			if err != nil {
+				Logger.Errorf("Fail to read:%v", err)
+				return
+			}
+
+			Logger.Infof("message:%v", string(message))
+		}
+	}()
 }
 
 func (a *IAnalyzer) Init(config *AnalyzerConfig) {
 
 	if a.config == nil {
-		a.config = a.defaultConfig()
+		a.config = a.GetDefaultConfig()
 	}
 
 	// 监视币种以及余额
@@ -100,37 +142,40 @@ func (a *IAnalyzer) Init(config *AnalyzerConfig) {
 
 	a.ops = make(map[uint]*OperationItem)
 	a.status = StatusProcessing
-	a.event = make(chan RulesEvent)
 
-	a.tradeDB = Mongo.Trades{
+	a.tradeDB = &Mongo.Trades{
 		Config: &Mongo.DBConfig{
-			CollectionName: "DiffOKExFutureSpot",
+			CollectionName: "DiffOKExFutureSpotTrade",
 		},
 	}
 
 	err := a.tradeDB.Connect()
 	if err != nil {
-		Logger.Errorf("DB error:%v", err)
+		Logger.Errorf("tradeDB error:%v", err)
+		return
+	}
+
+	a.orderDB = &Mongo.Orders{
+		Config: &Mongo.DBConfig{
+			CollectionName: "DiffOKExFutureSpotOrder",
+		},
+	}
+
+	err = a.orderDB.Connect()
+	if err != nil {
+		Logger.Errorf("orderDB error:%v", err)
 		return
 	}
 
 	Logger.Info("启动OKEx合约监视程序")
-	futureExchange := new(Exchange.OKExAPI)
-	futureExchange.Init(Exchange.InitConfig{
-		Api:    constOKEXApiKey,
-		Secret: constOEXSecretKey,
-		Custom: map[string]interface{}{"tradeType": Exchange.ExchangeTypeFuture},
-	})
+	futureExchange := Exchange.NewOKExFutureApi(nil) // 交易需要api
 	futureExchange.Start()
 
 	Logger.Info("启动OKEx现货监视程序")
-	spotExchange := new(Exchange.OKExAPI)
-	spotExchange.Init(Exchange.InitConfig{
-		Api:    constOKEXApiKey,
-		Secret: constOEXSecretKey,
-		Custom: map[string]interface{}{"tradeType": Exchange.ExchangeTypeSpot},
-	})
+	spotExchange := Exchange.NewOKExSpotApi(nil)
 	spotExchange.Start()
+
+	// a.connectTicker()
 
 	go func() {
 		for {
@@ -183,8 +228,6 @@ func (a *IAnalyzer) Watch() bool {
 
 		Logger.Info(msg)
 
-		a.triggerEvent(EventTypeTrigger, msg)
-
 		if a.checkPosition(coinName, valuefuture.Last, valueCurrent.Last) {
 			Logger.Info("持仓中...不做交易")
 			continue
@@ -192,13 +235,14 @@ func (a *IAnalyzer) Watch() bool {
 
 		if valuefuture != nil && valueCurrent != nil {
 
-			a.triggerEvent(EventTypeTrigger, "===============================")
-
-			if math.Abs(difference) > a.config.Trigger[coinName] {
+			if math.Abs(difference) > a.config.Area[coinName].Start {
 				if valuefuture.Last > valueCurrent.Last {
 					Logger.Info("卖出合约，买入现货")
 
+					batch := Utils.GetRandomHexString(12)
+
 					a.placeOrdersByQuantity(a.future, Exchange.TradeConfig{
+						Batch:  batch,
 						Coin:   coinName,
 						Type:   Exchange.TradeTypeOpenShort,
 						Price:  valuefuture.Last,
@@ -206,6 +250,7 @@ func (a *IAnalyzer) Watch() bool {
 						Limit:  a.config.LimitArea,
 					},
 						a.spot, Exchange.TradeConfig{
+							Batch:  batch,
 							Coin:   coinName,
 							Type:   Exchange.TradeTypeBuy,
 							Price:  valueCurrent.Last,
@@ -216,7 +261,10 @@ func (a *IAnalyzer) Watch() bool {
 				} else {
 					Logger.Info("买入合约, 卖出现货")
 
+					batch := Utils.GetRandomHexString(12)
+
 					a.placeOrdersByQuantity(a.future, Exchange.TradeConfig{
+						Batch:  batch,
 						Coin:   coinName,
 						Type:   Exchange.TradeTypeOpenLong,
 						Price:  valuefuture.Last,
@@ -224,6 +272,7 @@ func (a *IAnalyzer) Watch() bool {
 						Limit:  a.config.LimitArea,
 					},
 						a.spot, Exchange.TradeConfig{
+							Batch:  batch,
 							Coin:   coinName,
 							Type:   Exchange.TradeTypeSell,
 							Price:  valueCurrent.Last,
@@ -231,14 +280,16 @@ func (a *IAnalyzer) Watch() bool {
 							Limit:  a.config.LimitArea,
 						})
 				}
-
-				a.triggerEvent(EventTypeTrigger, "===============================")
 			}
 		}
 	}
 
 	return true
 
+}
+
+func (a *IAnalyzer) Close() {
+	a.status = StatusQuit
 }
 
 /*
@@ -252,11 +303,11 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 		return
 	}
 
-	channelFuture := ProcessTradeRoutine(future, futureConfig, &a.tradeDB)
-	channelSpot := ProcessTradeRoutine(spot, spotConfig, &a.tradeDB)
+	channelFuture := Task.ProcessTradeRoutine(future, futureConfig, a.tradeDB, a.orderDB)
+	channelSpot := Task.ProcessTradeRoutine(spot, spotConfig, a.tradeDB, a.orderDB)
 
 	var waitGroup sync.WaitGroup
-	var futureResult, spotResult TradeResult
+	var futureResult, spotResult Task.TradeResult
 
 	waitGroup.Add(1)
 	go func() {
@@ -279,23 +330,8 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 	waitGroup.Wait()
 	operation := OperationItem{}
 
-	if futureConfig.Type == Exchange.TradeTypeOpenLong {
-		futureConfig.Type = Exchange.TradeTypeCloseLong
-	} else if futureConfig.Type == Exchange.TradeTypeOpenShort {
-		futureConfig.Type = Exchange.TradeTypeCloseShort
-	} else {
-		Logger.Error("Invalid Operation for the future")
-		return
-	}
-
-	if spotConfig.Type == Exchange.TradeTypeSell {
-		spotConfig.Type = Exchange.TradeTypeBuy
-	} else if spotConfig.Type == Exchange.TradeTypeBuy {
-		spotConfig.Type = Exchange.TradeTypeSell
-	} else {
-		Logger.Error("Invalid Operation for the future")
-		return
-	}
+	futureConfig.Type = Exchange.RevertTradeType(futureConfig.Type)
+	spotConfig.Type = Exchange.RevertTradeType(spotConfig.Type)
 
 	// futureConfig.Amount = futureResult.Balance
 	spotConfig.Amount = math.Trunc(spotResult.Balance*100) / 100
@@ -305,37 +341,40 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 	operation.futureConfig = futureConfig
 	operation.spotConfig = spotConfig
 
-	if futureResult.Error == nil && spotResult.Error == nil {
+	if futureResult.Error == Task.TradeErrorSuccess && spotResult.Error == Task.TradeErrorSuccess {
+
 		Logger.Debug("锁仓成功")
-		// a.ops = append(a.ops, operation)
 		a.ops[a.opIndex] = &operation
 		a.opIndex++
 		return
-	} else if futureResult.Error == nil && spotResult.Error != nil {
-		channelSpot = ProcessTradeRoutine(spot, operation.spotConfig)
 
+	} else if futureResult.Error == Task.TradeErrorSuccess && spotResult.Error != Task.TradeErrorSuccess {
+
+		channelSpot = Task.ProcessTradeRoutine(spot, operation.spotConfig, a.tradeDB, a.orderDB)
 		select {
 
 		case spotResult = <-channelSpot:
 			Logger.Debugf("现货平仓结果:%v", spotResult)
-			if spotResult.Error != nil {
+			if spotResult.Error != Task.TradeErrorSuccess {
 				Logger.Errorf("平仓失败，请手工检查:%v", spotResult)
 				a.status = StatusError
 			}
 		}
-	} else if futureResult.Error != nil && spotResult.Error == nil {
-		channelFuture = ProcessTradeRoutine(spot, operation.futureConfig)
 
+	} else if futureResult.Error != Task.TradeErrorSuccess && spotResult.Error == Task.TradeErrorSuccess {
+
+		channelFuture = Task.ProcessTradeRoutine(spot, operation.futureConfig, a.tradeDB, a.orderDB)
 		select {
-
 		case futureResult = <-channelFuture:
 			Logger.Debugf("合约平仓结果:%v", futureResult)
-			if futureResult.Error != nil {
+			if futureResult.Error != Task.TradeErrorSuccess {
 				Logger.Errorf("平仓失败，请手工检查:%v", futureResult)
 				a.status = StatusError
 			}
 		}
+
 	} else {
+
 		Logger.Errorf("无法建立仓位：%v, %v", futureResult, spotResult)
 		a.status = StatusError
 	}
@@ -354,9 +393,10 @@ func (a *IAnalyzer) checkPosition(coin string, futurePrice float64, spotPrice fl
 			}
 
 			closeConditions := []bool{
-				!InPriceArea(futurePrice, op.futureConfig.Price, a.config.LimitClose), // 防止爆仓
+				!Task.InPriceArea(futurePrice, op.futureConfig.Price, a.config.LimitClose), // 防止爆仓
 				// !InPriceArea(spotPrice, op.spotConfig.Price, a.config.LimitClose),
-				math.Abs((futurePrice-spotPrice)*100/spotPrice) < a.config.Close[coin],
+				math.Abs((futurePrice-spotPrice)*100/spotPrice) < a.config.Area[coin].Close,
+				// a.status ==
 			}
 
 			Logger.Debugf("Conditions:%v", closeConditions)
@@ -364,14 +404,17 @@ func (a *IAnalyzer) checkPosition(coin string, futurePrice float64, spotPrice fl
 			for _, condition := range closeConditions {
 
 				if condition {
+
 					Logger.Error("条件平仓...")
+
 					op.futureConfig.Price = futurePrice
 					op.spotConfig.Price = spotPrice
-					channelFuture := ProcessTradeRoutine(a.future, op.futureConfig)
-					channelSpot := ProcessTradeRoutine(a.spot, op.spotConfig)
+
+					channelFuture := Task.ProcessTradeRoutine(a.future, op.futureConfig, a.tradeDB, a.orderDB)
+					channelSpot := Task.ProcessTradeRoutine(a.spot, op.spotConfig, a.tradeDB, a.orderDB)
 
 					var waitGroup sync.WaitGroup
-					var futureResult, spotResult TradeResult
+					var futureResult, spotResult Task.TradeResult
 
 					waitGroup.Add(1)
 					go func() {
@@ -393,13 +436,15 @@ func (a *IAnalyzer) checkPosition(coin string, futurePrice float64, spotPrice fl
 
 					waitGroup.Wait()
 
-					if futureResult.Error == nil && spotResult.Error == nil {
+					if futureResult.Error == Task.TradeErrorSuccess && spotResult.Error == Task.TradeErrorSuccess {
 						Logger.Info("平仓完成")
 						delete(a.ops, index)
 					} else {
 						Logger.Error("平仓失败，请手工检查")
 						a.status = StatusError
 					}
+
+					break
 				}
 
 			}
@@ -409,4 +454,42 @@ func (a *IAnalyzer) checkPosition(coin string, futurePrice float64, spotPrice fl
 	}
 
 	return false
+}
+
+/*
+	Parameters:
+	config AnalyzerConfig
+*/
+func main() {
+
+	// flag.Parse()
+
+	// kill := make(chan os.Signal, 1)
+	// signal.Notify(kill, os.Interrupt, os.Kill)
+
+	// go func() {
+	// 	for {
+	// 		select {
+	// 		case <-kill:
+	// 			Logger.Infof("interrupt")
+	// 			Utils.SleepAsyncBySecond(3)
+	// 			os.Exit(0)
+	// 		}
+	// 	}
+	// }()
+
+	config := flag.String("config", "test", "configuration")
+	flag.Parse()
+	Logger.Infof("start with paramters:%v, and I will sleep for a while", *config)
+
+	Utils.SleepAsyncBySecond(5)
+
+	Logger.Info("I am awake")
+
+	for {
+		select {
+		case <-time.After(1 * time.Second):
+			Logger.Info("1....")
+		}
+	}
 }

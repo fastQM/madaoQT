@@ -10,6 +10,7 @@ import (
 )
 
 type TradesRecord struct {
+	Batch    string
 	Time     time.Time
 	Oper     string // buy,sell
 	Exchange string
@@ -34,7 +35,7 @@ var defaultTradeDBConfig = &DBConfig{
 func (t *Trades) Connect() error {
 	session, err := mgo.Dial(MongoURL)
 	if err != nil {
-		fmt.Println("Connect to redis error", err)
+		fmt.Println("Connect to Mongo error", err)
 		return err
 	}
 	session.SetMode(mgo.Monotonic, true)
@@ -58,6 +59,7 @@ func (t *Trades) Close() {
 
 func (t *Trades) Insert(record *TradesRecord) error {
 	if t.session != nil {
+		record.Time = time.Now()
 		err := t.collection.Insert(record)
 		if err != nil {
 			return err
