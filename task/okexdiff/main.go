@@ -62,6 +62,8 @@ type IAnalyzer struct {
 
 	tradeDB *Mongo.Trades
 	orderDB *Mongo.Orders
+
+	conn *Websocket.Conn
 }
 
 type OperationItem struct {
@@ -126,6 +128,20 @@ func (a *IAnalyzer) connectTicker() {
 			Logger.Infof("message:%v", string(message))
 		}
 	}()
+
+	a.conn = c
+}
+
+func (a *IAnalyzer) websocketPulish(topic string, message string) {
+	if a.conn != nil {
+		msg, err := Task.WebsocketMessageSerialize(topic, message)
+		if err != nil {
+			Logger.Errorf("Fail to serialize: %v", err)
+		}
+
+		Logger.Infof("Send:%v", msg)
+		a.conn.WriteMessage(Websocket.TextMessage, []byte(msg))
+	}
 }
 
 func (a *IAnalyzer) Init(config *AnalyzerConfig) {
@@ -228,6 +244,8 @@ func (a *IAnalyzer) Watch() bool {
 
 		Logger.Info(msg)
 
+		a.websocketPulish("test", msg)
+
 		if a.checkPosition(coinName, valuefuture.Last, valueCurrent.Last) {
 			Logger.Info("持仓中...不做交易")
 			continue
@@ -297,6 +315,10 @@ func (a *IAnalyzer) Close() {
 */
 func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfig Exchange.TradeConfig,
 	spot Exchange.IExchange, spotConfig Exchange.TradeConfig) {
+
+	if true {
+		return
+	}
 
 	if a.status != StatusProcessing {
 		Logger.Infof("Invalid Status %v", a.status)

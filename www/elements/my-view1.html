@@ -1,15 +1,6 @@
-<!--
-@license
-Copyright (c) 2016 The Polymer Project Authors. All rights reserved.
-This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
-The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
-The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
-Code distributed by Google as part of the polymer project is also
-subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
--->
-<script src="/iris-ws.js"></script>
 <link rel="import" href="../bower_components/polymer/polymer-element.html">
 <link rel="import" href="shared-styles.html">
+<link rel="import" href="global-services.html">
 
 <dom-module id="my-view1">
   <template>
@@ -25,6 +16,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       <div class="circle">1</div>
       <p>监视数据</p>
       <pre>[[text]]</pre>
+      <global-services id="globalServices"></global-services>
     </div>
   </template>
 
@@ -36,38 +28,18 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           text: String
         }
       }
-      ready() {
+      ready(){
         super.ready()
-
-        this.text = ""
         var self = this
-
-        var scheme = document.location.protocol == "https:" ? "wss" : "ws";
-        var port = document.location.port ? (":" + document.location.port) : "";
-        var wsURL = scheme + "://" + document.location.hostname + port+"/websocket"; 
-
-        var socket = new Ws(wsURL)
-        socket.OnConnect(function () {
-          self.text += "Status: Connected\n";
-        });
-        socket.OnDisconnect(function () {
-          self.text += "Status: Disconnected\n";
-        });
-
-        // read events from the server
-        socket.On("chat", function (msg) {
-          addMessage(msg)
-        });
-
-        function send() {
-          addMessage("Me: " + input.value) // write ourselves
-          socket.Emit("chat", input.value);// send chat event data to the websocket server
-          input.value = ""; // clear the input
-        }
-        
-        function addMessage(msg) {
-          self.text += msg + "\n";
-        }
+        this.$.globalServices.WebsocketSubscribe("iamhere", function(msg){
+          console.log("recv:" + msg)
+          var rsp = JSON.parse(msg)
+          if(rsp.result){
+            self.$.globalServices.WebsocketAddListener("iamhere", function(msg){
+              console.log("great")
+            })
+          }
+        })
       }
     }
 

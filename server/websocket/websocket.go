@@ -4,11 +4,21 @@ import (
 	"fmt"
 	// "log"
 
+	"github.com/kataras/golog"
 	"github.com/kataras/iris"
 	"github.com/kataras/iris/websocket"
 
 	Exchange "madaoQT/exchange"
 )
+
+var Logger *golog.Logger
+
+func init() {
+	logger := golog.New()
+	Logger = logger
+	Logger.SetLevel("debug")
+	Logger.SetTimeFormat("2006-01-02 06:04:05")
+}
 
 type WebsocketServer struct {
 	ws *websocket.Server
@@ -34,36 +44,83 @@ func (w *WebsocketServer) SetupWebsocket(app *iris.Application) {
 	})
 }
 
-func (w *WebsocketServer) BroadcastAll(msg interface{}) {
+func (w *WebsocketServer) Broadcast(topic string, msg interface{}) {
 
 	connections := w.ws.GetConnections()
 	if connections != nil && len(connections) != 0 {
-		connections[0].To(websocket.All).Emit("chat", msg)
+		if topic == "" {
+			connections[0].To(websocket.All).Emit("chat", msg)
+		} else {
+			connections[0].To(topic).Emit(topic, msg)
+		}
 	}
 
 	return
 }
 
 func (w *WebsocketServer) Ticker(exchange string, tickerValue Exchange.TickerValue) {
-	w.BroadcastAll(fmt.Sprintf("%v", tickerValue))
+	w.Broadcast("", fmt.Sprintf("%v", tickerValue))
+}
+
+func (w *WebsocketServer) Publish(topic string, msg string) {
+	w.Broadcast(topic, msg)
 }
 
 func (w *WebsocketServer) handleConnection(c websocket.Connection) {
 
 	// Read events from browser
-	c.On("chat", func(msg string) {
-		// Print the message to the console, c.Context() is the iris's http context.
-		fmt.Printf("%s sent: %s\n", c.Context().RemoteAddr(), msg)
-		// Write message back to the client message owner:
-		// c.Emit("chat", msg)
-		c.To(websocket.Broadcast).Emit("chat", msg)
-	})
+	// c.On("chat", func(msg string) {
+	// 	// Print the message to the console, c.Context() is the iris's http context.
+	// 	fmt.Printf("%s sent: %s\n", c.Context().RemoteAddr(), msg)
+	// 	// Write message back to the client message owner:
+	// 	// c.Emit("chat", msg)
+	// 	c.To(websocket.Broadcast).Emit("chat", msg)
+	// })
 
-	c.On(MsgCmdPublish, func(msg string) {
-		// not allowed by connections
-	})
+	// c.On(MsgCmdPublish, func(msg string) {
+	// 	Logger.Debugf("recv publish msg:%s", msg)
+	// 	data := parseRequestMsg(msg)
+	// 	if data != nil {
+	// 		rsp := packageResponseMsg(data.Seq, true, ErrorTypeNone, nil)
+	// 		Logger.Debugf("Response:%s", rsp)
+	// 		c.To(c.ID()).Emit(MsgCmdPublish, string(rsp)) // 发送方相应
+	// 		c.To(data.Cmd).Emit(data.Cmd, data.Data)      // 订阅方发送
+	// 		return
+	// 	}
+	// })
 
-	c.On(MsgCmdSubscribe, func(msg string) {
+	c.On("command", func(msg string) {
+		Logger.Debugf("recv subscribe msg:%s", msg)
+		data := parseRequestMsg(msg)
+		if data != nil {
+			if data.Cmd == CmdTypeSubscribe && data.Data != nil {
+				topic := data.Data.(map[string]interface{})["topic"].(string)
+				c.Join(topic)
+				rsp := packageResponseMsg(data.Seq, true, ErrorTypeNone, nil)
+				Logger.Debugf("Response:%s", rsp)
+				c.To(c.ID()).Emit("result", string(rsp))
 
+			} else if data.Cmd == CmdTypeUnsubscribe && data.Data != nil {
+				topic := data.Data.(map[string]interface{})["topic"].(string)
+				c.Leave(topic)
+				rsp := packageResponseMsg(data.Seq, true, ErrorTypeNone, nil)
+				Logger.Debugf("Response:%s", rsp)
+				c.To(c.ID()).Emit("result", string(rsp))
+
+			} else if data.Cmd == CmdTypePublish {
+				channel := data.Channel
+				c.To(channel).Emit("data", data.Data)
+
+			} else {
+				goto __INVALID_CMD
+			}
+
+			return
+		}
+
+	__INVALID_CMD:
+		rsp := packageResponseMsg(data.Seq, false, ErrorTypeInvalidCmd, nil)
+		c.To(c.ID()).Emit("result", string(rsp))
+		return
 	})
 }

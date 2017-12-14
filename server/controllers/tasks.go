@@ -13,13 +13,14 @@ import (
 
 type TaskController struct {
 	mvc.C
-	Sessions *sessions.Sessions `iris:"persistence"`
+
 	// [ Your fields here ]
 	// Request lifecycle data
 	// Models
 	// Database
 	// Global properties
-	Tasks *sync.Map `iris:"persistence"`
+	Sessions *sessions.Sessions `iris:"persistence"`
+	Tasks    *sync.Map          `iris:"persistence"`
 }
 
 // GET /task/tasks
