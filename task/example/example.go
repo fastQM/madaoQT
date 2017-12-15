@@ -3,10 +3,11 @@ package main
 import (
 	"time"
 
-	Task "madaoQT/task"
+	"github.com/kataras/golog"
+
+	Message "madaoQT/server/websocket"
 
 	Websocket "github.com/gorilla/websocket"
-	"github.com/kataras/golog"
 )
 
 const websocketServer = "ws://localhost:8080/websocket"
@@ -29,12 +30,8 @@ func (c *ChangeDetect) Start() {
 	for {
 		select {
 		case <-time.After(3 * time.Second):
-			msg, err := Task.WebsocketMessageSerialize("iamhere", "helloworld")
-			if err != nil {
-				Logger.Errorf("Fail to serialize: %v", err)
-			}
-
-			Logger.Infof("Send:%v", msg)
+			msg := Message.PackageRequestMsg(0, Message.CmdTypePublish, "iamhere", "je;;p")
+			Logger.Infof("Send:%v", string(msg))
 			c.conn.WriteMessage(Websocket.TextMessage, []byte(msg))
 		}
 	}

@@ -66,22 +66,18 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           gWebsocketStatus = StatusDisconnected
         })
 
-        gWebsocket.On("command", function(msg){
+        gWebsocket.OnMessage(function(msg){
+          console.log("message:" + msg)
           var msg = JSON.parse(msg)
           if(msg.cmd == CmdTypePublish){
             console.log("Publish:" + msg.data)
           }
         })
-
-        gWebsocket.On("result", function(msg){
-
-        })
       }
 
-      WebsocketSend(topic, msg){
+      WebsocketSend(msg){
         if(gWebsocketStatus == StatusConnnected){
-          console.log("send")
-          gWebsocket.Emit(topic,msg)
+          gWebsocket.EmitMessage(msg)
           return true
         }
 
@@ -97,12 +93,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       }
 
       WebsocketSubscribe(topic, callback){
-        if(gWebsocketStatus == StatusConnnected){
-          let msg = {seq:gWebsocketSeq++, cmd: CmdTypeSubscribe, data:{topic:topic}}
-          this.WebsocketSend("subscribe", JSON.stringify(msg))
-          return true
-        }
-        return false        
+        let msg = {seq:gWebsocketSeq++, cmd: CmdTypeSubscribe, data:{topic:topic}}
+        return this.WebsocketSend(JSON.stringify(msg))      
       }
     }
 

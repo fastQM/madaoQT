@@ -89,27 +89,27 @@ func (w *WebsocketServer) handleConnection(c websocket.Connection) {
 	// 	}
 	// })
 
-	c.On("command", func(msg string) {
-		Logger.Debugf("recv subscribe msg:%s", msg)
-		data := parseRequestMsg(msg)
+	c.OnMessage(func(msg []byte) {
+		Logger.Debugf("recv message:%s", msg)
+		data := ParseRequestMsg(string(msg))
 		if data != nil {
 			if data.Cmd == CmdTypeSubscribe && data.Data != nil {
 				topic := data.Data.(map[string]interface{})["topic"].(string)
 				c.Join(topic)
-				rsp := packageResponseMsg(data.Seq, true, ErrorTypeNone, nil)
+				rsp := PackageResponseMsg(data.Seq, true, ErrorTypeNone, nil)
 				Logger.Debugf("Response:%s", rsp)
-				c.To(c.ID()).Emit("result", string(rsp))
+				c.To(c.ID()).EmitMessage(rsp)
 
 			} else if data.Cmd == CmdTypeUnsubscribe && data.Data != nil {
 				topic := data.Data.(map[string]interface{})["topic"].(string)
 				c.Leave(topic)
-				rsp := packageResponseMsg(data.Seq, true, ErrorTypeNone, nil)
+				rsp := PackageResponseMsg(data.Seq, true, ErrorTypeNone, nil)
 				Logger.Debugf("Response:%s", rsp)
-				c.To(c.ID()).Emit("result", string(rsp))
+				c.To(c.ID()).EmitMessage(rsp)
 
 			} else if data.Cmd == CmdTypePublish {
 				channel := data.Channel
-				c.To(channel).Emit("data", data.Data)
+				c.To(channel).EmitMessage([]byte(data.Data.(string)))
 
 			} else {
 				goto __INVALID_CMD
@@ -119,8 +119,8 @@ func (w *WebsocketServer) handleConnection(c websocket.Connection) {
 		}
 
 	__INVALID_CMD:
-		rsp := packageResponseMsg(data.Seq, false, ErrorTypeInvalidCmd, nil)
-		c.To(c.ID()).Emit("result", string(rsp))
+		rsp := PackageResponseMsg(data.Seq, false, ErrorTypeInvalidCmd, nil)
+		c.To(c.ID()).EmitMessage(rsp)
 		return
 	})
 }

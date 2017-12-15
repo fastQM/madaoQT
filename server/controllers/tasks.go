@@ -39,7 +39,17 @@ func (t *TaskController) authen() (bool, iris.Map) {
 }
 
 // Get route: /task
-func (t *TaskController) Get() iris.Map {
+func (t *TaskController) Post() iris.Map {
+
+	info := map[string]string{}
+	err := t.Ctx.ReadJSON(&info)
+	if err != nil {
+		Logger.Errorf("Error:%v", err)
+		t.Ctx.StatusCode(iris.StatusInternalServerError)
+		return nil
+	}
+
+	Logger.Infof("Data:%v", info)
 
 	var tasksInfo []string
 	t.Tasks.Range(func(key, value interface{}) bool {

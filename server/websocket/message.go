@@ -19,7 +19,7 @@ const (
 type RequestMsg struct {
 	Seq     int         `json:"seq"`
 	Cmd     string      `json:"cmd"`
-	Channel string      `json:"channel,omitempty"`
+	Channel string      `json:"channel"`
 	Data    interface{} `json:"data,omitempty"`
 }
 
@@ -31,7 +31,7 @@ type ResponseMsg struct {
 	Data   interface{} `json:"data,omitempty"`
 }
 
-func parseRequestMsg(message string) *RequestMsg {
+func ParseRequestMsg(message string) *RequestMsg {
 	var data RequestMsg
 	err := json.Unmarshal([]byte(message), &data)
 	if err != nil {
@@ -41,11 +41,23 @@ func parseRequestMsg(message string) *RequestMsg {
 	return &data
 }
 
-func packageRequestMsg() {
+func PackageRequestMsg(seq int, cmd string, channel string, data interface{}) []byte {
+	var req = RequestMsg{
+		Seq:     seq,
+		Cmd:     cmd,
+		Channel: channel,
+		Data:    data,
+	}
 
+	msg, err := json.Marshal(req)
+	if err != nil {
+		Logger.Errorf("Fail to packageResponseMsg:%v", err)
+		return nil
+	}
+	return msg
 }
 
-func packageResponseMsg(seq int, result bool, errorCode ErrorType, data interface{}) []byte {
+func PackageResponseMsg(seq int, result bool, errorCode ErrorType, data interface{}) []byte {
 	var rsp ResponseMsg
 	if result {
 		rsp = ResponseMsg{
