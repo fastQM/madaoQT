@@ -171,6 +171,8 @@ type IExchange interface {
 	GetExchangeName() string
 	Init(config InitConfig)
 	Start()
+	Close()
+
 	// AddTicker(coinA string, coinB string, config interface{}, tag string)
 	GetTickerValue(tag string) *TickerValue
 	WatchEvent() chan EventType

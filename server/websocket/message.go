@@ -17,10 +17,10 @@ const (
 )
 
 type RequestMsg struct {
-	Seq     int         `json:"seq"`
-	Cmd     string      `json:"cmd"`
-	Channel string      `json:"channel"`
-	Data    interface{} `json:"data,omitempty"`
+	Seq   int         `json:"seq"`
+	Cmd   string      `json:"cmd"`
+	Topic string      `json:"topic"`
+	Data  interface{} `json:"data,omitempty"`
 }
 
 type ResponseMsg struct {
@@ -41,12 +41,12 @@ func ParseRequestMsg(message string) *RequestMsg {
 	return &data
 }
 
-func PackageRequestMsg(seq int, cmd string, channel string, data interface{}) []byte {
+func PackageRequestMsg(seq int, cmd string, topic string, data interface{}) []byte {
 	var req = RequestMsg{
-		Seq:     seq,
-		Cmd:     cmd,
-		Channel: channel,
-		Data:    data,
+		Seq:   seq,
+		Cmd:   cmd,
+		Topic: topic,
+		Data:  data,
 	}
 
 	msg, err := json.Marshal(req)

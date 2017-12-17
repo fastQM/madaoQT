@@ -54,31 +54,44 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       <iron-form id="TaskConfigForm">
         <form>
           <div>
-            <paper-input name="coin" type="" placeholder="货币名称(btc, ltc...)" value$="{{coinName}}" required no-label-float></paper-input>
-            <paper-input name="open" type="" placeholder="开仓差价百分比" required no-label-float></paper-input>
-            <paper-input name="close" type="" placeholder="平仓差价百分比" required no-label-float></paper-input>
+            <paper-input name="coin" type="" placeholder="货币名称(btc, ltc...)" value="{{coinName}}" required no-label-float></paper-input>
+            <paper-input name="open" type="" placeholder="开仓差价百分比" value="{{open}}" required no-label-float>
+              <div slot="suffix">%</div>
+            </paper-input>
+            <paper-input name="close" type="" placeholder="平仓差价百分比" value="{{close}}" required no-label-float>
+              <div slot="suffix">%</div>
+            </paper-input>
           </div>
           <div>
-            <paper-input name="openlimit" type="" placeholder="开仓允许价差" required no-label-float></paper-input>
-            <paper-input name="clostlimit" type="" placeholder="强制平仓波动" required no-label-float></paper-input>
+            <paper-input name="openlimit" type="" placeholder="开仓允许价差" value="{{openlimit}}" required no-label-float>
+              <div slot="suffix">%</div>
+            </paper-input>
+            <paper-input name="clostlimit" type="" placeholder="强制平仓波动" value="{{closelimit}}" required no-label-float>
+              <div slot="suffix">%</div>
+            </paper-input>
           </div>
-        <paper-button raised on-click="dialogConfirm">Start</paper-button>
+        <paper-button raised="true" on-click="dialogConfirm">Start</paper-button>
         </form>
       </iron-form>
     </div>
     <paper-dialog id="actions">
       <h2>确认配置</h2>
-      <p>货币 {{coinName}}</p>
+      <p>货币 {{coinName}} 开仓差价百分比{{open}}% 平仓差价百分比{{close}}% 开仓允许价差{{openlimit}}% 强制平仓波动{{closelimit}}%</p>
       <div class="buttons">
-        <paper-button>More Info...</paper-button>
-        <paper-button dialog-dismiss on-click="decline">Decline</paper-button>
-        <paper-button dialog-confirm autofocus on-click="accept">Accept</paper-button>
+        <paper-button dialog-dismiss>取消</paper-button>
+        <paper-button dialog-confirm autofocus on-click="accept">确定</paper-button>
       </div>
     </paper-dialog>
-    <global-services id="gobalServices"></global-services>
+    <div class="card">
+      <div>
+        <h2>策略输出日志</h2>
+        <pre>[[log]]</pre>
+      </div>
+    </div>
+    <global-services id="globalServices"></global-services>
     <iron-ajax
-      url="http://localhost:8080/task"
-      body='{"part":"snippet", "q":"polymer", "key": "YOUTUBE_API_KEY", "type": "video"}'
+      url="http://localhost:8080/task/start"
+      body="{{config}}"
       method="post"
       content-type="application/json"
       on-response="handleResponse"
@@ -93,6 +106,17 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           coinName: {
             type: String,
             value: "ltc",
+          },
+          config:{
+            type: String,
+          },
+          open: Number,
+          close: Number,
+          openlimit: Number,
+          closelimit: Number,
+          log: {
+            type: String,
+            value: "",
           }
         };       
       }
@@ -101,13 +125,13 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this.$.actions.open()
       }
 
-      decline(){
-        console.log("decline")
-      }
-
       accept(){
         console.log("accept")
+        this.config = "{\"area\":{\"ltc\":{\"start\":3, \"close\":1.5}}, \"limitclose\":0.03, \"limitopen\":0.005}"
         this.$.ajax.generateRequest()
+        this.$.globalServices.WebsocketAddListener("test", function(message){
+          this.log += (message + "\n")
+        }.bind(this))
       }
 
       handleResponse(){

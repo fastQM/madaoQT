@@ -18,6 +18,7 @@ func init() {
 	Logger = logger
 	Logger.SetLevel("debug")
 	Logger.SetTimeFormat("2006-01-02 06:04:05")
+	Logger.SetPrefix("[SOCKET]")
 }
 
 type WebsocketServer struct {
@@ -108,14 +109,15 @@ func (w *WebsocketServer) handleConnection(c websocket.Connection) {
 				c.To(c.ID()).EmitMessage(rsp)
 
 			} else if data.Cmd == CmdTypePublish {
-				channel := data.Channel
-				c.To(channel).EmitMessage([]byte(data.Data.(string)))
+				topic := data.Topic
+				c.To(topic).EmitMessage([]byte(msg))
 
 			} else {
 				goto __INVALID_CMD
 			}
 
 			return
+
 		}
 
 	__INVALID_CMD:

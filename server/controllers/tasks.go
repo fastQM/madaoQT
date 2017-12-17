@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"sync"
 
 	"github.com/kataras/iris"
@@ -24,37 +25,49 @@ type TaskController struct {
 }
 
 // GET /task/tasks
+const DEBUG = true
 
 func (t *TaskController) authen() (bool, iris.Map) {
-	s := t.Sessions.Start(t.Ctx)
-	username := s.Get("name")
-	if username == nil || username == "" {
-		result := iris.Map{
-			"result": false,
-			"error":  errorCodeInvalidSession,
-		}
-		return false, result
+	if DEBUG {
+		return true, iris.Map{}
 	}
-	return false, iris.Map{}
+	{
+		s := t.Sessions.Start(t.Ctx)
+		username := s.Get("name")
+		if username == nil || username == "" {
+			result := iris.Map{
+				"result": false,
+				"error":  errorCodeInvalidSession,
+			}
+			return false, result
+		}
+		return true, iris.Map{}
+	}
+
 }
 
 // Get route: /task
-func (t *TaskController) Post() iris.Map {
+func (t *TaskController) Get() iris.Map {
 
-	info := map[string]string{}
-	err := t.Ctx.ReadJSON(&info)
-	if err != nil {
-		Logger.Errorf("Error:%v", err)
-		t.Ctx.StatusCode(iris.StatusInternalServerError)
-		return nil
-	}
+	// info := map[string]string{}
+	// err := t.Ctx.ReadJSON(&info)
+	// if err != nil {
+	// 	Logger.Errorf("Error:%v", err)
+	// 	t.Ctx.StatusCode(iris.StatusInternalServerError)
+	// 	return nil
+	// }
 
-	Logger.Infof("Data:%v", info)
+	// Logger.Infof("Data:%v", info)
 
-	var tasksInfo []string
+	var tasksInfo []map[string]string
 	t.Tasks.Range(func(key, value interface{}) bool {
 		Logger.Infof("KEY:%s", key)
-		tasksInfo = append(tasksInfo, key.(string))
+		defaultConfig, _ := json.Marshal(value.(Task.ITask).GetDefaultConfig())
+		taskInfo := map[string]string{
+			"name":    key.(string),
+			"default": string(defaultConfig),
+		}
+		tasksInfo = append(tasksInfo, taskInfo)
 		return true
 	})
 
@@ -66,16 +79,23 @@ func (t *TaskController) Post() iris.Map {
 	}
 }
 
-func (t *TaskController) GetRun() iris.Map {
+func (t *TaskController) PostStart() iris.Map {
 
 	if ok, result := t.authen(); !ok {
 		return result
 	}
 
-	value, ok := t.Tasks.Load("okexdiff")
-	if ok {
-		task := value.(*Task.Task)
-		task.InstallTaskAndRun(task.Name, "hello")
+	if task, ok := t.Tasks.Load("okexdiff"); ok {
+		body, err := ioutil.ReadAll(t.Ctx.Request().Body)
+		if err != nil {
+			Logger.Debugf("fail to read:%v", err)
+			return iris.Map{
+				"result": false,
+				"error":  errorCodeInvalidParameters,
+			}
+		}
+
+		task.(Task.ITask).Start(string(body))
 		return iris.Map{
 			"result": true,
 		}
@@ -84,7 +104,6 @@ func (t *TaskController) GetRun() iris.Map {
 	return iris.Map{
 		"result": false,
 	}
-
 }
 
 func (t *TaskController) GetStop() iris.Map {
@@ -93,10 +112,8 @@ func (t *TaskController) GetStop() iris.Map {
 		return result
 	}
 
-	value, ok := t.Tasks.Load("okexdiff")
-	if ok {
-		task := value.(*Task.Task)
-		task.ExitTask()
+	if task, ok := t.Tasks.Load("okexdiff"); ok {
+		task.(Task.ITask).Close()
 		return iris.Map{
 			"result": true,
 		}
@@ -105,5 +122,46 @@ func (t *TaskController) GetStop() iris.Map {
 	return iris.Map{
 		"result": false,
 	}
-
 }
+
+// func (t *TaskController) GetRun() iris.Map {
+
+// 	if ok, result := t.authen(); !ok {
+// 		return result
+// 	}
+
+// 	value, ok := t.Tasks.Load("okexdiff")
+// 	if ok {
+// 		task := value.(*Task.Task)
+// 		task.InstallTaskAndRun(task.Name, "hello")
+// 		return iris.Map{
+// 			"result": true,
+// 		}
+// 	}
+
+// 	return iris.Map{
+// 		"result": false,
+// 	}
+
+// }
+
+// func (t *TaskController) GetStop() iris.Map {
+
+// 	if ok, result := t.authen(); !ok {
+// 		return result
+// 	}
+
+// 	value, ok := t.Tasks.Load("okexdiff")
+// 	if ok {
+// 		task := value.(*Task.Task)
+// 		task.ExitTask()
+// 		return iris.Map{
+// 			"result": true,
+// 		}
+// 	}
+
+// 	return iris.Map{
+// 		"result": false,
+// 	}
+
+// }

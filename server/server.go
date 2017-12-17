@@ -144,7 +144,12 @@ func (h *HttpServer) setupTasks() {
 		h.Tasks = &sync.Map{}
 	}
 	// load default task
-	h.Tasks.Store("okexdiff", &Task.Task{
-		Name: "okexdiff",
-	})
+	// h.Tasks.Store("okexdiff", &Task.Task{
+	// 	Name: "okexdiff",
+	// })
+	tasks := Task.LoadStaticTask()
+	for _, task := range tasks {
+		h.Tasks.Store(task.GetTaskName(), task)
+	}
+
 }

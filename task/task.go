@@ -11,7 +11,7 @@ import (
 
 	Exchange "madaoQT/exchange"
 	Mongo "madaoQT/mongo"
-	"madaoQT/utils"
+	Utils "madaoQT/utils"
 )
 
 var constOKEXApiKey = "a982120e-8505-41db-9ae3-0c62dd27435c"
@@ -27,6 +27,7 @@ func init() {
 	Logger = logger
 	Logger.SetLevel("debug")
 	Logger.SetTimeFormat("2006-01-02 06:04:05")
+	Logger.SetPrefix("[TASK]")
 }
 
 type EventType int8
@@ -66,14 +67,18 @@ type TaskExplanation struct {
 	Explanation string
 }
 
-type Task struct {
+/*
+	实时加载的任务；目前暂不考虑支持
+*/
+
+type TaskHotLoad struct {
 	// GetTaskExplanation() *TaskExplanation
 	Name  string
 	Paras string
 	cmd   *exec.Cmd
 }
 
-func (t *Task) InstallTaskAndRun(name string, paramters string) error {
+func (t *TaskHotLoad) InstallTaskAndRun(name string, paramters string) error {
 
 	var path = "madaoQT/task/"
 	cmd := exec.Command("go", "install", path+name)
@@ -98,7 +103,7 @@ func (t *Task) InstallTaskAndRun(name string, paramters string) error {
 	return nil
 }
 
-func (t *Task) ExitTask() {
+func (t *TaskHotLoad) ExitTask() {
 	if t.cmd == nil {
 		Logger.Errorf("Invalid command to Exit")
 		return
@@ -202,7 +207,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 				loop := 10
 
 				for {
-					utils.SleepAsyncBySecond(1)
+					Utils.SleepAsyncBySecond(1)
 
 					info := exchange.GetOrderInfo(Exchange.OrderInfo{
 						OrderID: trade.OrderID,
@@ -315,7 +320,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 		_NEXTLOOP:
 			// 	延时
-			utils.SleepAsyncBySecond(1)
+			Utils.SleepAsyncBySecond(1)
 			continue
 		}
 	}()
@@ -343,4 +348,28 @@ func InPriceArea(price float64, baseprice float64, area float64) bool {
 
 func TranslateToContractNumber(price float64, coinQuantity float64) int {
 	return int(coinQuantity * price / 10)
+}
+
+/*
+	静态加载的任务
+*/
+
+type IConfig interface {
+	ReadJSON(interface{}) error
+}
+
+type ITask interface {
+	GetTaskName() string
+	GetDefaultConfig() interface{}
+	Start(string)
+	Close()
+}
+
+func LoadStaticTask() []ITask {
+	tasks := []ITask{}
+
+	okexdiff := new(IAnalyzer)
+	tasks = append(tasks, okexdiff)
+
+	return tasks
 }

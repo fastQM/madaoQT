@@ -28,22 +28,7 @@
           text: String
         }
       }
-      ready(){
-        super.ready()
-        var self = this
-        this.$.globalServices.WebsocketSubscribe("iamhere", function(msg){
-          console.log("recv:" + msg)
-          var rsp = JSON.parse(msg)
-          if(rsp.result){
-            self.$.globalServices.WebsocketAddListener("iamhere", function(msg){
-              console.log("great")
-            })
-          }
-        })
-      }
     }
-
-
 
     window.customElements.define(MyView1.is, MyView1);
   </script>

@@ -23,7 +23,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     let gWebsocket = null
     let gWebsocketStatus = StatusDisconnected
     let gWebsocketSeq = 0
-    let gTopicMap = new Map()
+    let gChannelMap = new Map()
 
     class GlobalServices extends Polymer.Element {
 
@@ -71,6 +71,10 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           var msg = JSON.parse(msg)
           if(msg.cmd == CmdTypePublish){
             console.log("Publish:" + msg.data)
+            var cb = gChannelMap.get(msg.topic)
+            if(cb != null){
+              cb(msg.data)
+            }
           }
         })
       }
@@ -85,16 +89,20 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       }
 
       WebsocketAddListener(topic, callback){
-        // if(gWebsocketStatus == StatusConnnected){
-        //   gWebsocket.On(topic,callback)
-        //   return true
-        // }
-        // return false
+        if(gChannelMap.get(topic) != null){
+          return false
+        }else{
+          gChannelMap.set(topic, callback)
+          return true
+        }
       }
 
       WebsocketSubscribe(topic, callback){
-        let msg = {seq:gWebsocketSeq++, cmd: CmdTypeSubscribe, data:{topic:topic}}
-        return this.WebsocketSend(JSON.stringify(msg))      
+        if(this.WebsocketAddListener(topic, callback)){
+          let msg = {seq:gWebsocketSeq++, cmd: CmdTypeSubscribe, data:{topic:topic}}
+          return this.WebsocketSend(JSON.stringify(msg)) 
+        }
+        return false
       }
     }
 

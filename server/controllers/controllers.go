@@ -9,6 +9,7 @@ type errorCode int
 const (
 	errorCodeSuccess errorCode = iota
 	errorCodeInvalidSession
+	errorCodeInvalidParameters
 )
 
 var Logger *golog.Logger

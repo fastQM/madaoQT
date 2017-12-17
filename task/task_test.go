@@ -103,8 +103,8 @@ func TestCheckStruct(t *testing.T) {
 	log.Printf("2:%v", value.S2)
 }
 
-func TestStartTask(t *testing.T) {
-	task := Task{}
+func _TestStartTask(t *testing.T) {
+	task := TaskHotLoad{}
 	err := task.InstallTaskAndRun("okexdiff", "monrnig")
 	if err != nil {
 		log.Printf("Error:%v", err)
