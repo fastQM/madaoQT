@@ -73,11 +73,11 @@ func (f *FileEncrypt) execute(mode int) {
 	if mode == ModeEncrypt {
 		PFunc = f.GCM_encrypt
 		suffix = "-encrypted"
-		bufferSize = 1024
+		bufferSize = 4096
 	} else {
 		PFunc = f.GCM_decrypt
 		suffix = "-decrypted"
-		bufferSize = 1040
+		bufferSize = 4112
 	}
 
 	inFile, err := os.Open(f.File)
