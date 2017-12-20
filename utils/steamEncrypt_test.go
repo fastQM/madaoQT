@@ -4,7 +4,7 @@ import "testing"
 
 func TestEncryptDecrypt(t *testing.T) {
 
-	file := "madaoQT.exe"
+	file := "test.mp4"
 	encrypt := FileEncrypt{
 		File:  file,
 		Key:   "hello, world",
