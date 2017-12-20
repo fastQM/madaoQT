@@ -18,9 +18,11 @@ import (
 )
 
 type HttpServer struct {
-	app   *iris.Application
-	ws    *Websocket.WebsocketServer
-	sess  *sessions.Sessions
+	app       *iris.Application
+	ws        *Websocket.WebsocketServer
+	sess      *sessions.Sessions
+	exchanges []Exchange.IExchange
+
 	Tasks *sync.Map
 }
 
@@ -120,7 +122,7 @@ func (h *HttpServer) setupExchanges() {
 	okexspot := Exchange.NewOKExSpotApi(&Exchange.InitConfig{
 		Ticker: Exchange.ITicker(h.ws),
 	})
-
+	h.exchanges = append(h.exchanges, okexspot)
 	okexspot.Start()
 
 	go func() {

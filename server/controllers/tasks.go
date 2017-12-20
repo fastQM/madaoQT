@@ -81,6 +81,7 @@ func (t *TaskController) Get() iris.Map {
 
 func (t *TaskController) PostStart() iris.Map {
 
+	var errMsg string
 	if ok, result := t.authen(); !ok {
 		return result
 	}
@@ -95,14 +96,21 @@ func (t *TaskController) PostStart() iris.Map {
 			}
 		}
 
-		task.(Task.ITask).Start(string(body))
+		err = task.(Task.ITask).Start(string(body))
+		if err != nil {
+			errMsg = err.Error()
+			goto _ERROR
+		}
+
 		return iris.Map{
 			"result": true,
 		}
 	}
 
+_ERROR:
 	return iris.Map{
 		"result": false,
+		"error":  errMsg,
 	}
 }
 

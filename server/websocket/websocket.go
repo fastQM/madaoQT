@@ -18,7 +18,7 @@ func init() {
 	Logger = logger
 	Logger.SetLevel("debug")
 	Logger.SetTimeFormat("2006-01-02 06:04:05")
-	Logger.SetPrefix("[SOCKET]")
+	Logger.SetPrefix("[SOCK]")
 }
 
 type WebsocketServer struct {

@@ -31,7 +31,7 @@ func init() {
 }
 
 type EventType int8
-type TradeErrorType int
+type TaskErrorType int
 
 const (
 	EventTypeError EventType = iota
@@ -39,25 +39,29 @@ const (
 )
 
 const (
-	TradeErrorSuccess TradeErrorType = iota
-	TradeErrorTimeout
-	TradeInvalidDepth
-
-	// 需要人工操作的错误
-	TradeUnableTrade
-	TradeUnableCancelOrder
+	TaskErrorSuccess TaskErrorType = iota
+	TaskErrorTimeout
+	TaskInvalidDepth
+	TaskUnableTrade
+	TaskUnableCancelOrder
+	TaskInvalidConfig
+	TaskErrorStatus
+	TaskLostMongodb
 )
 
-var TradeErrorMsg = map[TradeErrorType]string{
-	TradeErrorSuccess:      "success",
-	TradeErrorTimeout:      "timeout",
-	TradeInvalidDepth:      "Invalid Depth",
-	TradeUnableTrade:       "Unable to trade",
-	TradeUnableCancelOrder: "Unable to cancel order",
+var TaskErrorMsg = map[TaskErrorType]string{
+	TaskErrorSuccess:      "success",
+	TaskErrorTimeout:      "timeout",
+	TaskInvalidDepth:      "Invalid Depth",
+	TaskUnableTrade:       "Unable to trade",
+	TaskUnableCancelOrder: "Unable to cancel order",
+	TaskInvalidConfig:     "Invalid configure",
+	TaskErrorStatus:       "Error status",
+	TaskLostMongodb:       "Lost the connection of Mongodb",
 }
 
 type TradeResult struct {
-	Error    TradeErrorType
+	Error    TaskErrorType
 	Balance  float64 // 成交后余额
 	AvgPrice float64 // 成交均价
 }
@@ -147,14 +151,14 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 		var dealAmount, totalCost, avePrice float64
 		var trade *Exchange.TradeResult
 		var depthInvalidCount int
-		var errorCode TradeErrorType
+		var errorCode TaskErrorType
 		var depth *Exchange.DepthValue
 
 		for {
 
 			if time.Now().After(stopTime) {
 				Logger.Debugf("超出操作时间")
-				errorCode = TradeErrorTimeout
+				errorCode = TaskErrorTimeout
 				goto __ERROR
 			}
 
@@ -174,7 +178,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 					连续十次无法达到操作价格，则退出平仓
 				*/
 				if depthInvalidCount > 10 {
-					errorCode = TradeInvalidDepth
+					errorCode = TaskInvalidDepth
 					goto __ERROR
 				}
 				goto _NEXTLOOP
@@ -279,7 +283,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 						} else {
 							Logger.Errorf("取消订单：%v失败，请手动操作", info[0].OrderID)
 
-							errorCode = TradeUnableCancelOrder
+							errorCode = TaskUnableCancelOrder
 							goto __ERROR
 							return
 						}
@@ -287,7 +291,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 				}
 			} else {
 				Logger.Errorf("交易失败：%v", trade.Error)
-				errorCode = TradeUnableTrade
+				errorCode = TaskUnableTrade
 				goto __ERROR
 			}
 
@@ -304,7 +308,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 			avePrice = totalCost / dealAmount
 			Logger.Debugf("交易完成，余额：%v 成交均价：%v", balance, avePrice)
 			channel <- TradeResult{
-				Error:    TradeErrorSuccess,
+				Error:    TaskErrorSuccess,
 				Balance:  balance,
 				AvgPrice: avePrice,
 			}
@@ -361,7 +365,7 @@ type IConfig interface {
 type ITask interface {
 	GetTaskName() string
 	GetDefaultConfig() interface{}
-	Start(string)
+	Start(string) error
 	Close()
 }
 

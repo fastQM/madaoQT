@@ -6,6 +6,7 @@ package task
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -37,7 +38,7 @@ const (
 type IAnalyzer struct {
 	config AnalyzerConfig
 	// exchanges []ExchangeHandler
-	coins map[string]float64
+	// coins map[string]float64
 
 	// futures  map[string]AnalyzeItem
 	// currents map[string]AnalyzeItem
@@ -69,8 +70,9 @@ type AnalyzerConfig struct {
 }
 
 type TriggerArea struct {
-	Open  float64 `json:"open"`
-	Close float64 `json:"close"`
+	Open     float64 `json:"open"`
+	Close    float64 `json:"close"`
+	Position float64 `json:"position"`
 }
 
 var defaultConfig = AnalyzerConfig{
@@ -83,8 +85,8 @@ var defaultConfig = AnalyzerConfig{
 	// 	"ltc": 1.5,
 	// },
 	Area: map[string]TriggerArea{
-		"btc": {1.6, 0.5},
-		"ltc": {3, 1.5},
+		"btc": {1.6, 0.5, 10},
+		"ltc": {3, 1.5, 10},
 	},
 	LimitClose: 0.03,  // 止损幅度
 	LimitOpen:  0.005, // 允许操作价格的波动范围
@@ -128,6 +130,7 @@ func (a *IAnalyzer) wsConnect() {
 func (a *IAnalyzer) wsPublish(topic string, message string) {
 	if a.conn != nil {
 		message := Message.PackageRequestMsg(0, Message.CmdTypePublish, topic, message)
+		Logger.Debugf("WriteMessage:%s", string(message))
 		if message != nil {
 			if err := a.conn.WriteMessage(Websocket.TextMessage, message); err != nil {
 				Logger.Errorf("Fail to write message:%v", err)
@@ -136,35 +139,29 @@ func (a *IAnalyzer) wsPublish(topic string, message string) {
 	}
 }
 
-func (a *IAnalyzer) Start(configJSON string) {
+func (a *IAnalyzer) Start(configJSON string) error {
 
 	if a.status != StatusNone {
-		return
+		return errors.New(TaskErrorMsg[TaskErrorStatus])
 	}
 
 	a.status = StatusProcessing
 
 	Logger.Debugf("Configure:%v", configJSON)
-	// config := a.GetDefaultConfig().(AnalyzerConfig)
-	var config AnalyzerConfig
+
 	if configJSON != "" {
+		var config AnalyzerConfig
 		err := json.Unmarshal([]byte(configJSON), &config)
 		if err != nil {
 			log.Printf("Fail to get config:%v", err)
-			return
+			return errors.New(TaskErrorMsg[TaskInvalidConfig])
 		}
-
-		config = a.GetDefaultConfig().(AnalyzerConfig)
+		a.config = config
+	} else {
+		a.config = a.GetDefaultConfig().(AnalyzerConfig)
 	}
-	Logger.Debugf("Configure:%v", config)
-	a.config = config
 
 	Logger.Infof("Config:%v", a.config)
-	// 监视币种以及余额
-	a.coins = map[string]float64{
-		// "btc": 0,
-		"ltc/usdt": 1,
-	}
 
 	a.ops = make(map[uint]*OperationItem)
 
@@ -177,7 +174,7 @@ func (a *IAnalyzer) Start(configJSON string) {
 	err := a.tradeDB.Connect()
 	if err != nil {
 		Logger.Errorf("tradeDB error:%v", err)
-		return
+		return errors.New(TaskErrorMsg[TaskLostMongodb])
 	}
 
 	a.orderDB = &Mongo.Orders{
@@ -189,7 +186,7 @@ func (a *IAnalyzer) Start(configJSON string) {
 	err = a.orderDB.Connect()
 	if err != nil {
 		Logger.Errorf("orderDB error:%v", err)
-		return
+		return errors.New(TaskErrorMsg[TaskLostMongodb])
 	}
 
 	Logger.Info("启动OKEx合约监视程序")
@@ -207,7 +204,8 @@ func (a *IAnalyzer) Start(configJSON string) {
 			select {
 			case event := <-futureExchange.WatchEvent():
 				if event == Exchange.EventConnected {
-					for k := range a.coins {
+					for k := range a.config.Area {
+						k = (k + "/usdt")
 						futureExchange.StartContractTicker(k, "this_week", k+"future")
 					}
 					a.future = Exchange.IExchange(futureExchange)
@@ -218,7 +216,8 @@ func (a *IAnalyzer) Start(configJSON string) {
 			case event := <-spotExchange.WatchEvent():
 				if event == Exchange.EventConnected {
 
-					for k := range a.coins {
+					for k := range a.config.Area {
+						k = (k + "/usdt")
 						spotExchange.StartCurrentTicker(k, k+"spot")
 					}
 
@@ -236,12 +235,16 @@ func (a *IAnalyzer) Start(configJSON string) {
 			}
 		}
 	}()
+
+	return nil
 }
 
 func (a *IAnalyzer) Watch() {
 
-	for coinName, _ := range a.coins {
-
+	// for coinName, _ := range a.coins {
+	for key := range a.config.Area {
+		coinName := key + "/usdt"
+		Logger.Debugf("Current Coin:%v", coinName)
 		valuefuture := a.future.GetTickerValue(coinName + "future")
 		valueCurrent := a.spot.GetTickerValue(coinName + "spot")
 
@@ -251,7 +254,7 @@ func (a *IAnalyzer) Watch() {
 
 		Logger.Info(msg)
 
-		a.wsPublish("test", msg)
+		a.wsPublish("okexdiff", msg)
 
 		if a.checkPosition(coinName, valuefuture.Last, valueCurrent.Last) {
 			Logger.Info("持仓中...不做交易")
@@ -385,33 +388,33 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 	operation.futureConfig = futureConfig
 	operation.spotConfig = spotConfig
 
-	if futureResult.Error == TradeErrorSuccess && spotResult.Error == TradeErrorSuccess {
+	if futureResult.Error == TaskErrorSuccess && spotResult.Error == TaskErrorSuccess {
 
 		Logger.Debug("锁仓成功")
 		a.ops[a.opIndex] = &operation
 		a.opIndex++
 		return
 
-	} else if futureResult.Error == TradeErrorSuccess && spotResult.Error != TradeErrorSuccess {
+	} else if futureResult.Error == TaskErrorSuccess && spotResult.Error != TaskErrorSuccess {
 
 		channelSpot = ProcessTradeRoutine(spot, operation.spotConfig, a.tradeDB, a.orderDB)
 		select {
 
 		case spotResult = <-channelSpot:
 			Logger.Debugf("现货平仓结果:%v", spotResult)
-			if spotResult.Error != TradeErrorSuccess {
+			if spotResult.Error != TaskErrorSuccess {
 				Logger.Errorf("平仓失败，请手工检查:%v", spotResult)
 				a.status = StatusError
 			}
 		}
 
-	} else if futureResult.Error != TradeErrorSuccess && spotResult.Error == TradeErrorSuccess {
+	} else if futureResult.Error != TaskErrorSuccess && spotResult.Error == TaskErrorSuccess {
 
 		channelFuture = ProcessTradeRoutine(spot, operation.futureConfig, a.tradeDB, a.orderDB)
 		select {
 		case futureResult = <-channelFuture:
 			Logger.Debugf("合约平仓结果:%v", futureResult)
-			if futureResult.Error != TradeErrorSuccess {
+			if futureResult.Error != TaskErrorSuccess {
 				Logger.Errorf("平仓失败，请手工检查:%v", futureResult)
 				a.status = StatusError
 			}
@@ -480,7 +483,7 @@ func (a *IAnalyzer) checkPosition(coin string, futurePrice float64, spotPrice fl
 
 					waitGroup.Wait()
 
-					if futureResult.Error == TradeErrorSuccess && spotResult.Error == TradeErrorSuccess {
+					if futureResult.Error == TaskErrorSuccess && spotResult.Error == TaskErrorSuccess {
 						Logger.Info("平仓完成")
 						delete(a.ops, index)
 					} else {

@@ -98,7 +98,7 @@ func (f *FileEncrypt) execute(mode int) {
 	tmp := make([]byte, bufferSize)
 	for {
 		length, err := inFileReader.Read(tmp)
-		log.Printf("Read len:%v error:%v", length, err)
+		// log.Printf("Read len:%v error:%v", length, err)
 		if err == io.EOF && length == 0 {
 			outFileWriter.Flush()
 			log.Printf("DONE!")

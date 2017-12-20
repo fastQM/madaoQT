@@ -85,7 +85,10 @@ func (c *UserController) GetInfo() string {
 
 // user's exchanges interfaces
 
-// POST: /user/exchange/addkey
+// POST: /user/exchanges
+func (c *UserController) GetExchanges() iris.Map {
+
+}
 
 func (c *UserController) PostExchangeAddkey() iris.Map {
 	var errMsg string
