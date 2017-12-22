@@ -77,6 +77,7 @@ func (h *HttpServer) setupControllers() {
 	h.app.Controller("/helloworld", new(Controllers.HelloWorldController))
 	h.app.Controller("/user", &Controllers.UserController{Sessions: h.sess})
 	h.app.Controller("/task", &Controllers.TaskController{Sessions: h.sess, Tasks: h.Tasks})
+	h.app.Controller("/exchange", &Controllers.ExchangeController{Sessions: h.sess, Exchanges: h.exchanges})
 }
 
 func (h *HttpServer) SetupHttpServer() {
@@ -122,7 +123,12 @@ func (h *HttpServer) setupExchanges() {
 	okexspot := Exchange.NewOKExSpotApi(&Exchange.InitConfig{
 		Ticker: Exchange.ITicker(h.ws),
 	})
+
+	okexfuture := Exchange.NewOKExFutureApi(nil)
+
 	h.exchanges = append(h.exchanges, okexspot)
+	h.exchanges = append(h.exchanges, okexfuture)
+
 	okexspot.Start()
 
 	go func() {

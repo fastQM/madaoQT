@@ -31,7 +31,6 @@ const (
 	StatusNone StatusType = iota
 	StatusProcessing
 	StatusOrdering
-	StatusQuit
 	StatusError
 )
 
@@ -62,8 +61,8 @@ type OperationItem struct {
 }
 
 type AnalyzerConfig struct {
-	// APIKey     string
-	// SecretKey  string
+	API        string
+	Secret     string
 	Area       map[string]TriggerArea `json:"area"`
 	LimitOpen  float64                `json:"limitopen"`
 	LimitClose float64                `json:"limitclose"`
@@ -139,7 +138,7 @@ func (a *IAnalyzer) wsPublish(topic string, message string) {
 	}
 }
 
-func (a *IAnalyzer) Start(configJSON string) error {
+func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 
 	if a.status != StatusNone {
 		return errors.New(TaskErrorMsg[TaskErrorStatus])
@@ -190,11 +189,17 @@ func (a *IAnalyzer) Start(configJSON string) error {
 	}
 
 	Logger.Info("启动OKEx合约监视程序")
-	futureExchange := Exchange.NewOKExFutureApi(nil) // 交易需要api
+	futureExchange := Exchange.NewOKExFutureApi(&Exchange.InitConfig{
+		Api:    api,
+		Secret: secret,
+	}) // 交易需要api
 	futureExchange.Start()
 
 	Logger.Info("启动OKEx现货监视程序")
-	spotExchange := Exchange.NewOKExSpotApi(nil)
+	spotExchange := Exchange.NewOKExSpotApi(&Exchange.InitConfig{
+		Api:    api,
+		Secret: secret,
+	})
 	spotExchange.Start()
 
 	a.wsConnect()
@@ -226,8 +231,8 @@ func (a *IAnalyzer) Start(configJSON string) error {
 					spotExchange.Start()
 				}
 			case <-time.After(10 * time.Second):
-				if a.status == StatusError || a.status == StatusQuit {
-					Logger.Debug("状态异常")
+				if a.status == StatusError || a.status == StatusNone {
+					Logger.Debug("状态异常或退出")
 					return
 				}
 
@@ -317,7 +322,7 @@ func (a *IAnalyzer) Watch() {
 }
 
 func (a *IAnalyzer) Close() {
-	a.status = StatusQuit
+	a.status = StatusNone
 
 	a.future.Close()
 	a.spot.Close()

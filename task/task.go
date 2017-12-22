@@ -14,9 +14,6 @@ import (
 	Utils "madaoQT/utils"
 )
 
-var constOKEXApiKey = "a982120e-8505-41db-9ae3-0c62dd27435c"
-var constOEXSecretKey = "71430C7FA63A067724FB622FB3031970"
-
 /*
 	初始化日志句柄
 */
@@ -365,7 +362,7 @@ type IConfig interface {
 type ITask interface {
 	GetTaskName() string
 	GetDefaultConfig() interface{}
-	Start(string) error
+	Start(api string, secret string, configJSON string) error
 	Close()
 }
 

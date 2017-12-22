@@ -19,18 +19,23 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
   <template>
     <style include="shared-styles">
       :host {
-        display: table;
+        display: block;
         padding: 10px;
       }
 
       iron-form {
         padding: 20px;
-        display: inline;
-        margin: 0px auto;
+        display: block;
+        min-width: 700px;
+      }
+
+      .ExchangeConfig{
+        display: block;
+        height:80px;
       }
 
       .exchange-name, paper-input, paper-button{
-        float: left;
+        display:inline-block;
         margin: 0px 30px;
       }
 
@@ -46,46 +51,77 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       }
 
       paper-button {
-        width:100px
+        width:80px
       }
     </style>
 
     <div class="card">
       <div class="">添加交易所访问令牌</div>
-        <iron-form id="formAddExchange">
-          <form action="/user/exchange/addkey" method="post">
-          <p class="exchange-name">OKEX</p>
-          <paper-input name="APIKey" type="" placeholder="api key" required no-label-float></paper-input>
-          <paper-input name="SecretKey" type="" placeholder="secret key" required no-label-float></paper-input>
-          <paper-button raised on-click="AddExchangeKey">Submit</paper-button>
+        <iron-form>
+          <form>
+            <template is="dom-repeat" items="[[exchanges]]">
+              <div class="ExchangeConfig">
+                <p class="exchange-name">[[item.name]]</p>
+                <paper-input name="APIKey" type="" label="API key" value="{{item.api}}" required alwaysFloatLabel></paper-input>
+                <paper-input name="SecretKey" type="" label="Secret key" value="{{item.secret}}" required alwaysFloatLabel></paper-input>
+                <paper-button raised on-click="AddExchangeKey">提交</paper-button>
+              </div>
+            </template>
           </form>
         </iron-form>
     </div>
+    <iron-ajax
+      url="http://localhost:8080/exchange/list"
+      method="get"
+      handle-as="json"
+      on-response="getExchangesResult"
+      last-response={{response}}
+      debounce-duration="300" id="GetExchanges"></iron-ajax>
+    <iron-ajax
+      url="http://localhost:8080/exchange/addkey"
+      body="{{request}}"
+      method="post"
+      content-type="application/json"
+      handle-as="json"
+      on-response="addKeyResult"
+      last-response={{response}}
+      debounce-duration="300" id="AddKey"></iron-ajax>
   </template>
 
   <script>
     class MyView2 extends Polymer.Element {
       static get is() { return 'my-view2'; }
+      static get properties(){
+        return {
+          exchanges: {
+            type: Array,
+            value: [],
+          },
+          response: String,
+          request: String,
+        }
+      }
 
       ready(){
         super.ready()
-        this.$.formAddExchange.addEventListener("iron-form-response", function(event){
-          var response = event.detail.parseResponse()
-          if(response.result){
-            console.log("add successfully!")
-          }else{
-            console.log("Error:" + response.error)
-          }
-        });
-
-        this.$.formAddExchange.addEventListener('iron-form-presubmit', function() {
-          this.request.params["Name"] = "OKEX"
-          console.log("Paras:" + JSON.stringify(this.request.params))    
-        });
+        this.$.GetExchanges.generateRequest()
       }
 
-      AddExchangeKey(){
-        this.$.formAddExchange.submit()
+      getExchangesResult() {
+        if(this.response.result){
+          for(var i=0;i<this.response.exchanges.length;i++){
+            this.push("exchanges", {name: this.response.exchanges[i]})
+          }
+        }
+      }
+
+      addKeyResult(){
+        console.log("Response:" + this.response)
+      }
+
+      AddExchangeKey(oEvent){
+        this.request = JSON.stringify(this.exchanges[oEvent.model.index])
+        this.$.AddKey.generateRequest()
       }
 
     }

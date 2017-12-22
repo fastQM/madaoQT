@@ -7,8 +7,6 @@ import (
 	"github.com/kataras/iris/mvc"
 
 	"github.com/kataras/iris/sessions"
-
-	Mongo "madaoQT/mongo"
 )
 
 type UserController struct {
@@ -27,10 +25,23 @@ type UserControllerLoginInfo struct {
 	LastPage string
 }
 
-type ExchangeInfo struct {
-	Name      string
-	APIKey    string
-	SecretKey string
+func (c *UserController) authen() (bool, iris.Map) {
+	if DEBUG {
+		return true, iris.Map{}
+	}
+	{
+		s := c.Sessions.Start(c.Ctx)
+		username := s.Get("name")
+		if username == nil || username == "" {
+			result := iris.Map{
+				"result": false,
+				"error":  errorCodeInvalidSession,
+			}
+			return false, result
+		}
+		return true, iris.Map{}
+	}
+
 }
 
 // basic user interfaces
@@ -81,62 +92,6 @@ func (c *UserController) GetInfo() string {
 	// password := s.Get("password")
 	// return fmt.Sprintf("name:%s, password:%s", name, password)
 	return fmt.Sprintf("Hellow, %s!", name)
-}
-
-// user's exchanges interfaces
-
-// POST: /user/exchanges
-func (c *UserController) GetExchanges() iris.Map {
-
-}
-
-func (c *UserController) PostExchangeAddkey() iris.Map {
-	var errMsg string
-	var err error
-	s := c.Sessions.Start(c.Ctx)
-	username := s.Get("name")
-
-	exchangesDB := Mongo.ExchangeDB{}
-
-	info := ExchangeInfo{}
-
-	if username == nil {
-		errMsg = "Invalid Session"
-		goto _ERROR
-	}
-
-	err = c.Ctx.ReadForm(&info)
-	if err != nil {
-		errMsg = err.Error()
-		goto _ERROR
-	}
-
-	Logger.Debugf("KEY:%v", info)
-
-	if err = exchangesDB.Connect(); err != nil {
-		errMsg = err.Error()
-		goto _ERROR
-	}
-
-	if err = exchangesDB.Insert(&Mongo.ExchangeRecord{
-		Name:   info.Name,
-		API:    info.APIKey,
-		Secret: info.SecretKey,
-		User:   username.(string),
-	}); err != nil {
-		errMsg = "Fail to insert record into database"
-		goto _ERROR
-	}
-
-	return iris.Map{
-		"result": true,
-	}
-
-_ERROR:
-	return iris.Map{
-		"result": false,
-		"error":  errMsg,
-	}
 }
 
 //

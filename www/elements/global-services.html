@@ -24,6 +24,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     let gWebsocketStatus = StatusDisconnected
     let gWebsocketSeq = 0
     let gChannelMap = new Map()
+    let gCommandCB = null
 
     class GlobalServices extends Polymer.Element {
 
@@ -97,9 +98,18 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         }
       }
 
+      // 暂不考虑应答，都是成功
       WebsocketSubscribe(topic, callback){
         if(this.WebsocketAddListener(topic, callback)){
           let msg = {seq:gWebsocketSeq++, cmd: CmdTypeSubscribe, data:{topic:topic}}
+          return this.WebsocketSend(JSON.stringify(msg)) 
+        }
+        return false
+      }
+
+      WebsocketUnsubscribe(topic, callback){
+        if(this.WebsocketRemoveListener(topic)){
+          let msg = {seq:gWebsocketSeq++, cmd: CmdTypeUnsubscribe, data:{topic:topic}}
           return this.WebsocketSend(JSON.stringify(msg)) 
         }
         return false

@@ -113,29 +113,22 @@ const constOEXSecretKey = "71430C7FA63A067724FB622FB3031970"
 func NewOKExFutureApi(config *InitConfig) *OKExAPI {
 
 	if config == nil {
-		config = &InitConfig{
-			Api:    constOKEXApiKey,
-			Secret: constOEXSecretKey,
-		}
+		config = &InitConfig{}
 	}
 
 	config.Custom = map[string]interface{}{"exchangeType": ExchangeTypeFuture}
 	future := new(OKExAPI)
 	future.Init(*config)
-
 	return future
 }
 
 func NewOKExSpotApi(config *InitConfig) *OKExAPI {
 
 	if config == nil {
-		config = &InitConfig{
-			Api:    constOKEXApiKey,
-			Secret: constOEXSecretKey,
-		}
+		config = &InitConfig{}
 	}
 
-	config.Custom = map[string]interface{}{"exchangeType": ExchangeTypeFuture}
+	config.Custom = map[string]interface{}{"exchangeType": ExchangeTypeSpot}
 	spot := new(OKExAPI)
 	spot.Init(*config)
 
@@ -161,6 +154,9 @@ func (o *OKExAPI) Init(config InitConfig) {
 	o.secretKey = config.Secret
 	o.exchangeType = config.Custom["exchangeType"].(ExchangeType)
 
+	if o.apiKey == "" || o.secretKey == "" {
+		Logger.Debug("没有配置API，不可执行交易操作")
+	}
 }
 
 func (o *OKExAPI) Start() {

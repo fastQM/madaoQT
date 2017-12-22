@@ -120,16 +120,15 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       method="post"
       content-type="application/json"
       handle-as="json"
-      on-response="started"
+      on-response="onStarted"
       last-response={{response}}
       debounce-duration="300" id="ajaxStart"></iron-ajax>
     <iron-ajax
       url="http://localhost:8080/task/stop"
-      body="{{config}}"
-      method="post"
+      method="get"
       content-type="application/json"
       handle-as="json"
-      on-response="stopped"
+      on-response="onStopped"
       last-response={{response}}
       debounce-duration="300" id="ajaxStop"></iron-ajax>
   </template>
@@ -202,24 +201,27 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
         this.config = JSON.stringify(config)
         this.$.ajaxStart.generateRequest()
-        this.$.globalServices.WebsocketAddListener("okexdiff", function(message){
+        this.$.globalServices.WebsocketSubscribe("okexdiff", function(message){
           this.log += (message + "\n")
         }.bind(this))
       }
 
       onStop(){
+
         this.$.ajaxStop.generateRequest()
-        this.$.globalServices.WebsocketAddListener("okexdiff", function(message){
+        this.$.globalServices.WebsocketUnsubscribe("okexdiff", function(message){
           this.log += (message + "\n")
         }.bind(this))
       }
 
-      started(){
-        console.log("Started:" + JSON.stringify(response))
+      onStarted(){
+        console.log("Started:" + JSON.stringify(this.response))
       }
 
-      stopped(){
-        console.log("Stopped:" + JSON.stringify(response))
+      onStopped(){
+        this.$.launchBtn.innerHTML = "启动"
+        this.$.launchBtn.style.backgroundColor = "green"
+        console.log("Stopped:" + JSON.stringify(this.response))
       }
     }
 

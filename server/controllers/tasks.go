@@ -9,6 +9,7 @@ import (
 	"github.com/kataras/iris/mvc"
 	"github.com/kataras/iris/sessions"
 
+	Mongo "madaoQT/mongo"
 	Task "madaoQT/task"
 )
 
@@ -71,17 +72,19 @@ func (t *TaskController) Get() iris.Map {
 		return true
 	})
 
-	configBytes, _ := json.Marshal(tasksInfo)
+	// configBytes, _ := json.Marshal(tasksInfo)
 
 	return iris.Map{
 		"result": true,
-		"tasks":  string(configBytes),
+		"tasks":  tasksInfo,
 	}
 }
 
 func (t *TaskController) PostStart() iris.Map {
 
 	var errMsg string
+	var mongo *Mongo.ExchangeDB
+
 	if ok, result := t.authen(); !ok {
 		return result
 	}
@@ -96,7 +99,30 @@ func (t *TaskController) PostStart() iris.Map {
 			}
 		}
 
-		err = task.(Task.ITask).Start(string(body))
+		mongo = new(Mongo.ExchangeDB)
+		if err = mongo.Connect(); err != nil {
+			return iris.Map{
+				"result": false,
+				"error":  errorCodeMongoDisconnect,
+			}
+		}
+
+		err, record := mongo.FindOne("OkexSpot")
+		if err != nil {
+			return iris.Map{
+				"result": false,
+				"error":  err.Error(),
+			}
+		} else if record == nil {
+			return iris.Map{
+				"result": false,
+				"error":  errorCodeAPINotSet,
+			}
+		}
+
+		Logger.Debugf("Record:%v", record)
+
+		err = task.(Task.ITask).Start(record.API, record.Secret, string(body))
 		if err != nil {
 			errMsg = err.Error()
 			goto _ERROR

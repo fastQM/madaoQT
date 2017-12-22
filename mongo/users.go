@@ -34,3 +34,9 @@ func (t *User) Connect() error {
 
 	return nil
 }
+
+func (t *User) Close() {
+	if t.session != nil {
+		t.session.Close()
+	}
+}

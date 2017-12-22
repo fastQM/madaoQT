@@ -45,18 +45,12 @@ func (w *WebsocketServer) SetupWebsocket(app *iris.Application) {
 	})
 }
 
-func (w *WebsocketServer) Broadcast(topic string, msg interface{}) {
+func (w *WebsocketServer) Broadcast(room string, msg interface{}) {
 
-	connections := w.ws.GetConnections()
-	if connections != nil && len(connections) != 0 {
-		if topic == "" {
-			connections[0].To(websocket.All).Emit("chat", msg)
-		} else {
-			connections[0].To(topic).Emit(topic, msg)
-		}
+	connections := w.ws.GetConnectionsByRoom(room)
+	if connections != nil && len(connections) > 0 {
+		connections[0].To(room).EmitMessage([]byte(msg.(string)))
 	}
-
-	return
 }
 
 func (w *WebsocketServer) Ticker(exchange string, tickerValue Exchange.TickerValue) {
@@ -69,29 +63,8 @@ func (w *WebsocketServer) Publish(topic string, msg string) {
 
 func (w *WebsocketServer) handleConnection(c websocket.Connection) {
 
-	// Read events from browser
-	// c.On("chat", func(msg string) {
-	// 	// Print the message to the console, c.Context() is the iris's http context.
-	// 	fmt.Printf("%s sent: %s\n", c.Context().RemoteAddr(), msg)
-	// 	// Write message back to the client message owner:
-	// 	// c.Emit("chat", msg)
-	// 	c.To(websocket.Broadcast).Emit("chat", msg)
-	// })
-
-	// c.On(MsgCmdPublish, func(msg string) {
-	// 	Logger.Debugf("recv publish msg:%s", msg)
-	// 	data := parseRequestMsg(msg)
-	// 	if data != nil {
-	// 		rsp := packageResponseMsg(data.Seq, true, ErrorTypeNone, nil)
-	// 		Logger.Debugf("Response:%s", rsp)
-	// 		c.To(c.ID()).Emit(MsgCmdPublish, string(rsp)) // 发送方相应
-	// 		c.To(data.Cmd).Emit(data.Cmd, data.Data)      // 订阅方发送
-	// 		return
-	// 	}
-	// })
-
 	c.OnMessage(func(msg []byte) {
-		Logger.Debugf("recv message:%s", msg)
+		Logger.Debugf("recv:%s from:%s", msg, c.ID())
 		data := ParseRequestMsg(string(msg))
 		if data != nil {
 			if data.Cmd == CmdTypeSubscribe && data.Data != nil {
@@ -110,7 +83,12 @@ func (w *WebsocketServer) handleConnection(c websocket.Connection) {
 
 			} else if data.Cmd == CmdTypePublish {
 				topic := data.Topic
-				c.To(topic).EmitMessage([]byte(msg))
+				if connections := w.ws.GetConnectionsByRoom(data.Topic); connections == nil && len(connections) > 0 {
+					Logger.Debug("room not found")
+				} else {
+					// Logger.Debugf("Room:%v", connections[0])
+					c.To(topic).EmitMessage([]byte(msg))
+				}
 
 			} else {
 				goto __INVALID_CMD
