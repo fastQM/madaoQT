@@ -8,24 +8,24 @@ import (
 	mgo "gopkg.in/mgo.v2"
 )
 
-type OrderItem struct {
-	Pair          string  `json:"pair"`
-	Trigger       string  `json:"trigger"`
-	SellLimitHigh float64 `json:"sellhigh"`
-	SellLimitLow  float64 `json:"selllow"`
-	BuyLimitHigh  float64 `json:"buyhigh"`
-	BuyLimitLow   float64 `json:"buylow"`
-	// priority
-}
+// type OrderItem struct {
+// 	Pair          string  `json:"pair"`
+// 	Trigger       string  `json:"trigger"`
+// 	SellLimitHigh float64 `json:"sellhigh"`
+// 	SellLimitLow  float64 `json:"selllow"`
+// 	BuyLimitHigh  float64 `json:"buyhigh"`
+// 	BuyLimitLow   float64 `json:"buylow"`
+// 	// priority
+// }
 
 type OrderInfo struct {
-	Batch    string
-	Time     time.Time
-	Exchange string
-	Coin     string
-	OrderID  string
-	Status   string
-	Details  string
+	Batch    string    `json:"batch"`
+	Time     time.Time `json:"time"`
+	Exchange string    `json:"exchange"`
+	Coin     string    `json:"coin"`
+	OrderID  string    `json:"orderid"`
+	Status   string    `json:"status"`
+	Details  string    `json:"detail"`
 }
 
 type Orders struct {

@@ -19,7 +19,9 @@
     "paper-dialog": "PolymerElements/paper-dialog#^2.0.0",
     "iron-form": "PolymerElements/iron-form#^2.0.1",
     "paper-input": "PolymerElements/paper-input#^2.0.4",
-    "paper-button": "PolymerElements/paper-button#^2.0.0"
+    "paper-button": "PolymerElements/paper-button#^2.0.0",
+    "paper-checkbox": "PolymerElements/paper-checkbox#^2.0.1",
+    "vaadin-grid": "^4.1.0"
   },
   "resolutions": {
     "polymer": "^2.0.0"

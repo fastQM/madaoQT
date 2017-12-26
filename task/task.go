@@ -250,7 +250,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 							Batch:   tradeConfig.Batch,
 							Oper:    Exchange.TradeTypeString[Exchange.TradeTypeCancel],
 							OrderID: trade.OrderID,
-							Details: fmt.Sprintf("%v", trade),
+							// Details: fmt.Sprintf("%v", trade),
 						}); err != nil {
 							Logger.Errorf("保存交易操作失败:%v", err)
 						}
@@ -268,7 +268,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 								Coin:     tradeConfig.Coin,
 								OrderID:  trade.OrderID,
 								Status:   Exchange.OrderStatusString[info[0].Status],
-								Details:  fmt.Sprintf("%v", info[0]),
+								// Details:  fmt.Sprintf("%v", info[0]),
 							})
 
 							dealAmount += info[0].DealAmount
@@ -293,7 +293,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 			}
 
 		__ERROR:
-			balance = exchange.GetBalance(coin)
+			balance, _ = exchange.GetBalance(coin)
 			channel <- TradeResult{
 				Error:   errorCode,
 				Balance: balance,
@@ -301,7 +301,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 			return
 		__CheckBalance:
-			balance = exchange.GetBalance(coin)
+			balance, _ = exchange.GetBalance(coin)
 			avePrice = totalCost / dealAmount
 			Logger.Debugf("交易完成，余额：%v 成交均价：%v", balance, avePrice)
 			channel <- TradeResult{
@@ -362,6 +362,9 @@ type IConfig interface {
 type ITask interface {
 	GetTaskName() string
 	GetDefaultConfig() interface{}
+	GetBalances() map[string]interface{}
+	GetTrades() []Mongo.TradesRecord
+	GetOrders() []Mongo.OrderInfo
 	Start(api string, secret string, configJSON string) error
 	Close()
 }

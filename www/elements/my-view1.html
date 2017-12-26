@@ -1,4 +1,6 @@
 <link rel="import" href="../bower_components/polymer/polymer-element.html">
+<link rel="import" href="../bower_components/iron-ajax/iron-ajax.html">
+<link rel="import" href="../bower_components/vaadin-grid/vaadin-grid.html">
 <link rel="import" href="shared-styles.html">
 <link rel="import" href="global-services.html">
 
@@ -13,11 +15,108 @@
     </style>
 
     <div class="card">
-      <div class="circle">1</div>
-      <p>监视数据</p>
+      <p>余额以及持仓信息</p>
       <pre>[[text]]</pre>
       <global-services id="globalServices"></global-services>
     </div>
+    <div class="card">
+      <h3>历史交易数据</h3>
+      <vaadin-grid aria-label="Basic Binding Example" items="[[trades]]">
+          <vaadin-grid-column width="50px" flex-grow="0">
+            <template class="header">#</template>
+            <template>[[index]]</template>
+            <!-- If necessary, the footer could be set using <template class="footer"> -->
+            <template class="footer">#</template>
+          </vaadin-grid-column>
+    
+          <vaadin-grid-column>
+            <template class="header">
+              <span draggable="true">操作批次号</span>
+            </template>
+            <template>
+              <span draggable="true">
+                [[item.batch]]
+              </span>
+            </template>
+            <template class="footer">操作批次号</template>
+          </vaadin-grid-column>
+    
+          <vaadin-grid-column width="150px">
+            <template class="header">时间</template>
+            <template>[[item.time]]</template>
+            <template class="footer">时间</template>
+          </vaadin-grid-column>
+    
+          <vaadin-grid-column width="30px">
+            <template class="header">操作</template>
+            <template>
+              <p style="white-space: normal">[[item.oper]]</p>
+            </template>
+            <template class="footer">操作</template>
+          </vaadin-grid-column>
+    
+          <vaadin-grid-column width="30px">
+              <template class="header">交易所</template>
+              <template>
+                <p style="white-space: normal">[[item.exchange]]</p>
+              </template>
+              <template class="footer">交易所</template>
+            </vaadin-grid-column>
+            
+          <vaadin-grid-column width="30px">
+              <template class="header">币种</template>
+              <template>
+                <p style="white-space: normal">[[item.coin]]</p>
+              </template>
+              <template class="footer">币种</template>
+          </vaadin-grid-column>
+
+          <vaadin-grid-column>
+              <template class="header">价格</template>
+              <template>
+                <p style="white-space: normal">[[item.price]]</p>
+              </template>
+              <template class="footer">价格</template>
+          </vaadin-grid-column>
+
+          <vaadin-grid-column>
+              <template class="header">数量</template>
+              <template>
+                <p style="white-space: normal">[[item.quantity]]</p>
+              </template>
+              <template class="footer">数量</template>
+          </vaadin-grid-column>
+
+          <vaadin-grid-column width="50px">
+              <template class="header">订单号</template>
+              <template>
+                <p style="white-space: normal">[[item.orderid]]</p>
+              </template>
+              <template class="footer">订单号</template>
+          </vaadin-grid-column>
+
+        </vaadin-grid>
+    </div>
+
+    <iron-ajax
+      auto
+      url="http://localhost:8080/task/balances"
+      method="get"
+      content-type="application/json"
+      handle-as="json"
+      on-response="onResponse"
+      last-response={{balanceResult}}
+      debounce-duration="60000" id="getBalances"></iron-ajax>
+
+    <iron-ajax
+      auto
+      url="http://localhost:8080/task/trades"
+      method="get"
+      content-type="application/json"
+      handle-as="json"
+      on-response="onResponse"
+      last-response={{response}}
+      debounce-duration="60000" id="getTrades"></iron-ajax>
   </template>
 
   <script>
@@ -25,7 +124,21 @@
       static get is() { return 'my-view1'; }
       static get properties() {
         return {
-          text: String
+          text: String,
+          response:String,
+          trades: Array,
+          balanceResult: String,
+        }
+      }
+
+      ready(){
+        super.ready();
+        this.$.getTrades.generateRequest();
+      }
+
+      onResponse(){
+        if(this.response.result){
+          this.trades = this.response.data
         }
       }
     }

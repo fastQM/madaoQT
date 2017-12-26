@@ -10,15 +10,15 @@ import (
 )
 
 type TradesRecord struct {
-	Batch    string
-	Time     time.Time
-	Oper     string // buy,sell
-	Exchange string
-	Coin     string
-	Price    float64
-	Quantity float64
-	OrderID  string
-	Details  string
+	Batch    string    `json:"batch"`
+	Time     time.Time `json:"time"`
+	Oper     string    `json:"oper"`
+	Exchange string    `json:"exchange"`
+	Coin     string    `json:"coin"`
+	Price    float64   `json:"price"`
+	Quantity float64   `json:"quantity"`
+	OrderID  string    `json:"orderid"`
+	Details  string    `json:"detail"`
 }
 
 type Trades struct {
@@ -76,7 +76,6 @@ func (t *Trades) FindAll() (error, []TradesRecord) {
 		if err != nil {
 			return err, nil
 		}
-
 		return nil, result
 	}
 

@@ -228,7 +228,7 @@ func (o *OKExAPI) Start() {
 							o.messageChannels.Delete(channel)
 						}()
 					} else if data["result"] == false {
-						Logger.Errorf("Response Error: %v", message)
+						Logger.Errorf("Response Error: %s", message)
 						goto END
 					}
 				}
@@ -896,7 +896,7 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 	}
 }
 
-func (o *OKExAPI) GetBalance(coin string) float64 {
+func (o *OKExAPI) GetBalance(coin string) (float64, float64) {
 
 	var channel string
 	var data, parameters map[string]string
@@ -930,12 +930,20 @@ func (o *OKExAPI) GetBalance(coin string) float64 {
 				values := recv.(map[string]interface{})[coin]
 				if values != nil {
 					balance := values.(map[string]interface{})["balance"]
+					contracts := values.(map[string]interface{})["contracts"]
+					var bond float64
+					if contracts != nil && len(contracts.([]interface{})) > 0 {
+						for _, contract := range contracts.([]interface{}) {
+							bond += contract.(map[string]interface{})["bond"].(float64)
+						}
+					}
+
 					if balance != nil {
-						return balance.(float64)
+						return balance.(float64), bond
 					}
 				}
 			}
-			return -1
+			return -1, -1
 
 		} else if o.exchangeType == ExchangeTypeSpot {
 			if recv != nil {
@@ -944,16 +952,16 @@ func (o *OKExAPI) GetBalance(coin string) float64 {
 					balance := funds.(map[string]interface{})["free"]
 					if balance != nil {
 						result, _ := strconv.ParseFloat(balance.(map[string]interface{})[coin].(string), 64)
-						return result
+						return result, -1
 					}
 				}
 			}
 		}
 
-		return -1
+		return -1, -1
 	case <-time.After(DefaultTimeoutSec * time.Second):
 		log.Printf("Timeout to get user info")
-		return -1
+		return -1, -1
 	}
 
 }

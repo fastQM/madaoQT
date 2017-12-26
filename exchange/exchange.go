@@ -177,8 +177,7 @@ type IExchange interface {
 	GetTickerValue(tag string) *TickerValue
 	WatchEvent() chan EventType
 	GetDepthValue(coin string, price float64, limit float64, orderQuantity float64, tradeType TradeType) *DepthValue
-	GetBalance(coin string) float64
-
+	GetBalance(coin string) (float64,float64)
 	Trade(configs TradeConfig) *TradeResult
 
 	CancelOrder(order OrderInfo) *TradeResult

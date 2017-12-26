@@ -14,6 +14,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 <link rel="import" href="../bower_components/iron-form/iron-form.html">
 <link rel="import" href="../bower_components/paper-input/paper-input.html">
 <link rel="import" href="../bower_components/paper-button/paper-button.html">
+<link rel="import" href="../bower_components/paper-dialog/paper-dialog.html">
 
 <dom-module id="my-view2">
   <template>
@@ -70,6 +71,13 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           </form>
         </iron-form>
     </div>
+    <paper-dialog id="dialogResult">
+      <h2>提示</h2>
+      <p>{{dialogInfo}}</p>
+      <div class="buttons">
+        <paper-button dialog-confirm>确定</paper-button>
+      </div>
+    </paper-dialog>
     <iron-ajax
       url="http://localhost:8080/exchange/list"
       method="get"
@@ -99,6 +107,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           },
           response: String,
           request: String,
+          dialogInfo: String,
         }
       }
 
@@ -117,6 +126,13 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
       addKeyResult(){
         console.log("Response:" + this.response)
+        if(this.response.result){
+          this.dialogInfo = "添加API成功"
+        }else{
+          this.dialogInfo = "添加API失败"
+        }
+
+        this.$.dialogResult.open()
       }
 
       AddExchangeKey(oEvent){

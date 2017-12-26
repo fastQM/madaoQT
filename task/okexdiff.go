@@ -138,13 +138,72 @@ func (a *IAnalyzer) wsPublish(topic string, message string) {
 	}
 }
 
+func (a *IAnalyzer) GetBalances() map[string]interface{} {
+
+	var spots []map[string]float64
+	var futures []map[string]interface{}
+	if a.spot != nil {
+		for coin := range a.config.Area {
+			balance, _ := a.spot.GetBalance(coin)
+			spots = append(spots, map[string]float64{coin: balance})
+		}
+
+		balance, _ := a.spot.GetBalance("usdt")
+		spots = append(spots, map[string]float64{"usdt": balance})
+	}
+
+	if a.future != nil {
+		for coin := range a.config.Area {
+			balance, bond := a.future.GetBalance(coin)
+			values := map[string]float64{
+				"balance": balance,
+				"bond":    bond,
+			}
+			futures = append(futures, map[string]interface{}{coin: values})
+		}
+	}
+
+	return map[string]interface{}{
+		"spots":   spots,
+		"futures": futures,
+	}
+}
+
+func (a *IAnalyzer) GetPositions() {
+
+}
+
+func (a *IAnalyzer) GetTrades() []Mongo.TradesRecord {
+	if a.tradeDB != nil {
+		err, records := a.tradeDB.FindAll()
+		if err != nil {
+			Logger.Errorf("Fail to get trades:%v", err)
+			return nil
+		}
+
+		return records
+	}
+
+	return nil
+}
+
+func (a *IAnalyzer) GetOrders() []Mongo.OrderInfo {
+	if a.orderDB != nil {
+		err, orders := a.orderDB.FindAll()
+		if err != nil {
+			Logger.Errorf("Fail to get orders:%v", err)
+			return nil
+		}
+		return orders
+	}
+	return nil
+}
+
 func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 
 	if a.status != StatusNone {
 		return errors.New(TaskErrorMsg[TaskErrorStatus])
 	}
-
-	a.status = StatusProcessing
 
 	Logger.Debugf("Configure:%v", configJSON)
 
@@ -203,6 +262,8 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 	spotExchange.Start()
 
 	a.wsConnect()
+
+	a.status = StatusProcessing
 
 	go func() {
 		for {
@@ -267,8 +328,8 @@ func (a *IAnalyzer) Watch() {
 		}
 
 		if valuefuture != nil && valueCurrent != nil {
-
-			if math.Abs(difference) > a.config.Area[coinName].Open {
+			Logger.Infof("1:%v 2:%v", math.Abs(difference), a.config.Area[key].Open)
+			if math.Abs(difference) > a.config.Area[key].Open {
 				if valuefuture.Last > valueCurrent.Last {
 					Logger.Info("卖出合约，买入现货")
 
@@ -322,10 +383,16 @@ func (a *IAnalyzer) Watch() {
 }
 
 func (a *IAnalyzer) Close() {
+
 	a.status = StatusNone
 
-	a.future.Close()
-	a.spot.Close()
+	if a.future != nil {
+		a.future.Close()
+	}
+
+	if a.spot != nil {
+		a.spot.Close()
+	}
 
 	if a.conn != nil {
 		a.conn.Close()

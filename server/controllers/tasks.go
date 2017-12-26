@@ -140,6 +140,52 @@ _ERROR:
 	}
 }
 
+func (t *TaskController) GetBalances() iris.Map {
+
+	if task, ok := t.Tasks.Load("okexdiff"); ok {
+		result := task.(Task.ITask).GetBalances()
+		return iris.Map{
+			"result": true,
+			"data":   result,
+		}
+	}
+
+	return iris.Map{
+		"result": false,
+	}
+}
+
+func (t *TaskController) GetTrades() iris.Map {
+
+	if task, ok := t.Tasks.Load("okexdiff"); ok {
+		result := task.(Task.ITask).GetTrades()
+		Logger.Debugf("getTrades:%v", result)
+		return iris.Map{
+			"result": true,
+			"data":   result,
+		}
+	}
+
+	return iris.Map{
+		"result": false,
+	}
+}
+
+func (t *TaskController) GetOrders() iris.Map {
+
+	if task, ok := t.Tasks.Load("okexdiff"); ok {
+		result := task.(Task.ITask).GetOrders()
+		return iris.Map{
+			"result": true,
+			"data":   result,
+		}
+	}
+
+	return iris.Map{
+		"result": false,
+	}
+}
+
 func (t *TaskController) GetStop() iris.Map {
 
 	if ok, result := t.authen(); !ok {
