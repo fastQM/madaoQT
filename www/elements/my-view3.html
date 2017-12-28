@@ -123,7 +123,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     </div>
     <global-services id="globalServices"></global-services>
     <iron-ajax
-      url="http://localhost:8080/task/start"
+      url="/task/start"
       body="{{config}}"
       method="post"
       content-type="application/json"
@@ -132,7 +132,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       last-response={{response}}
       debounce-duration="300" id="ajaxStart"></iron-ajax>
     <iron-ajax
-      url="http://localhost:8080/task/stop"
+      url="/task/stop"
       method="get"
       content-type="application/json"
       handle-as="json"

@@ -79,14 +79,14 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       </div>
     </paper-dialog>
     <iron-ajax
-      url="http://localhost:8080/exchange/list"
+      url="/exchange/list"
       method="get"
       handle-as="json"
       on-response="getExchangesResult"
       last-response={{response}}
       debounce-duration="300" id="GetExchanges"></iron-ajax>
     <iron-ajax
-      url="http://localhost:8080/exchange/addkey"
+      url="/exchange/addkey"
       body="{{request}}"
       method="post"
       content-type="application/json"
