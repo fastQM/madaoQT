@@ -43,6 +43,7 @@ type IAnalyzer struct {
 	// currents map[string]AnalyzeItem
 	future Exchange.IExchange
 	spot   Exchange.IExchange
+	fund   *OkexFundManage
 
 	status StatusType
 
@@ -50,7 +51,8 @@ type IAnalyzer struct {
 	opIndex uint
 
 	tradeDB *Mongo.Trades
-	orderDB *Mongo.Orders
+	// orderDB *Mongo.Orders
+	diffDB *Mongo.OKExDiff
 
 	conn *Websocket.Conn
 }
@@ -140,26 +142,35 @@ func (a *IAnalyzer) wsPublish(topic string, message string) {
 
 func (a *IAnalyzer) GetBalances() map[string]interface{} {
 
-	var spots []map[string]float64
+	var spots []map[string]interface{}
 	var futures []map[string]interface{}
+
 	if a.spot != nil {
+		balances := a.spot.GetBalance()
 		for coin := range a.config.Area {
-			balance, _ := a.spot.GetBalance(coin)
-			spots = append(spots, map[string]float64{coin: balance})
+			balance := balances[coin]
+			spots = append(spots, map[string]interface{}{
+				"name":    coin,
+				"balance": balance.(map[string]interface{})["balance"].(float64),
+			})
 		}
 
-		balance, _ := a.spot.GetBalance("usdt")
-		spots = append(spots, map[string]float64{"usdt": balance})
+		balance := balances["usdt"]
+		spots = append(spots, map[string]interface{}{
+			"name":    "usdt",
+			"balance": balance.(map[string]interface{})["balance"].(float64),
+		})
 	}
 
 	if a.future != nil {
+		balances := a.future.GetBalance()
 		for coin := range a.config.Area {
-			balance, bond := a.future.GetBalance(coin)
-			values := map[string]float64{
-				"balance": balance,
-				"bond":    bond,
-			}
-			futures = append(futures, map[string]interface{}{coin: values})
+			balance := balances[coin]
+			futures = append(futures, map[string]interface{}{
+				"name":    coin,
+				"balance": balance.(map[string]interface{})["balance"].(float64),
+				"bond":    balance.(map[string]interface{})["bond"].(float64),
+			})
 		}
 	}
 
@@ -187,17 +198,17 @@ func (a *IAnalyzer) GetTrades() []Mongo.TradesRecord {
 	return nil
 }
 
-func (a *IAnalyzer) GetOrders() []Mongo.OrderInfo {
-	if a.orderDB != nil {
-		err, orders := a.orderDB.FindAll()
-		if err != nil {
-			Logger.Errorf("Fail to get orders:%v", err)
-			return nil
-		}
-		return orders
-	}
-	return nil
-}
+// func (a *IAnalyzer) GetOrders() []Mongo.OrderInfo {
+// 	if a.orderDB != nil {
+// 		err, orders := a.orderDB.FindAll()
+// 		if err != nil {
+// 			Logger.Errorf("Fail to get orders:%v", err)
+// 			return nil
+// 		}
+// 		return orders
+// 	}
+// 	return nil
+// }
 
 func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 
@@ -235,17 +246,29 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 		return errors.New(TaskErrorMsg[TaskLostMongodb])
 	}
 
-	a.orderDB = &Mongo.Orders{
+	a.diffDB = &Mongo.OKExDiff{
 		Config: &Mongo.DBConfig{
-			CollectionName: "DiffOKExFutureSpotOrder",
+			CollectionName: "DiffOKExHistory",
 		},
 	}
 
-	err = a.orderDB.Connect()
+	err = a.diffDB.Connect()
 	if err != nil {
-		Logger.Errorf("orderDB error:%v", err)
+		Logger.Errorf("tradeDB error:%v", err)
 		return errors.New(TaskErrorMsg[TaskLostMongodb])
 	}
+
+	// a.orderDB = &Mongo.Orders{
+	// 	Config: &Mongo.DBConfig{
+	// 		CollectionName: "DiffOKExFutureSpotOrder",
+	// 	},
+	// }
+
+	// err = a.orderDB.Connect()
+	// if err != nil {
+	// 	Logger.Errorf("orderDB error:%v", err)
+	// 	return errors.New(TaskErrorMsg[TaskLostMongodb])
+	// }
 
 	Logger.Info("启动OKEx合约监视程序")
 	futureExchange := Exchange.NewOKExFutureApi(&Exchange.InitConfig{
@@ -260,6 +283,9 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 		Secret: secret,
 	})
 	spotExchange.Start()
+
+	a.fund = new(OkexFundManage)
+	a.fund.Init()
 
 	a.wsConnect()
 
@@ -310,13 +336,23 @@ func (a *IAnalyzer) Watch() {
 	// for coinName, _ := range a.coins {
 	for key := range a.config.Area {
 		coinName := key + "/usdt"
-		Logger.Debugf("Current Coin:%v", coinName)
+
 		valuefuture := a.future.GetTickerValue(coinName + "future")
 		valueCurrent := a.spot.GetTickerValue(coinName + "spot")
-
+		Logger.Debugf("Current Coin:%v spot:%v future:%v", coinName, valueCurrent, valuefuture)
 		difference := (valuefuture.Last - valueCurrent.Last) * 100 / valueCurrent.Last
 		msg := fmt.Sprintf("币种:%s, 合约价格：%.2f, 现货价格：%.2f, 价差：%.2f%%",
 			coinName, valuefuture.Last, valueCurrent.Last, difference)
+
+		a.diffDB.Insert(Mongo.DiffValue{
+			Coin:         key,
+			SpotPrice:    valueCurrent.Last,
+			SpotVolume:   valueCurrent.Volume,
+			FuturePrice:  valuefuture.Last,
+			FutureVolume: valuefuture.Volume,
+			Diff:         difference,
+			Time:         time.Now(),
+		})
 
 		Logger.Info(msg)
 
@@ -328,7 +364,6 @@ func (a *IAnalyzer) Watch() {
 		}
 
 		if valuefuture != nil && valueCurrent != nil {
-			Logger.Infof("1:%v 2:%v", math.Abs(difference), a.config.Area[key].Open)
 			if math.Abs(difference) > a.config.Area[key].Open {
 				if valuefuture.Last > valueCurrent.Last {
 					Logger.Info("卖出合约，买入现货")
@@ -398,12 +433,16 @@ func (a *IAnalyzer) Close() {
 		a.conn.Close()
 	}
 
-	if a.orderDB != nil {
-		a.orderDB.Close()
-	}
+	// if a.orderDB != nil {
+	// 	a.orderDB.Close()
+	// }
 
 	if a.tradeDB != nil {
 		a.tradeDB.Close()
+	}
+
+	if a.fund != nil {
+		a.fund.Close()
 	}
 }
 
@@ -422,8 +461,12 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 		return
 	}
 
-	channelFuture := ProcessTradeRoutine(future, futureConfig, a.tradeDB, a.orderDB)
-	channelSpot := ProcessTradeRoutine(spot, spotConfig, a.tradeDB, a.orderDB)
+	channelFuture := ProcessTradeRoutine(future, futureConfig, a.tradeDB)
+	channelSpot := ProcessTradeRoutine(spot, spotConfig, a.tradeDB)
+
+	pair := Exchange.ParsePair(futureConfig.Coin)
+	a.fund.OpenPosition(Exchange.ExchangeTypeFuture, future, futureConfig.Batch, pair[0], futureConfig.Type)
+	a.fund.OpenPosition(Exchange.ExchangeTypeSpot, spot, spotConfig.Batch, pair[0], spotConfig.Type)
 
 	var waitGroup sync.WaitGroup
 	var futureResult, spotResult TradeResult
@@ -452,8 +495,8 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 	futureConfig.Type = Exchange.RevertTradeType(futureConfig.Type)
 	spotConfig.Type = Exchange.RevertTradeType(spotConfig.Type)
 
-	// futureConfig.Amount = futureResult.Balance
-	spotConfig.Amount = math.Trunc(spotResult.Balance*100) / 100
+	futureConfig.Amount = futureResult.DealAmount
+	spotConfig.Amount = math.Trunc(spotResult.DealAmount*100) / 100 //如果数值是0.299,可交易数量是0.29
 
 	Logger.Debugf("spotConfig.Amount:%v", spotConfig.Amount)
 
@@ -467,35 +510,41 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 		a.opIndex++
 		return
 
-	} else if futureResult.Error == TaskErrorSuccess && spotResult.Error != TaskErrorSuccess {
-
-		channelSpot = ProcessTradeRoutine(spot, operation.spotConfig, a.tradeDB, a.orderDB)
-		select {
-
-		case spotResult = <-channelSpot:
-			Logger.Debugf("现货平仓结果:%v", spotResult)
-			if spotResult.Error != TaskErrorSuccess {
-				Logger.Errorf("平仓失败，请手工检查:%v", spotResult)
-				a.status = StatusError
-			}
-		}
-
-	} else if futureResult.Error != TaskErrorSuccess && spotResult.Error == TaskErrorSuccess {
-
-		channelFuture = ProcessTradeRoutine(spot, operation.futureConfig, a.tradeDB, a.orderDB)
-		select {
-		case futureResult = <-channelFuture:
-			Logger.Debugf("合约平仓结果:%v", futureResult)
-			if futureResult.Error != TaskErrorSuccess {
-				Logger.Errorf("平仓失败，请手工检查:%v", futureResult)
-				a.status = StatusError
-			}
-		}
-
 	} else {
 
-		Logger.Errorf("无法建立仓位：%v, %v", futureResult, spotResult)
-		a.status = StatusError
+		if spotResult.DealAmount > 0 {
+			channelSpot = ProcessTradeRoutine(spot, operation.spotConfig, a.tradeDB)
+			waitGroup.Add(1)
+			go func() {
+				select {
+				case spotResult = <-channelSpot:
+					Logger.Debugf("现货平仓结果:%v", spotResult)
+					if spotResult.Error != TaskErrorSuccess {
+						Logger.Errorf("平仓失败，请手工检查:%v", spotResult)
+						a.status = StatusError
+					}
+					waitGroup.Done()
+				}
+			}()
+		}
+
+		if futureResult.DealAmount > 0 {
+			channelFuture = ProcessTradeRoutine(spot, operation.futureConfig, a.tradeDB)
+			waitGroup.Add(1)
+			select {
+			case futureResult = <-channelFuture:
+				Logger.Debugf("合约平仓结果:%v", futureResult)
+				if futureResult.Error != TaskErrorSuccess {
+					Logger.Errorf("平仓失败，请手工检查:%v", futureResult)
+					a.status = StatusError
+				}
+				waitGroup.Done()
+			}
+		}
+
+		waitGroup.Wait()
+		a.fund.ClosePosition(Exchange.ExchangeTypeFuture, future, futureConfig.Batch, pair[0])
+		a.fund.ClosePosition(Exchange.ExchangeTypeSpot, spot, spotConfig.Batch, pair[0])
 	}
 
 	return
@@ -529,8 +578,8 @@ func (a *IAnalyzer) checkPosition(coin string, futurePrice float64, spotPrice fl
 					op.futureConfig.Price = futurePrice
 					op.spotConfig.Price = spotPrice
 
-					channelFuture := ProcessTradeRoutine(a.future, op.futureConfig, a.tradeDB, a.orderDB)
-					channelSpot := ProcessTradeRoutine(a.spot, op.spotConfig, a.tradeDB, a.orderDB)
+					channelFuture := ProcessTradeRoutine(a.future, op.futureConfig, a.tradeDB)
+					channelSpot := ProcessTradeRoutine(a.spot, op.spotConfig, a.tradeDB)
 
 					var waitGroup sync.WaitGroup
 					var futureResult, spotResult TradeResult
@@ -558,6 +607,11 @@ func (a *IAnalyzer) checkPosition(coin string, futurePrice float64, spotPrice fl
 					if futureResult.Error == TaskErrorSuccess && spotResult.Error == TaskErrorSuccess {
 						Logger.Info("平仓完成")
 						delete(a.ops, index)
+
+						pair := Exchange.ParsePair(op.futureConfig.Coin)
+						a.fund.ClosePosition(Exchange.ExchangeTypeFuture, a.future, op.futureConfig.Batch, pair[0])
+						a.fund.ClosePosition(Exchange.ExchangeTypeSpot, a.spot, op.spotConfig.Batch, pair[0])
+
 					} else {
 						Logger.Error("平仓失败，请手工检查")
 						a.status = StatusError

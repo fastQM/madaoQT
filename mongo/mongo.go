@@ -9,6 +9,8 @@ const ChartCollectin = "Chart"
 const TradeRecordCollection = "TradeRecord"
 const ExchangeCollection = "Exchanges"
 const OrderCollection = "Orders"
+const FundCollection = "Funds"
+const OkexDiffHistory = "OkexDiffHistory"
 
 type DBConfig struct {
 	CollectionName string

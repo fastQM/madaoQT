@@ -171,20 +171,20 @@ func (t *TaskController) GetTrades() iris.Map {
 	}
 }
 
-func (t *TaskController) GetOrders() iris.Map {
+// func (t *TaskController) GetOrders() iris.Map {
 
-	if task, ok := t.Tasks.Load("okexdiff"); ok {
-		result := task.(Task.ITask).GetOrders()
-		return iris.Map{
-			"result": true,
-			"data":   result,
-		}
-	}
+// 	if task, ok := t.Tasks.Load("okexdiff"); ok {
+// 		result := task.(Task.ITask).GetOrders()
+// 		return iris.Map{
+// 			"result": true,
+// 			"data":   result,
+// 		}
+// 	}
 
-	return iris.Map{
-		"result": false,
-	}
-}
+// 	return iris.Map{
+// 		"result": false,
+// 	}
+// }
 
 func (t *TaskController) GetStop() iris.Map {
 

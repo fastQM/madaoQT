@@ -333,7 +333,7 @@ func (o *OKExAPI) Close() {
 */
 func (o *OKExAPI) StartContractTicker(pair string, period string, tag string) {
 
-	coins := ParseCoins(pair)
+	coins := ParsePair(pair)
 
 	channel := strings.Replace(ChannelContractTicker, "X", coins[0], 1)
 	channel = strings.Replace(channel, "Y", period, 1)
@@ -360,7 +360,7 @@ bt2_btc btg_btc qtum_btc hsr_btc neo_btc gas_btc
 qtum_usdt hsr_usdt neo_usdt gas_usdt
 */
 func (o *OKExAPI) StartCurrentTicker(pair string, tag string) {
-	coins := ParseCoins(pair)
+	coins := ParsePair(pair)
 	channel := strings.Replace(ChannelCurrentChannelTicker, "X", coins[0]+"_"+coins[1], 1)
 
 	ticker := TickerListItem{
@@ -407,10 +407,12 @@ func (o *OKExAPI) GetTickerValue(tag string) *TickerValue {
 				// 	lastValue = value
 				// }
 				lastValue, _ := strconv.ParseFloat(tmp["last"].(string), 64)
+				volume, _ := strconv.ParseFloat(tmp["vol"].(string), 64)
 
 				tickerValue := &TickerValue{
-					Last: lastValue,
-					Time: formatTimeOKEX(),
+					Last:   lastValue,
+					Time:   formatTimeOKEX(),
+					Volume: volume,
 				}
 
 				return tickerValue
@@ -488,7 +490,7 @@ func (o *OKExAPI) SwitchCurrentDepth(open bool, pair string, depth string) chan 
 func (o *OKExAPI) GetDepthValue(coin string, price float64, limit float64, orderQuantity float64, tradeType TradeType) *DepthValue {
 
 	var recvChan chan interface{}
-	coins := ParseCoins(coin)
+	coins := ParsePair(coin)
 
 	if o.exchangeType == ExchangeTypeFuture {
 		recvChan = o.SwithContractDepth(true, coins[0], "this_week", "20")
@@ -671,7 +673,7 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 	var channel string
 	var data, parameters map[string]string
 
-	coins := ParseCoins(configs.Coin)
+	coins := ParsePair(configs.Coin)
 
 	if o.exchangeType == ExchangeTypeFuture {
 
@@ -747,7 +749,7 @@ func (o *OKExAPI) CancelOrder(order OrderInfo) *TradeResult {
 	var channel string
 	var data, parameters map[string]string
 
-	coins := ParseCoins(order.Coin)
+	coins := ParsePair(order.Pair)
 
 	if o.exchangeType == ExchangeTypeFuture {
 
@@ -813,7 +815,7 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 	var channel string
 	var data, parameters map[string]string
 
-	coins := ParseCoins(filter.Coin)
+	pair := ParsePair(filter.Pair)
 
 	if o.exchangeType == ExchangeTypeFuture {
 
@@ -827,7 +829,7 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 			"current_page": "1",
 			"page_length":  "1",
 			"order_id":     filter.OrderID,
-			"symbol":       coins[0] + "_" + coins[1],
+			"symbol":       pair[0] + "_" + pair[1],
 		}
 
 	} else if o.exchangeType == ExchangeTypeSpot {
@@ -838,7 +840,7 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 			"api_key": o.apiKey,
 			// "secret_key": constSecretKey,
 			"order_id": filter.OrderID,
-			"symbol":   coins[0] + "_" + coins[1],
+			"symbol":   pair[0] + "_" + pair[1],
 		}
 
 	}
@@ -876,7 +878,7 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 				avgPrice = order["avg_price"].(float64)
 			}
 			item := OrderInfo{
-				Coin:    order["symbol"].(string),
+				Pair:    order["symbol"].(string),
 				OrderID: strconv.FormatFloat(order["order_id"].(float64), 'f', 0, 64),
 				// OrderID: strconv.FormatInt(order["order_id"].(int64), 64),
 				Price:      order["price"].(float64),
@@ -896,7 +898,7 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 	}
 }
 
-func (o *OKExAPI) GetBalance(coin string) (float64, float64) {
+func (o *OKExAPI) GetBalance() map[string]interface{} {
 
 	var channel string
 	var data, parameters map[string]string
@@ -927,41 +929,68 @@ func (o *OKExAPI) GetBalance(coin string) (float64, float64) {
 	case recv := <-recvChan:
 		if o.exchangeType == ExchangeTypeFuture {
 			if recv != nil {
-				values := recv.(map[string]interface{})[coin]
-				if values != nil {
-					balance := values.(map[string]interface{})["balance"]
-					contracts := values.(map[string]interface{})["contracts"]
+				// values := recv.(map[string]interface{})[coin]
+				// if values != nil {
+				// 	balance := values.(map[string]interface{})["balance"]
+				// 	contracts := values.(map[string]interface{})["contracts"]
+				// 	var bond float64
+				// 	if contracts != nil && len(contracts.([]interface{})) > 0 {
+				// 		for _, contract := range contracts.([]interface{}) {
+				// 			bond += contract.(map[string]interface{})["bond"].(float64)
+				// 		}
+				// 	}
+
+				// 	if balance != nil {
+				// 		return balance.(float64), bond
+				// 	}
+				// }
+				result := make(map[string]interface{})
+				balances := recv.(map[string]interface{})
+				for coin, value := range balances {
 					var bond float64
+					balance := value.(map[string]interface{})["balance"]
+					contracts := value.(map[string]interface{})["contracts"]
 					if contracts != nil && len(contracts.([]interface{})) > 0 {
 						for _, contract := range contracts.([]interface{}) {
 							bond += contract.(map[string]interface{})["bond"].(float64)
 						}
 					}
-
-					if balance != nil {
-						return balance.(float64), bond
+					result[coin] = map[string]interface{}{
+						"balance": balance,
+						"bond":    bond,
 					}
 				}
+
+				return result
 			}
-			return -1, -1
+
+			return nil
 
 		} else if o.exchangeType == ExchangeTypeSpot {
 			if recv != nil {
 				funds := recv.(map[string]interface{})["funds"]
 				if funds != nil {
-					balance := funds.(map[string]interface{})["free"]
-					if balance != nil {
-						result, _ := strconv.ParseFloat(balance.(map[string]interface{})[coin].(string), 64)
-						return result, -1
+					balances := funds.(map[string]interface{})["free"].(map[string]interface{})
+					// if balance != nil {
+					// 	result, _ := strconv.ParseFloat(balance.(map[string]interface{})[coin].(string), 64)
+					// 	return result, -1
+					// }
+					result := make(map[string]interface{})
+					for coin, balance := range balances {
+						value, _ := strconv.ParseFloat(balance.(string), 64)
+						result[coin] = map[string]interface{}{
+							"balance": value,
+						}
 					}
+					return result
 				}
 			}
 		}
 
-		return -1, -1
+		return nil
 	case <-time.After(DefaultTimeoutSec * time.Second):
 		log.Printf("Timeout to get user info")
-		return -1, -1
+		return nil
 	}
 
 }

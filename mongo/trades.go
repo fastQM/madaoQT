@@ -6,8 +6,12 @@ import (
 	"time"
 
 	mgo "gopkg.in/mgo.v2"
-	//   bson "gopkg.in/mgo.v2/bson"
+	bson "gopkg.in/mgo.v2/bson"
 )
+
+const TradeStatusOpen = "open"
+const TradeStatusCanceled = "canceled"
+const TradeStatusDone = "done"
 
 type TradesRecord struct {
 	Batch    string    `json:"batch"`
@@ -18,7 +22,7 @@ type TradesRecord struct {
 	Price    float64   `json:"price"`
 	Quantity float64   `json:"quantity"`
 	OrderID  string    `json:"orderid"`
-	Details  string    `json:"detail"`
+	Status   string    `json:"status"`
 }
 
 type Trades struct {
@@ -60,7 +64,27 @@ func (t *Trades) Close() {
 func (t *Trades) Insert(record *TradesRecord) error {
 	if t.session != nil {
 		record.Time = time.Now()
+		record.Status = TradeStatusOpen
 		err := t.collection.Insert(record)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	return nil
+}
+
+func (t *Trades) SetCanceled(orderID string) error {
+	return t.updateStatus(orderID, TradeStatusCanceled)
+}
+
+func (t *Trades) SetDone(orderID string) error {
+	return t.updateStatus(orderID, TradeStatusDone)
+}
+
+func (t *Trades) updateStatus(orderID string, status string) error {
+	if t.session != nil {
+		_, err := t.collection.UpdateAll(bson.M{"orderid": orderID}, bson.M{"$set": bson.M{"status": status}})
 		if err != nil {
 			return err
 		}

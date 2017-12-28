@@ -146,7 +146,7 @@ type TradeConfig struct {
 }
 
 type OrderInfo struct {
-	Coin       string
+	Pair       string
 	OrderID    string
 	Price      float64
 	Amount     float64
@@ -177,7 +177,7 @@ type IExchange interface {
 	GetTickerValue(tag string) *TickerValue
 	WatchEvent() chan EventType
 	GetDepthValue(coin string, price float64, limit float64, orderQuantity float64, tradeType TradeType) *DepthValue
-	GetBalance(coin string) (float64,float64)
+	GetBalance() map[string]interface{}
 	Trade(configs TradeConfig) *TradeResult
 
 	CancelOrder(order OrderInfo) *TradeResult
@@ -334,7 +334,7 @@ func GetRatio(value1 float64, value2 float64) float64 {
 }
 
 // Example: ETH/USDT
-func ParseCoins(pair string) []string {
+func ParsePair(pair string) []string {
 	return strings.Split(pair, "/")
 }
 

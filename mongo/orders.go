@@ -25,7 +25,6 @@ type OrderInfo struct {
 	Coin     string    `json:"coin"`
 	OrderID  string    `json:"orderid"`
 	Status   string    `json:"status"`
-	Details  string    `json:"detail"`
 }
 
 type Orders struct {

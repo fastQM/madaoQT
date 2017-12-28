@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestConfigToJson(t *testing.T) {
+func _TestConfigToJson(t *testing.T) {
 	configJSON := "{\"area\":{\"ltc\":{\"open\":3, \"close\":1.5}}, \"limitclose\":0.03, \"limitopen\":0.005}"
 
 	var config AnalyzerConfig

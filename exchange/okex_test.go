@@ -76,7 +76,7 @@ func _TestOKEXContractTicker(t *testing.T) {
 	}
 }
 
-func TestOKEXCurrentTicker(t *testing.T) {
+func _TestOKEXCurrentTicker(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(InitConfig{
 		Api:    constApiKey,
@@ -85,7 +85,7 @@ func TestOKEXCurrentTicker(t *testing.T) {
 	})
 
 	okex.Start()
-	okex.StartCurrentTicker("btc", "usdt", "btc_current")
+	okex.StartCurrentTicker("btc/usdt", "btc_current")
 
 	counter := 3
 	for {
@@ -132,7 +132,7 @@ func TestGetUserInfo(t *testing.T) {
 		Custom: map[string]interface{}{"exchangeType": ExchangeTypeFuture},
 	})
 	okex.Start()
-	log.Printf("balance:%v", okex.GetBalance("ltc"))
+	log.Printf("balance:%v", okex.GetBalance())
 }
 
 func _TestCancelFutureOrder(t *testing.T) {
@@ -146,7 +146,7 @@ func _TestCancelFutureOrder(t *testing.T) {
 
 	order := OrderInfo{
 		OrderID: "14922014209",
-		Coin:    "ltc_usd",
+		Pair:    "ltc_usd",
 	}
 
 	log.Printf("CancelOrder:%v", okex.CancelOrder(order))
@@ -162,7 +162,7 @@ func _TestSpotCancelOrder(t *testing.T) {
 
 	order := OrderInfo{
 		OrderID: "64274385",
-		Coin:    "ltc_usdt",
+		Pair:    "ltc_usdt",
 	}
 
 	log.Printf("CancelOrder:%v", okex.CancelOrder(order))
@@ -196,15 +196,18 @@ func _TestSpotGetOrderInfo(t *testing.T) {
 		Custom: map[string]interface{}{"exchangeType": ExchangeTypeSpot},
 	})
 
-	configs := map[string]interface{}{
-		"order_id": "-1",
-		"symbol":   "ltc_usdt",
-	}
+	// configs := map[string]interface{}{
+	// 	"order_id": "-1",
+	// 	"symbol":   "ltc_usdt",
+	// }
 
-	log.Printf("OrderInfo:%v", okex.GetOrderInfo(configs))
+	log.Printf("OrderInfo:%v", okex.GetOrderInfo(OrderInfo{
+		OrderID: "-1",
+		Pair:    "ltc/usdt",
+	}))
 }
 
-func TestFutureGetOrderInfo(t *testing.T) {
+func _TestFutureGetOrderInfo(t *testing.T) {
 	okex := new(OKExAPI)
 
 	okex.Init(InitConfig{
@@ -215,12 +218,15 @@ func TestFutureGetOrderInfo(t *testing.T) {
 
 	okex.Start()
 
-	configs := map[string]interface{}{
-		"order_id": "15188890865",
-		"symbol":   "ltc_usd",
-	}
+	// configs := map[string]interface{}{
+	// 	"order_id": "15188890865",
+	// 	"symbol":   "ltc_usd",
+	// }
 
-	log.Printf("OrderInfo:%v", okex.GetOrderInfo(configs))
+	log.Printf("OrderInfo:%v", okex.GetOrderInfo(OrderInfo{
+		OrderID: "-1",
+		Pair:    "ltc/usd",
+	}))
 }
 
 func TestSpotGetUserInfo(t *testing.T) {
@@ -233,8 +239,7 @@ func TestSpotGetUserInfo(t *testing.T) {
 
 	okex.Start()
 
-	log.Printf("Balance:%v", okex.GetBalance("usdt"))
-	log.Printf("Balance:%v", okex.GetBalance("ltc"))
+	log.Printf("Balance:%v", okex.GetBalance())
 }
 
 func _TestGetTradeType(t *testing.T) {

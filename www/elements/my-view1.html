@@ -16,7 +16,16 @@
 
     <div class="card">
       <p>余额以及持仓信息</p>
-      <pre>[[text]]</pre>
+      <template is="dom-repeat" items="{{futureBalances}}">
+        <div>
+          名称[[item.name]] 余额[[item.balance]] 保证金[[item.bond]]
+        </div>
+      </template>
+      <template is="dom-repeat" items="{{spotBalance}}">
+          <div>
+            名称[[item.name]] 余额[[item.balance]]
+          </div>
+        </template>
       <global-services id="globalServices"></global-services>
     </div>
     <div class="card">
@@ -104,8 +113,8 @@
       method="get"
       content-type="application/json"
       handle-as="json"
-      on-response="onResponse"
-      last-response={{balanceResult}}
+      on-response="OnBalanceResponse"
+      last-response={{balanceResponse}}
       debounce-duration="60000" id="getBalances"></iron-ajax>
 
     <iron-ajax
@@ -127,18 +136,29 @@
           text: String,
           response:String,
           trades: Array,
-          balanceResult: String,
+          balanceResponse: String,
+
+          futureBalances: Array,
+          spotBalance: Array,
         }
       }
 
       ready(){
         super.ready();
         this.$.getTrades.generateRequest();
+        this.$.getBalances.generateRequest();
       }
 
       onResponse(){
         if(this.response.result){
           this.trades = this.response.data
+        }
+      }
+
+      OnBalanceResponse(){
+        if(this.balanceResponse.result){
+          this.futureBalances = this.balanceResponse.data.futures
+          this.spotBalance = this.balanceResponse.data.spots
         }
       }
     }

@@ -2,7 +2,6 @@ package task
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"time"
@@ -58,9 +57,8 @@ var TaskErrorMsg = map[TaskErrorType]string{
 }
 
 type TradeResult struct {
-	Error    TaskErrorType
-	Balance  float64 // 成交后余额
-	AvgPrice float64 // 成交均价
+	Error      TaskErrorType
+	DealAmount float64 // 已成交金额，如果部分成交，需要将该部分平仓
 }
 
 type TaskExplanation struct {
@@ -132,11 +130,10 @@ func (t *TaskHotLoad) ExitTask() {
 
 func ProcessTradeRoutine(exchange Exchange.IExchange,
 	tradeConfig Exchange.TradeConfig,
-	dbTrades *Mongo.Trades,
-	dbOrders *Mongo.Orders) chan TradeResult {
+	dbTrades *Mongo.Trades) chan TradeResult {
 
-	var balance float64 // 实际余额后台返回为准
-	coin := Exchange.ParseCoins(tradeConfig.Coin)[0]
+	// var balance interface{} // 实际余额后台返回为准
+	// coin := Exchange.ParsePair(tradeConfig.Coin)[0]
 	channel := make(chan TradeResult)
 	stopTime := time.Now().Add(1 * time.Minute)
 
@@ -145,7 +142,8 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 	go func() {
 		defer close(channel)
 
-		var dealAmount, totalCost, avePrice float64
+		// var dealAmount, totalCost, avePrice float64
+		var dealAmount float64
 		var trade *Exchange.TradeResult
 		var depthInvalidCount int
 		var errorCode TaskErrorType
@@ -172,7 +170,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 				Logger.Debugf("无操作价格:%v", depth)
 				depthInvalidCount++
 				/*
-					连续十次无法达到操作价格，则退出平仓
+					连续十次无法达到操作价格，则退出
 				*/
 				if depthInvalidCount > 10 {
 					errorCode = TaskInvalidDepth
@@ -198,7 +196,6 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 				Quantity: depth.LimitTradeAmount,
 				Price:    depth.LimitTradePrice,
 				OrderID:  trade.OrderID,
-				Details:  fmt.Sprintf("%v", trade),
 			}); err != nil {
 				Logger.Errorf("保存交易操作失败:%v", err)
 			}
@@ -212,26 +209,26 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 					info := exchange.GetOrderInfo(Exchange.OrderInfo{
 						OrderID: trade.OrderID,
-						Coin:    tradeConfig.Coin,
+						Pair:    tradeConfig.Coin,
 					})
 
-					if len(info) == 0 {
-						Logger.Error("暂未取得订单信息")
+					if info == nil || len(info) == 0 {
+						Logger.Error("未取得订单信息")
 						continue
 					}
 
-					dbOrders.Insert(&Mongo.OrderInfo{
-						Batch:    tradeConfig.Batch,
-						Exchange: exchange.GetExchangeName(),
-						Coin:     tradeConfig.Coin,
-						OrderID:  trade.OrderID,
-						Status:   Exchange.OrderStatusString[info[0].Status],
-						Details:  fmt.Sprintf("%v", info[0]),
-					})
+					// dbOrders.Insert(&Mongo.OrderInfo{
+					// 	Batch:    tradeConfig.Batch,
+					// 	Exchange: exchange.GetExchangeName(),
+					// 	Coin:     tradeConfig.Coin,
+					// 	OrderID:  trade.OrderID,
+					// 	Status:   Exchange.OrderStatusString[info[0].Status],
+					// })
 
 					if info[0].Status == Exchange.OrderStatusDone {
 						dealAmount += info[0].DealAmount
-						totalCost += (info[0].AvgPrice * info[0].DealAmount) //手续费如何？
+						// totalCost += (info[0].AvgPrice * info[0].DealAmount) //手续费如何？
+						dbTrades.SetDone(trade.OrderID)
 						goto __CheckDealAmount
 					}
 
@@ -242,47 +239,51 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 						Logger.Debugf("超时，取消订单...")
 						// cancle the order, if it is traded when we cancle?
 						trade := exchange.CancelOrder(Exchange.OrderInfo{
-							Coin:    tradeConfig.Coin,
+							Pair:    tradeConfig.Coin,
 							OrderID: info[0].OrderID,
 						})
 
-						if err := dbTrades.Insert(&Mongo.TradesRecord{
-							Batch:   tradeConfig.Batch,
-							Oper:    Exchange.TradeTypeString[Exchange.TradeTypeCancel],
-							OrderID: trade.OrderID,
-							// Details: fmt.Sprintf("%v", trade),
-						}); err != nil {
-							Logger.Errorf("保存交易操作失败:%v", err)
-						}
+						// if err := dbTrades.Insert(&Mongo.TradesRecord{
+						// 	Batch:   tradeConfig.Batch,
+						// 	Oper:    Exchange.TradeTypeString[Exchange.TradeTypeCancel],
+						// 	OrderID: trade.OrderID,
+						// 	// Details: fmt.Sprintf("%v", trade),
+						// }); err != nil {
+						// 	Logger.Errorf("保存交易操作失败:%v", err)
+						// }
 
 						if trade != nil && trade.Error == nil {
 
 							info := exchange.GetOrderInfo(Exchange.OrderInfo{
 								OrderID: trade.OrderID,
-								Coin:    tradeConfig.Coin,
+								Pair:    tradeConfig.Coin,
 							})
 
-							dbOrders.Insert(&Mongo.OrderInfo{
-								Batch:    tradeConfig.Batch,
-								Exchange: exchange.GetExchangeName(),
-								Coin:     tradeConfig.Coin,
-								OrderID:  trade.OrderID,
-								Status:   Exchange.OrderStatusString[info[0].Status],
-								// Details:  fmt.Sprintf("%v", info[0]),
-							})
+							if info == nil || len(info) == 0 {
+								Logger.Error("未取得订单信息")
+								goto __ERROR
+							}
+
+							dbTrades.SetCanceled(trade.OrderID)
+
+							// dbOrders.Insert(&Mongo.OrderInfo{
+							// 	Batch:    tradeConfig.Batch,
+							// 	Exchange: exchange.GetExchangeName(),
+							// 	Coin:     tradeConfig.Coin,
+							// 	OrderID:  trade.OrderID,
+							// 	Status:   Exchange.OrderStatusString[info[0].Status],
+							// 	// Details:  fmt.Sprintf("%v", info[0]),
+							// })
 
 							dealAmount += info[0].DealAmount
-							totalCost += (info[0].AvgPrice * info[0].DealAmount)
+							// totalCost += (info[0].AvgPrice * info[0].DealAmount)
 							Logger.Debugf("成功取消订单：%v, 已成交金额:%v", info[0].OrderID, dealAmount)
-
 							goto __CheckDealAmount
 
 						} else {
 							Logger.Errorf("取消订单：%v失败，请手动操作", info[0].OrderID)
-
 							errorCode = TaskUnableCancelOrder
 							goto __ERROR
-							return
 						}
 					}
 				}
@@ -293,27 +294,26 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 			}
 
 		__ERROR:
-			balance, _ = exchange.GetBalance(coin)
 			channel <- TradeResult{
-				Error:   errorCode,
-				Balance: balance,
+				Error:      errorCode,
+				DealAmount: dealAmount,
 			}
 
 			return
 		__CheckBalance:
-			balance, _ = exchange.GetBalance(coin)
-			avePrice = totalCost / dealAmount
-			Logger.Debugf("交易完成，余额：%v 成交均价：%v", balance, avePrice)
+			// balance = exchange.GetBalance()[coin]
+			// avePrice = totalCost / dealAmount
+			// Logger.Debugf("交易完成，余额：%v 成交均价：%v", balance, avePrice)
 			channel <- TradeResult{
-				Error:    TaskErrorSuccess,
-				Balance:  balance,
-				AvgPrice: avePrice,
+				Error: TaskErrorSuccess,
+				// Balance:  balance.(map[string]interface{})["balance"].(float64),
+				// AvgPrice: avePrice,
 			}
 			return
 
 		__CheckDealAmount:
 			Logger.Debugf("已成交:%v 总量:%v", dealAmount, tradeConfig.Amount)
-			if tradeConfig.Amount-dealAmount > 0.01 {
+			if tradeConfig.Amount-dealAmount >= 0.01 {
 				goto _NEXTLOOP
 			}
 			// else
@@ -355,16 +355,11 @@ func TranslateToContractNumber(price float64, coinQuantity float64) int {
 	静态加载的任务
 */
 
-type IConfig interface {
-	ReadJSON(interface{}) error
-}
-
 type ITask interface {
 	GetTaskName() string
 	GetDefaultConfig() interface{}
 	GetBalances() map[string]interface{}
 	GetTrades() []Mongo.TradesRecord
-	GetOrders() []Mongo.OrderInfo
 	Start(api string, secret string, configJSON string) error
 	Close()
 }

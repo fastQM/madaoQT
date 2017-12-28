@@ -9,6 +9,9 @@ import (
 	Utils "madaoQT/utils"
 )
 
+const constOKEXApiKey = "a982120e-8505-41db-9ae3-0c62dd27435c"
+const constOEXSecretKey = "71430C7FA63A067724FB622FB3031970"
+
 const pair = "ltc/usdt"
 
 func _TestProcessFutureTrade(t *testing.T) {
@@ -38,7 +41,7 @@ func _TestProcessFutureTrade(t *testing.T) {
 		Price:  tickerValue.Last,
 		Amount: 1,
 		Limit:  0.003,
-	}, nil, nil)
+	}, nil)
 
 	select {
 	case result := <-resultChan:
@@ -73,7 +76,7 @@ func _TestProcessSpotTrade(t *testing.T) {
 		Price:  tickerValue.Last,
 		Amount: 0.01,
 		Limit:  0.003,
-	}, nil, nil)
+	}, nil)
 
 	select {
 	case result := <-resultChan:
