@@ -3,6 +3,7 @@
 <link rel="import" href="../bower_components/vaadin-grid/vaadin-grid.html">
 <link rel="import" href="shared-styles.html">
 <link rel="import" href="global-services.html">
+<link rel="import" href="history-charts.html">
 
 <dom-module id="my-view1">
   <template>
@@ -13,6 +14,10 @@
         padding: 10px;
       }
     </style>
+
+    <div class="card">
+      <history-chart></history-chart>
+    </div>
 
     <div class="card">
       <p>余额以及持仓信息</p>
