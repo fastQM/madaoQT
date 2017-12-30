@@ -52,7 +52,7 @@ func (t *ExchangeDB) Insert(record *ExchangeInfo) error {
 		}
 		return nil
 	}
-	return nil
+	return errors.New("Connection is lost")
 }
 
 func (t *ExchangeDB) FindOne(name string) (error, *ExchangeInfo) {

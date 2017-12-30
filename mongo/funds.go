@@ -70,7 +70,7 @@ func (t *Funds) Insert(record *FundInfo) error {
 		}
 		return nil
 	}
-	return nil
+	return errors.New("Connection is lost")
 }
 
 func (t *Funds) Update(conditions map[string]interface{}, update map[string]interface{}) error {
@@ -81,7 +81,7 @@ func (t *Funds) Update(conditions map[string]interface{}, update map[string]inte
 		}
 		return nil
 	}
-	return nil
+	return errors.New("Connection is lost")
 }
 
 func (t *Funds) FindAll() (error, []FundInfo) {

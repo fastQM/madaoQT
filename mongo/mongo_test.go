@@ -14,7 +14,7 @@ func _TestLoadingCharts(t *testing.T) {
 	}
 }
 
-func _TestInsertTradeRecord(t *testing.T) {
+func TestInsertTradeRecord(t *testing.T) {
 	tradesDB := new(Trades)
 	err := tradesDB.Connect()
 	if err == nil {

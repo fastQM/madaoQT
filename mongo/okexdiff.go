@@ -6,6 +6,7 @@ import (
 	"time"
 
 	mgo "gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 )
 
 type DiffValue struct {
@@ -51,6 +52,7 @@ func (t *OKExDiff) Connect() error {
 func (t *OKExDiff) Close() {
 	if t.session != nil {
 		t.session.Close()
+		t.session = nil
 	}
 }
 
@@ -62,19 +64,18 @@ func (t *OKExDiff) Insert(record DiffValue) error {
 		}
 		return nil
 	}
-	return nil
+	return errors.New("Connection is lost")
 }
 
-func (t *OKExDiff) FindAll() (error, []DiffValue) {
+func (t *OKExDiff) FindAll(filter map[string]interface{}) ([]DiffValue, error) {
 	var result []DiffValue
 	if t.session != nil {
-		err := t.collection.Find(nil).All(&result)
+		err := t.collection.Find(bson.M(filter)).All(&result)
 		if err != nil {
-			return err, nil
+			return nil, err
 		}
-
-		return nil, result
+		return result, nil
 	}
 
-	return errors.New("Connection is lost"), nil
+	return nil, errors.New("Connection is lost")
 }

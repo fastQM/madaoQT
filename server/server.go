@@ -75,6 +75,7 @@ func (h *HttpServer) setupSessions() {
 func (h *HttpServer) setupControllers() {
 
 	h.app.Controller("/helloworld", new(Controllers.HelloWorldController))
+	h.app.Controller("/charts", new(Controllers.ChartsController))
 	h.app.Controller("/user", &Controllers.UserController{Sessions: h.sess})
 	h.app.Controller("/task", &Controllers.TaskController{Sessions: h.sess, Tasks: h.Tasks})
 	h.app.Controller("/exchange", &Controllers.ExchangeController{Sessions: h.sess, Exchanges: h.exchanges})
