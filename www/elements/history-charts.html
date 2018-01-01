@@ -9,7 +9,7 @@
         <div id="volumns" style="height:200px"></div>
         <div id="diffs" style="height:200px"></div>
         <iron-ajax
-            url="/charts/btc"
+            url="/charts/eth"
             method="get"
             content-type="application/json"
             handle-as="json"
@@ -51,7 +51,7 @@
                     },
                     xAxis:{
                         categories: times,
-                        minTickInterval: 1000,
+                        minTickInterval: 2000,
                         startOnTick: true,
                     },
                     yAxis: {
@@ -110,7 +110,7 @@
                     },
                     xAxis:{
                         categories: times,
-                        minTickInterval: 1000,
+                        minTickInterval: 2000,
                         startOnTick: true,
                     },
                     yAxis: {
@@ -188,7 +188,7 @@
                     },
                     xAxis:{
                         categories: times,
-                        minTickInterval: 1000,
+                        minTickInterval: 2000,
                         startOnTick: true,
                     },
                     series: [{

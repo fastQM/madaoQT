@@ -18,7 +18,7 @@ type TradesRecord struct {
 	Time     time.Time `json:"time"`
 	Oper     string    `json:"oper"`
 	Exchange string    `json:"exchange"`
-	Coin     string    `json:"coin"`
+	Pair     string    `json:"pair"`
 	Price    float64   `json:"price"`
 	Quantity float64   `json:"quantity"`
 	OrderID  string    `json:"orderid"`

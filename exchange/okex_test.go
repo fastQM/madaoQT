@@ -124,7 +124,7 @@ func _TestFutureTrade(t *testing.T) {
 
 }
 
-func TestGetUserInfo(t *testing.T) {
+func _TestGetUserInfo(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.Init(InitConfig{
 		Api:    constApiKey,

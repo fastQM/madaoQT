@@ -158,7 +158,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 			}
 
 			// 1. 根据深度情况计算价格下单
-			depth = exchange.GetDepthValue(tradeConfig.Coin,
+			depth = exchange.GetDepthValue(tradeConfig.Pair,
 				tradeConfig.Price,
 				tradeConfig.Limit,
 				tradeConfig.Amount-dealAmount,
@@ -182,7 +182,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 			depthInvalidCount = 0
 
 			trade = exchange.Trade(Exchange.TradeConfig{
-				Coin:   tradeConfig.Coin,
+				Pair:   tradeConfig.Pair,
 				Type:   tradeConfig.Type,
 				Amount: tradeConfig.Amount - dealAmount,
 				Price:  depth.LimitTradePrice,
@@ -192,7 +192,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 				Batch:    tradeConfig.Batch,
 				Oper:     Exchange.TradeTypeString[tradeConfig.Type],
 				Exchange: exchange.GetExchangeName(),
-				Coin:     tradeConfig.Coin,
+				Pair:     tradeConfig.Pair,
 				Quantity: depth.LimitTradeAmount,
 				Price:    depth.LimitTradePrice,
 				OrderID:  trade.OrderID,
@@ -209,7 +209,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 					info := exchange.GetOrderInfo(Exchange.OrderInfo{
 						OrderID: trade.OrderID,
-						Pair:    tradeConfig.Coin,
+						Pair:    tradeConfig.Pair,
 					})
 
 					if info == nil || len(info) == 0 {
@@ -239,7 +239,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 						Logger.Debugf("超时，取消订单...")
 						// cancle the order, if it is traded when we cancle?
 						trade := exchange.CancelOrder(Exchange.OrderInfo{
-							Pair:    tradeConfig.Coin,
+							Pair:    tradeConfig.Pair,
 							OrderID: info[0].OrderID,
 						})
 
@@ -256,7 +256,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 							info := exchange.GetOrderInfo(Exchange.OrderInfo{
 								OrderID: trade.OrderID,
-								Pair:    tradeConfig.Coin,
+								Pair:    tradeConfig.Pair,
 							})
 
 							if info == nil || len(info) == 0 {

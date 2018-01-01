@@ -1,9 +1,9 @@
 package exchange
 
 import (
-	"time"
 	"encoding/json"
 	"strings"
+	"time"
 
 	Utils "madaoQT/utils"
 )
@@ -18,7 +18,7 @@ func (b *BittrexAPI) Init() {
 
 	var counter int
 	// get ticker
-	go func(){
+	go func() {
 		for {
 			select {
 			case <-time.After(1 * time.Second):
@@ -38,20 +38,20 @@ func (b *BittrexAPI) ticker(pair string) {
 	// log.Printf("URL:%s", url)
 	data, err := Utils.HttpGet(url, nil)
 	if err != nil {
-		Logger.Errorf("fail to http request:%v", err);
+		logger.Errorf("fail to http request:%v", err)
 		return
 	}
 
 	var records map[string]interface{}
 	if err = json.Unmarshal(data, &records); err != nil {
-		Logger.Errorf("Fail to Unmarshal:%v", err)
+		logger.Errorf("Fail to Unmarshal:%v", err)
 		return
 	}
 
 	// log.Printf("record:%v", records)
 
 	if !records["success"].(bool) {
-		Logger.Error("Fail to get ticker")
+		logger.Error("Fail to get ticker")
 		return
 	}
 
@@ -62,7 +62,7 @@ func (b *BittrexAPI) ticker(pair string) {
 	if b.tickerList != nil {
 		for i, ticker := range b.tickerList {
 			if ticker.Name == pair {
-				b.tickerList[i].Value = values;
+				b.tickerList[i].Value = values
 				break
 			}
 		}
@@ -70,14 +70,13 @@ func (b *BittrexAPI) ticker(pair string) {
 
 }
 
-
 // USDT-BTC
 func (b *BittrexAPI) AddTicker(coinA string, coinB string, tag string) {
 	pair := (strings.ToUpper(coinA) + "-" + strings.ToUpper(coinB))
 
 	// log.Printf("Pair:%v", pair)
 	ticker := TickerListItem{
-		Tag: tag,
+		Tag:  tag,
 		Name: pair,
 	}
 
@@ -85,7 +84,7 @@ func (b *BittrexAPI) AddTicker(coinA string, coinB string, tag string) {
 }
 
 func (b *BittrexAPI) GetExchangeName() string {
-	return "Bittrex";
+	return "Bittrex"
 }
 
 func (b *BittrexAPI) GetTickerValue(tag string) map[string]interface{} {

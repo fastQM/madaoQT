@@ -271,15 +271,15 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 	// }
 
 	Logger.Info("启动OKEx合约监视程序")
-	futureExchange := Exchange.NewOKExFutureApi(&Exchange.InitConfig{
-		Api:    api,
+	futureExchange := Exchange.NewOKExFutureApi(&Exchange.Config{
+		API:    api,
 		Secret: secret,
 	}) // 交易需要api
 	futureExchange.Start()
 
 	Logger.Info("启动OKEx现货监视程序")
-	spotExchange := Exchange.NewOKExSpotApi(&Exchange.InitConfig{
-		Api:    api,
+	spotExchange := Exchange.NewOKExSpotApi(&Exchange.Config{
+		API:    api,
 		Secret: secret,
 	})
 	spotExchange.Start()
@@ -337,19 +337,25 @@ func (a *IAnalyzer) Watch() {
 	for key := range a.config.Area {
 		coinName := key + "/usdt"
 
-		valuefuture := a.future.GetTickerValue(coinName + "future")
+		valueFuture := a.future.GetTickerValue(coinName + "future")
 		valueCurrent := a.spot.GetTickerValue(coinName + "spot")
-		Logger.Debugf("Current Coin:%v spot:%v future:%v", coinName, valueCurrent, valuefuture)
-		difference := (valuefuture.Last - valueCurrent.Last) * 100 / valueCurrent.Last
+
+		if valueFuture == nil || valueCurrent == nil {
+			Logger.Errorf("not valid ticker")
+			return
+		}
+
+		Logger.Debugf("Current Coin:%v spot:%v future:%v", coinName, valueCurrent, valueFuture)
+		difference := (valueFuture.Last - valueCurrent.Last) * 100 / valueCurrent.Last
 		msg := fmt.Sprintf("币种:%s, 合约价格：%.2f, 现货价格：%.2f, 价差：%.2f%%",
-			coinName, valuefuture.Last, valueCurrent.Last, difference)
+			coinName, valueFuture.Last, valueCurrent.Last, difference)
 
 		a.diffDB.Insert(Mongo.DiffValue{
 			Coin:         key,
 			SpotPrice:    valueCurrent.Last,
 			SpotVolume:   valueCurrent.Volume,
-			FuturePrice:  valuefuture.Last,
-			FutureVolume: valuefuture.Volume,
+			FuturePrice:  valueFuture.Last,
+			FutureVolume: valueFuture.Volume,
 			Diff:         difference,
 			Time:         time.Now(),
 		})
@@ -358,29 +364,29 @@ func (a *IAnalyzer) Watch() {
 
 		a.wsPublish("okexdiff", msg)
 
-		if a.checkPosition(coinName, valuefuture.Last, valueCurrent.Last) {
+		if a.checkPosition(coinName, valueFuture.Last, valueCurrent.Last) {
 			Logger.Info("持仓中...不做交易")
 			continue
 		}
 
-		if valuefuture != nil && valueCurrent != nil {
+		if valueFuture != nil && valueCurrent != nil {
 			if math.Abs(difference) > a.config.Area[key].Open {
-				if valuefuture.Last > valueCurrent.Last {
+				if valueFuture.Last > valueCurrent.Last {
 					Logger.Info("卖出合约，买入现货")
 
 					batch := Utils.GetRandomHexString(12)
 
 					a.placeOrdersByQuantity(a.future, Exchange.TradeConfig{
 						Batch:  batch,
-						Coin:   coinName,
+						Pair:   coinName,
 						Type:   Exchange.TradeTypeOpenShort,
-						Price:  valuefuture.Last,
+						Price:  valueFuture.Last,
 						Amount: 5,
 						Limit:  a.config.LimitOpen,
 					},
 						a.spot, Exchange.TradeConfig{
 							Batch:  batch,
-							Coin:   coinName,
+							Pair:   coinName,
 							Type:   Exchange.TradeTypeBuy,
 							Price:  valueCurrent.Last,
 							Amount: 50 / valueCurrent.Last,
@@ -394,15 +400,15 @@ func (a *IAnalyzer) Watch() {
 
 					a.placeOrdersByQuantity(a.future, Exchange.TradeConfig{
 						Batch:  batch,
-						Coin:   coinName,
+						Pair:   coinName,
 						Type:   Exchange.TradeTypeOpenLong,
-						Price:  valuefuture.Last,
+						Price:  valueFuture.Last,
 						Amount: 5,
 						Limit:  a.config.LimitOpen,
 					},
 						a.spot, Exchange.TradeConfig{
 							Batch:  batch,
-							Coin:   coinName,
+							Pair:   coinName,
 							Type:   Exchange.TradeTypeSell,
 							Price:  valueCurrent.Last,
 							Amount: 50 / valueCurrent.Last,
@@ -464,7 +470,7 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 	channelFuture := ProcessTradeRoutine(future, futureConfig, a.tradeDB)
 	channelSpot := ProcessTradeRoutine(spot, spotConfig, a.tradeDB)
 
-	pair := Exchange.ParsePair(futureConfig.Coin)
+	pair := Exchange.ParsePair(futureConfig.Pair)
 	a.fund.OpenPosition(Exchange.ExchangeTypeFuture, future, futureConfig.Batch, pair[0], futureConfig.Type)
 	a.fund.OpenPosition(Exchange.ExchangeTypeSpot, spot, spotConfig.Batch, pair[0], spotConfig.Type)
 
@@ -608,7 +614,7 @@ func (a *IAnalyzer) checkPosition(coin string, futurePrice float64, spotPrice fl
 						Logger.Info("平仓完成")
 						delete(a.ops, index)
 
-						pair := Exchange.ParsePair(op.futureConfig.Coin)
+						pair := Exchange.ParsePair(op.futureConfig.Pair)
 						a.fund.ClosePosition(Exchange.ExchangeTypeFuture, a.future, op.futureConfig.Batch, pair[0])
 						a.fund.ClosePosition(Exchange.ExchangeTypeSpot, a.spot, op.spotConfig.Batch, pair[0])
 

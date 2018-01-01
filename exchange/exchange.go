@@ -7,45 +7,64 @@ import (
 	"github.com/kataras/golog"
 )
 
-/*
-	初始化日志句柄
-*/
-var Logger *golog.Logger
+// Logger: the handler of the module global logger
+var logger *golog.Logger
 
 func init() {
-	logger := golog.New()
-	Logger = logger
-	Logger.SetLevel("debug")
-	Logger.SetTimeFormat("2006-01-02 06:04:05")
+	_logger := golog.New()
+	logger = _logger
+	logger.SetLevel("debug")
+	logger.SetTimeFormat("2006-01-02 06:04:05")
 }
 
-/* 交易类型：买，卖，开多，开空，平多，平空 */
+// ExchangeType the type of the exchange, spot or the future exchange
 type ExchangeType int8
+
+// EventType the type of the event, for example, notify the application that the connection with the exchange is lost
 type EventType int8
+
+// TradeType the type of the trading, for example: buy, sell, openlong, openshort, closelong, closeshort
 type TradeType int8
+
+// OrderStatusType the type of the order status, for example: open, partial-done, done
 type OrderStatusType int8
 
 const (
+	// ExchangeTypeFuture the exchange for future-contract trading
 	ExchangeTypeFuture ExchangeType = iota
+	// ExchangeTypeSpot the exchange for spot trading
 	ExchangeTypeSpot
 )
 
 const (
+	// EventConnected the event that the exchange is connected
 	EventConnected EventType = iota
-	EventError
+	// EventLostConnection the event that the connection is in lost
+	EventLostConnection
+	// EventNum the common error
+	EventNum
 )
 
 const (
+	// TradeTypeOpenLong the OpenLong trade type of the future
 	TradeTypeOpenLong TradeType = iota
+	// TradeTypeOpenShort the OpenShort trade type of the future
 	TradeTypeOpenShort
+	// TradeTypeCloseLong the CloseLong trade type of the future
 	TradeTypeCloseLong
+	// TradeTypeCloseShort the CloseShort trade type of the future
 	TradeTypeCloseShort
+	// TradeTypeBuy the buy trade of the spot
 	TradeTypeBuy
+	// TradeTypeSell the sell trade of the spot
 	TradeTypeSell
+	// TradeTypeCancel the cancel trade of the future/spot
 	TradeTypeCancel
+	// TradeTypeUnknown the error type
 	TradeTypeUnknown
 )
 
+// TradeTypeString the string description of the trade type
 var TradeTypeString = map[TradeType]string{
 	TradeTypeOpenLong:   "OpenLong",
 	TradeTypeOpenShort:  "OpenShort",
@@ -58,14 +77,21 @@ var TradeTypeString = map[TradeType]string{
 }
 
 const (
+	// OrderStatusOpen the open status of an order
 	OrderStatusOpen OrderStatusType = iota
+	// OrderStatusPartDone the part-done status of an order
 	OrderStatusPartDone
+	// OrderStatusDone the done status of an order
 	OrderStatusDone
+	// OrderStatusCanceling the canceling status of an order
 	OrderStatusCanceling
+	// OrderStatusCanceled the canceled status of an order
 	OrderStatusCanceled
+	// OrderStatusUnknown the error status
 	OrderStatusUnknown
 )
 
+// OrderStatusString the string description of the status of the order
 var OrderStatusString = map[OrderStatusType]string{
 	OrderStatusOpen:      "Open",
 	OrderStatusPartDone:  "PartDone",
@@ -75,26 +101,33 @@ var OrderStatusString = map[OrderStatusType]string{
 	OrderStatusUnknown:   "Unknown_OrderStatus",
 }
 
-type InitConfig struct {
-	Api    string
+// Config the configuration of the exchange
+type Config struct {
+	// API the api key of the exchange
+	API string
+	// Secret the secret key of the exchange
 	Secret string
+	// Ticker the applicatio should implement this interface to receive the information of the ticker of the exchange
 	Ticker ITicker
+	// custom configuration of the exchange
 	Custom map[string]interface{}
 }
 
 type ITicker interface {
-	Ticker(exchange string, value TickerValue)
+	Ticker(exchange string, pair string, value TickerValue)
 }
 
 type TickerListItem struct {
-	Tag    string // 用户调用者匹配
-	Name   string // 用户交易所匹配
+	// Tag used to get the ticker of the corresponding the pair/coin
+	Tag string
+	// Name the symbol in the exchange
+	Name   string
 	Time   string
-	Period string // 合约周期
+	Period string
 	Value  interface{}
 
-	ticket    int64
-	oldticket int64
+	ticket    uint64
+	oldticket uint64
 }
 
 type DepthListItem struct {
@@ -136,7 +169,7 @@ type TickerValue struct {
 
 type TradeConfig struct {
 	Batch string
-	Coin  string
+	Pair  string
 
 	/* buy or sell */
 	Type   TradeType
@@ -167,31 +200,45 @@ type DepthPrice struct {
 	qty   float64
 }
 
+// IExchange the interface of a exchange
 type IExchange interface {
+	// GetExchangeName() the function to get the name of the exchange
 	GetExchangeName() string
-	Init(config InitConfig)
-	Start()
+	// SetConfigure()
+	SetConfigure(config Config) error
+	// WatchEvent() return a channel which notified the application of the event triggered by exchange
+	WatchEvent() chan EventType
+
+	// Start() prepare the connection to the exchange
+	Start() error
+	// Close() close the connection to the exchange and other handles
 	Close()
 
-	// AddTicker(coinA string, coinB string, config interface{}, tag string)
-	GetTickerValue(tag string) *TickerValue
-	WatchEvent() chan EventType
-	GetDepthValue(coin string, price float64, limit float64, orderQuantity float64, tradeType TradeType) *DepthValue
-	GetBalance() map[string]interface{}
-	Trade(configs TradeConfig) *TradeResult
+	// StartTicker() send message to the exchange to start the ticker of the given pairs
+	StartTicker(pairs []string)
+	// GetTicker(), better to use the ITicker to notify the ticker information
+	GetTicker(pair string) *TickerValue
 
+	// GetDepthValue() get the depth of the assigned price area and quantity
+	GetDepthValue(pair string, price float64, limit float64, orderQuantity float64, tradeType TradeType) *DepthValue
+	// GetBalance() get the balances of all the coins
+	GetBalance() map[string]interface{}
+
+	// Trade() trade as the configs
+	Trade(configs TradeConfig) *TradeResult
+	// CancelOrder() cancel the order as the order information
 	CancelOrder(order OrderInfo) *TradeResult
+	// GetOrderInfo() get the information with order filter
 	GetOrderInfo(filter OrderInfo) []OrderInfo
 }
 
+// RevertTradeType the "close" operation of the original trading
 func RevertTradeType(tradeType TradeType) TradeType {
 	switch tradeType {
 	case TradeTypeOpenLong:
 		return TradeTypeCloseLong
 	case TradeTypeOpenShort:
 		return TradeTypeCloseShort
-	// case TradeTypeCloseLong:
-	// case TradeTypeCloseShort:
 	case TradeTypeBuy:
 		return TradeTypeSell
 	case TradeTypeSell:
@@ -293,7 +340,7 @@ func GetDepthPriceByPrice(items []DepthPrice, price float64, limit float64, quan
 
 	limitPriceHigh := price * (1 + limit)
 	limitPriceLow := price * (1 - limit)
-	Logger.Debugf("有效价格范围：%v-%v", limitPriceLow, limitPriceHigh)
+	logger.Debugf("有效价格范围：%v-%v", limitPriceLow, limitPriceHigh)
 
 	var tradePrice float64
 	var tradeQuantity float64
@@ -309,12 +356,12 @@ func GetDepthPriceByPrice(items []DepthPrice, price float64, limit float64, quan
 			}
 
 		} else {
-			Logger.Debugf("超出价格范围")
+			logger.Debugf("超出价格范围")
 			break
 		}
 	}
 
-	Logger.Debugf("限价价格：%v 限价数量：%v", tradePrice, tradeQuantity)
+	logger.Debugf("限价价格：%v 限价数量：%v", tradePrice, tradeQuantity)
 	return tradePrice, tradeQuantity
 }
 
@@ -337,32 +384,3 @@ func GetRatio(value1 float64, value2 float64) float64 {
 func ParsePair(pair string) []string {
 	return strings.Split(pair, "/")
 }
-
-type Exchanges struct {
-	exchanges map[string]IExchange
-}
-
-// func (e *Exchanges) Init() {
-// 	/* add exchange list */
-// 	okexfuture := new(OKExAPI)
-// 	okexfuture.Init(InitConfig{
-// 		Api:    constOKEXApiKey,
-// 		Secret: constOEXSecretKey,
-// 		Custom: map[string]interface{}{"tradeType": ExchangeTypeFuture},
-// 	})
-
-// 	e.exchanges[okexfuture.GetExchangeName()] = okexfuture
-
-// 	okexspot := new(OKExAPI)
-// 	okexspot.Init(InitConfig{
-// 		Api:    constOKEXApiKey,
-// 		Secret: constOEXSecretKey,
-// 		Custom: map[string]interface{}{"tradeType": ExchangeTypeSpot},
-// 	})
-
-// 	e.exchanges[okexfuture.GetExchangeName()] = okexspot
-// }
-
-// func (e *Exchanges) Start() {
-
-// }

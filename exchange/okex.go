@@ -12,36 +12,14 @@ import (
 	"sync"
 	"time"
 
-	websocket "github.com/gorilla/websocket"
+	Websocket "github.com/gorilla/websocket"
 )
 
 const NameOKEXSpot = "OkexSpot"
 const NameOKEXFuture = "OkexFuture"
 
-const contractUrl = "wss://real.okex.com:10440/websocket/okexapi"
-const currentUrl = "wss://real.okex.com:10441/websocket"
-
-const X_BTC = "btc"
-const X_LTC = "ltc"
-const X_ETH = "eth"
-
-const Y_THIS_WEEK = "this_week"
-const Y_NEXT_WEEK = "next_week"
-const Y_QUARTER = "quarter"
-
-const Z_1min = "1min"
-const Z_3min = "3min"
-const Z_5min = "5min"
-const Z_15min = "15min"
-const Z_30min = "30min"
-const Z_1hour = "1hour"
-const Z_2hour = "2hour"
-const Z_4hour = "4hour"
-const Z_6hour = "6hour"
-const Z_12hour = "12hour"
-const Z_day = "day"
-const Z_3day = "3day"
-const Z_week = "week"
+const future__ENDPoint = "wss://real.okex.com:10440/websocket/okexapi"
+const spot__ENDPoint = "wss://real.okex.com:10441/websocket"
 
 // event
 const EventAddChannel = "addChannel"
@@ -52,10 +30,10 @@ const ChannelContractTicker = "ok_sub_futureusd_X_ticker_Y"
 const ChannelContractDepth = "ok_sub_futureusd_X_depth_Y_Z"
 
 const ChannelLogin = "login"
-const ChannelContractTrade = "ok_futureusd_trade"
-const ChannelContractTradeCancel = "ok_futureusd_cancel_order"
-const ChannelUserInfo = "ok_futureusd_userinfo"
-const ChannelOrderInfo = "ok_futureusd_orderinfo"
+const ChannelFutureTrade = "ok_futureusd_trade"
+const ChannelFutureCancelOrder = "ok_futureusd_cancel_order"
+const ChannelFutureUserInfo = "ok_futureusd_userinfo"
+const ChannelFutureOrderInfo = "ok_futureusd_orderinfo"
 const ChannelSubTradesInfo = "ok_sub_futureusd_trades"
 const ChannelSubUserInfo = "ok_sub_futureusd_userinfo"
 const ChannelSubPositions = "ok_sub_futureusd_positions"
@@ -86,7 +64,7 @@ const (
 type OKExAPI struct {
 	Ticker ITicker
 
-	conn      *websocket.Conn
+	conn      *Websocket.Conn
 	apiKey    string
 	secretKey string
 
@@ -110,27 +88,27 @@ func formatTimeOKEX() string {
 const constOKEXApiKey = "a982120e-8505-41db-9ae3-0c62dd27435c"
 const constOEXSecretKey = "71430C7FA63A067724FB622FB3031970"
 
-func NewOKExFutureApi(config *InitConfig) *OKExAPI {
+func NewOKExFutureApi(config *Config) *OKExAPI {
 
 	if config == nil {
-		config = &InitConfig{}
+		config = &Config{}
 	}
 
 	config.Custom = map[string]interface{}{"exchangeType": ExchangeTypeFuture}
 	future := new(OKExAPI)
-	future.Init(*config)
+	future.SetConfigure(*config)
 	return future
 }
 
-func NewOKExSpotApi(config *InitConfig) *OKExAPI {
+func NewOKExSpotApi(config *Config) *OKExAPI {
 
 	if config == nil {
-		config = &InitConfig{}
+		config = &Config{}
 	}
 
 	config.Custom = map[string]interface{}{"exchangeType": ExchangeTypeSpot}
 	spot := new(OKExAPI)
-	spot.Init(*config)
+	spot.SetConfigure(*config)
 
 	return spot
 
@@ -144,50 +122,50 @@ func (o *OKExAPI) triggerEvent(event EventType) {
 	o.event <- event
 }
 
-func (o *OKExAPI) Init(config InitConfig) {
+func (o *OKExAPI) SetConfigure(config Config) {
 
 	o.Ticker = config.Ticker
 	o.tickerList = nil
 	o.depthList = nil
 	o.event = make(chan EventType)
-	o.apiKey = config.Api
+	o.apiKey = config.API
 	o.secretKey = config.Secret
 	o.exchangeType = config.Custom["exchangeType"].(ExchangeType)
 
 	if o.apiKey == "" || o.secretKey == "" {
-		Logger.Debug("没有配置API，不可执行交易操作")
+		logger.Debug("没有配置API，不可执行交易操作")
 	}
 }
 
-func (o *OKExAPI) Start() {
+func (o *OKExAPI) Start() error {
 
 	var url string
 
 	if o.exchangeType == ExchangeTypeFuture {
-		url = contractUrl
+		url = future__ENDPoint
 	} else if o.exchangeType == ExchangeTypeSpot {
-		url = currentUrl
+		url = spot__ENDPoint
 	} else {
-		Logger.Error("Invalid type")
-		return
+		return errors.New("Invalid exchange type")
 	}
 
-	c, _, err := websocket.DefaultDialer.Dial(url, nil)
+	c, _, err := Websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
-		Logger.Errorf("Fail to dial: %v", err)
-		go o.triggerEvent(EventError)
-		return
+		errMsg := fmt.Sprintf("Fail to dial: %v", err)
+		go o.triggerEvent(EventLostConnection)
+		return errors.New(errMsg)
 	}
 
 	go func() {
 		for {
 			_, message, err := c.ReadMessage()
 			if err != nil {
-				Logger.Errorf("Fail to read:%v", err)
-				go o.triggerEvent(EventError)
+				logger.Errorf("Fail to read:%v", err)
+				go o.triggerEvent(EventLostConnection)
 				return
 			}
 
+			// to log the trade command
 			if Debug {
 				filters := []string{
 					"depth",
@@ -202,22 +180,22 @@ func (o *OKExAPI) Start() {
 				}
 
 				if !filtered {
-					Logger.Debugf("recv: %s", message)
+					logger.Debugf("[RECV]%s", message)
 				}
 
 			}
 
 			var response []map[string]interface{}
 			if err = json.Unmarshal([]byte(message), &response); err != nil {
-				Logger.Errorf("Fail to Unmarshal:%v", err)
+				logger.Errorf("Fail to Unmarshal:%v", err)
 				continue
 			}
 
 			channel := response[0]["channel"].(string)
 
 			if channel == EventAddChannel || channel == EventRemoveChannel {
-
-			} else if channel == ChannelUserInfo || channel == ChannelSpotUserInfo {
+				// the response of some command
+			} else if channel == ChannelFutureUserInfo || channel == ChannelSpotUserInfo {
 				if recvChan, ok := o.messageChannels.Load(channel); recvChan != nil && ok {
 					data := response[0]["data"].(map[string]interface{})
 					if data != nil && data["result"] == true {
@@ -228,18 +206,18 @@ func (o *OKExAPI) Start() {
 							o.messageChannels.Delete(channel)
 						}()
 					} else if data["result"] == false {
-						Logger.Errorf("Response Error: %s", message)
-						goto END
+						logger.Errorf("Response Error: %s", message)
+						goto __END
 					}
 				}
 			} else {
-				// 处理下单取消订单
+				// 1. 处理下单取消订单
 				acceptChannels := []string{
-					ChannelOrderInfo,
-					// ChannelUserInfo,
-					ChannelSubTradesInfo,
-					ChannelContractTrade,
-					ChannelContractTradeCancel,
+					ChannelFutureOrderInfo,
+					// ChannelFutureUserInfo,
+					// ChannelSubTradesInfo,
+					ChannelFutureTrade,
+					ChannelFutureCancelOrder,
 					ChannelSpotOrder,
 					ChannelSpotCancelOrder,
 					// ChannelSpotUserInfo,
@@ -256,27 +234,23 @@ func (o *OKExAPI) Start() {
 							}
 						}()
 
-						goto END
+						goto __END
 					}
 				}
 
-				// 处理期货价格深度
+				// 2. 处理期货价格深度
 				if recvChan, ok := o.messageChannels.Load(channel); recvChan != nil && ok {
 
 					/*
 						1. OKEX will send the message periodly, and if we remove the channel, the socket will be closed;
-						2. There is possiblity that more than single routine will be called at the same time, so we will need to remove the channel here
+						2. There is possiblity that multiple routines will be called at the same time, so we will need to remove the channel here
 					*/
 					o.messageChannels.Delete(channel)
 
 					data := response[0]["data"].(map[string]interface{})
-
-					// unitTime := time.Unix(int64(data["timestamp"].(float64))/1000, 0)
-					// timeHM := unitTime.Format("2006-01-02 03:04:05")
-					// o.depthList[i].Time = timeHM
-					if data["asks"] == nil {
-						log.Printf("Recv Invalid data from %s:%v", o.GetExchangeName(), response)
-						goto END
+					if data["asks"] == nil || data["bids"] == nil {
+						logger.Errorf("Invalid depth data:%v", response)
+						goto __END
 					}
 
 					go func() {
@@ -284,10 +258,10 @@ func (o *OKExAPI) Start() {
 						close(recvChan.(chan interface{}))
 					}()
 
-					goto END
+					goto __END
 				}
 
-				// 处理现货价格
+				// 3. 处理现货价格
 				if o.tickerList != nil {
 					for i, ticker := range o.tickerList {
 						if ticker.Name == channel {
@@ -302,15 +276,15 @@ func (o *OKExAPI) Start() {
 								Time: formatTimeOKEX(),
 							}
 							if o.Ticker != nil {
-								o.Ticker.Ticker(o.GetExchangeName(), tickerValue)
+								o.Ticker.Ticker(o.GetExchangeName(), ticker.Tag, tickerValue)
 							}
-							goto END
+							goto __END
 						}
 					}
 				}
 			}
 
-		END:
+		__END:
 		}
 
 	}()
@@ -318,6 +292,8 @@ func (o *OKExAPI) Start() {
 	o.conn = c
 
 	go o.triggerEvent(EventConnected)
+
+	return nil
 
 }
 
@@ -329,7 +305,7 @@ func (o *OKExAPI) Close() {
 
 /*
 ① X值为：btc, ltc
-② Y值为：this_week, next_week, quarter
+② Y值为：this_week
 */
 func (o *OKExAPI) StartContractTicker(pair string, period string, tag string) {
 
@@ -394,7 +370,9 @@ func (o *OKExAPI) GetTickerValue(tag string) *TickerValue {
 			if ticker.Value != nil {
 				// return ticker.Value.(map[string]interface{})
 				if ticker.oldticket == ticker.ticket {
-					Logger.Errorf("[%s][%s]Ticker数据未更新", o.GetExchangeName(), ticker.Name)
+					logger.Errorf("[%s][%s]Ticker数据未更新", o.GetExchangeName(), ticker.Name)
+					o.triggerEvent(EventLostConnection)
+					return nil
 				} else {
 					ticker.oldticket = ticker.ticket
 				}
@@ -500,7 +478,7 @@ func (o *OKExAPI) GetDepthValue(coin string, price float64, limit float64, order
 		// defer o.SwitchCurrentDepth(false, coinA, coinB, "20")
 	}
 
-	// o.depthList = append(o.depthList, DepthListItem{
+	// o.depthList = app__END(o.depthList, DepthListItem{
 	// 	Name: channel,
 	// })
 
@@ -643,7 +621,7 @@ func (o *OKExAPI) command(data map[string]string, parameters map[string]string) 
 		log.Printf("Cmd:%v", string(cmd))
 	}
 
-	o.conn.WriteMessage(websocket.TextMessage, cmd)
+	o.conn.WriteMessage(Websocket.TextMessage, cmd)
 
 	return nil
 }
@@ -673,11 +651,11 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 	var channel string
 	var data, parameters map[string]string
 
-	coins := ParsePair(configs.Coin)
+	coins := ParsePair(configs.Pair)
 
 	if o.exchangeType == ExchangeTypeFuture {
 
-		channel = ChannelContractTrade
+		channel = ChannelFutureTrade
 
 		parameters = map[string]string{
 			"api_key":       o.apiKey,
@@ -753,7 +731,7 @@ func (o *OKExAPI) CancelOrder(order OrderInfo) *TradeResult {
 
 	if o.exchangeType == ExchangeTypeFuture {
 
-		channel = ChannelContractTradeCancel
+		channel = ChannelFutureCancelOrder
 
 		parameters = map[string]string{
 			"api_key":       o.apiKey,
@@ -819,7 +797,7 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 
 	if o.exchangeType == ExchangeTypeFuture {
 
-		channel = ChannelOrderInfo
+		channel = ChannelFutureOrderInfo
 
 		parameters = map[string]string{
 			"api_key": o.apiKey,
@@ -904,7 +882,7 @@ func (o *OKExAPI) GetBalance() map[string]interface{} {
 	var data, parameters map[string]string
 
 	if o.exchangeType == ExchangeTypeFuture {
-		channel = ChannelUserInfo
+		channel = ChannelFutureUserInfo
 
 	} else if o.exchangeType == ExchangeTypeSpot {
 		channel = ChannelSpotUserInfo
@@ -1063,6 +1041,6 @@ func (o *OKExAPI) getTradeTypeString(orderType TradeType) string {
 		return "sell"
 	}
 
-	Logger.Errorf("[%s]getTradeType: Invalid type", o.GetExchangeName())
+	logger.Errorf("[%s]getTradeType: Invalid type", o.GetExchangeName())
 	return ""
 }
