@@ -5,13 +5,11 @@ import (
 
 	"github.com/kataras/iris"
 
-	"github.com/kataras/iris/mvc"
-
 	Mongo "madaoQT/mongo"
 )
 
 type ChartsController struct {
-	mvc.C
+	Ctx iris.Context
 }
 
 //

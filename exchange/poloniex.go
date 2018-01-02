@@ -1,10 +1,10 @@
 package exchange
 
 import (
-	"time"
-	"log"
 	"encoding/json"
+	"log"
 	"strings"
+	"time"
 
 	Utils "madaoQT/utils"
 )
@@ -15,7 +15,7 @@ type PoloniexAPI struct {
 
 func (p *PoloniexAPI) Init() {
 
-	go func(){
+	go func() {
 		for {
 			select {
 			case <-time.After(5 * time.Second):
@@ -28,7 +28,7 @@ func (p *PoloniexAPI) Init() {
 func (p *PoloniexAPI) ticker() {
 	data, err := Utils.HttpGet("https://poloniex.com/public?command=returnTicker", nil)
 	if err != nil {
-		log.Printf("Fail to get ticker");
+		log.Printf("Fail to get ticker")
 		return
 	}
 
@@ -43,7 +43,7 @@ func (p *PoloniexAPI) ticker() {
 	if p.tickerList != nil {
 		for i, ticker := range p.tickerList {
 			for k, v := range records {
-				if ticker.Name == k {
+				if ticker.Symbol == k {
 					// log.Printf("COMP:%v|%v", k, v)
 					p.tickerList[i].Value = v
 					break
@@ -58,21 +58,21 @@ func (p *PoloniexAPI) AddTicker(coinA string, coinB string, tag string) {
 	pair := (strings.ToUpper(coinA) + "_" + strings.ToUpper(coinB))
 
 	// log.Printf("Pair:%v", pair)
-	ticker := TickerListItem {
-		Tag: tag,
-		Name: pair,
+	ticker := TickerListItem{
+		Pair:   tag,
+		Symbol: pair,
 	}
 
 	p.tickerList = append(p.tickerList, ticker)
 }
 
 func (p *PoloniexAPI) GetExchangeName() string {
-	return "Poloniex";
+	return "Poloniex"
 }
 
 func (p *PoloniexAPI) GetTickerValue(tag string) map[string]interface{} {
 	for _, ticker := range p.tickerList {
-		if ticker.Tag == tag {
+		if ticker.Pair == tag {
 			if ticker.Value != nil {
 				return ticker.Value.(map[string]interface{})
 			}

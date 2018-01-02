@@ -10,7 +10,7 @@ import (
 )
 
 type UserController struct {
-	mvc.C
+	Ctx      iris.Context
 	Sessions *sessions.Sessions `iris:"persistence"`
 	// [ Your fields here ]
 	// Request lifecycle data

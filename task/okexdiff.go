@@ -298,11 +298,14 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 				if event == Exchange.EventConnected {
 					for k := range a.config.Area {
 						k = (k + "/usdt")
-						futureExchange.StartContractTicker(k, "this_week", k+"future")
+						// futureExchange.StartContractTicker(k, "this_week", k+"future")
+						futureExchange.StartTicker(k, map[string]interface{}{
+							"period": "this_week",
+						})
 					}
 					a.future = Exchange.IExchange(futureExchange)
 
-				} else if event == Exchange.EventError {
+				} else if event == Exchange.EventLostConnection {
 					futureExchange.Start()
 				}
 			case event := <-spotExchange.WatchEvent():
@@ -310,11 +313,11 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 
 					for k := range a.config.Area {
 						k = (k + "/usdt")
-						spotExchange.StartCurrentTicker(k, k+"spot")
+						spotExchange.StartTicker(k, nil)
 					}
 
 					a.spot = spotExchange
-				} else if event == Exchange.EventError {
+				} else if event == Exchange.EventLostConnection {
 					spotExchange.Start()
 				}
 			case <-time.After(10 * time.Second):
@@ -337,8 +340,8 @@ func (a *IAnalyzer) Watch() {
 	for key := range a.config.Area {
 		coinName := key + "/usdt"
 
-		valueFuture := a.future.GetTickerValue(coinName + "future")
-		valueCurrent := a.spot.GetTickerValue(coinName + "spot")
+		valueFuture := a.future.GetTicker(coinName)
+		valueCurrent := a.spot.GetTicker(coinName)
 
 		if valueFuture == nil || valueCurrent == nil {
 			Logger.Errorf("not valid ticker")

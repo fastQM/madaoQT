@@ -118,10 +118,10 @@ type ITicker interface {
 }
 
 type TickerListItem struct {
-	// Tag used to get the ticker of the corresponding the pair/coin
-	Tag string
+	// Pair used to get the ticker of the corresponding the pair/coin
+	Pair string
 	// Name the symbol in the exchange
-	Name   string
+	Symbol string
 	Time   string
 	Period string
 	Value  interface{}
@@ -205,7 +205,7 @@ type IExchange interface {
 	// GetExchangeName() the function to get the name of the exchange
 	GetExchangeName() string
 	// SetConfigure()
-	SetConfigure(config Config) error
+	SetConfigure(config Config)
 	// WatchEvent() return a channel which notified the application of the event triggered by exchange
 	WatchEvent() chan EventType
 
@@ -215,7 +215,7 @@ type IExchange interface {
 	Close()
 
 	// StartTicker() send message to the exchange to start the ticker of the given pairs
-	StartTicker(pairs []string)
+	StartTicker(pair string, option map[string]interface{})
 	// GetTicker(), better to use the ITicker to notify the ticker information
 	GetTicker(pair string) *TickerValue
 

@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/kataras/iris"
-	"github.com/kataras/iris/mvc"
 	"github.com/kataras/iris/sessions"
 
 	Mongo "madaoQT/mongo"
@@ -14,7 +13,7 @@ import (
 )
 
 type TaskController struct {
-	mvc.C
+	Ctx iris.Context
 
 	// [ Your fields here ]
 	// Request lifecycle data

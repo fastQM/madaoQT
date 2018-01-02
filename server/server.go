@@ -7,6 +7,7 @@ import (
 	"github.com/gorilla/securecookie"
 	"github.com/kataras/golog"
 	"github.com/kataras/iris"
+	"github.com/kataras/iris/mvc"
 	"github.com/kataras/iris/sessions"
 
 	Config "madaoQT/config"
@@ -74,11 +75,17 @@ func (h *HttpServer) setupSessions() {
 
 func (h *HttpServer) setupControllers() {
 
-	h.app.Controller("/helloworld", new(Controllers.HelloWorldController))
-	h.app.Controller("/charts", new(Controllers.ChartsController))
-	h.app.Controller("/user", &Controllers.UserController{Sessions: h.sess})
-	h.app.Controller("/task", &Controllers.TaskController{Sessions: h.sess, Tasks: h.Tasks})
-	h.app.Controller("/exchange", &Controllers.ExchangeController{Sessions: h.sess, Exchanges: h.exchanges})
+	// h.app.Controller("/helloworld", new(Controllers.HelloWorldController))
+	// h.app.Controller("/charts", new(Controllers.ChartsController))
+	// h.app.Controller("/user", &Controllers.UserController{Sessions: h.sess})
+	// h.app.Controller("/task", &Controllers.TaskController{Sessions: h.sess, Tasks: h.Tasks})
+	// h.app.Controller("/exchange", &Controllers.ExchangeController{Sessions: h.sess, Exchanges: h.exchanges})
+	mvc.New(h.app.Party("/helloworld")).Handle(new(Controllers.HelloWorldController))
+	mvc.New(h.app.Party("/charts")).Handle(new(Controllers.ChartsController))
+	mvc.New(h.app.Party("/user")).Handle(&Controllers.UserController{Sessions: h.sess})
+	mvc.New(h.app.Party("/task")).Handle(&Controllers.TaskController{Sessions: h.sess, Tasks: h.Tasks})
+	mvc.New(h.app.Party("/exchange")).Handle(&Controllers.ExchangeController{Sessions: h.sess, Exchanges: h.exchanges})
+
 }
 
 func (h *HttpServer) SetupHttpServer() {
@@ -121,7 +128,7 @@ func (h *HttpServer) SetupHttpServer() {
 // }
 
 func (h *HttpServer) setupExchanges() {
-	okexspot := Exchange.NewOKExSpotApi(&Exchange.InitConfig{
+	okexspot := Exchange.NewOKExSpotApi(&Exchange.Config{
 		Ticker: Exchange.ITicker(h.ws),
 	})
 
@@ -137,9 +144,9 @@ func (h *HttpServer) setupExchanges() {
 			select {
 			case event := <-okexspot.WatchEvent():
 				if event == Exchange.EventConnected {
-					okexspot.StartCurrentTicker("ltc/usdt", "hello")
+					okexspot.StartTicker("ltc/usdt", nil)
 
-				} else if event == Exchange.EventError {
+				} else if event == Exchange.EventLostConnection {
 					okexspot.Start()
 				}
 			}

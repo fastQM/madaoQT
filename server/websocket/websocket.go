@@ -53,8 +53,8 @@ func (w *WebsocketServer) Broadcast(room string, msg interface{}) {
 	}
 }
 
-func (w *WebsocketServer) Ticker(exchange string, tickerValue Exchange.TickerValue) {
-	w.Broadcast("", fmt.Sprintf("%v", tickerValue))
+func (w *WebsocketServer) Ticker(exchange string, pair string, tickerValue Exchange.TickerValue) {
+	w.Broadcast("", fmt.Sprintf("[%s][%s]%v", exchange, pair, tickerValue))
 }
 
 func (w *WebsocketServer) Publish(topic string, msg string) {

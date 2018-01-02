@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"github.com/kataras/iris"
-	"github.com/kataras/iris/mvc"
 	"github.com/kataras/iris/sessions"
 
 	Exchange "madaoQT/exchange"
@@ -10,8 +9,7 @@ import (
 )
 
 type ExchangeController struct {
-	mvc.C
-
+	Ctx iris.Context
 	// [ Your fields here ]
 	// Request lifecycle data
 	// Models

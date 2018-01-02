@@ -135,6 +135,7 @@ func (o *OKExAPI) SetConfigure(config Config) {
 	if o.apiKey == "" || o.secretKey == "" {
 		logger.Debug("没有配置API，不可执行交易操作")
 	}
+
 }
 
 func (o *OKExAPI) Start() error {
@@ -264,7 +265,7 @@ func (o *OKExAPI) Start() error {
 				// 3. 处理现货价格
 				if o.tickerList != nil {
 					for i, ticker := range o.tickerList {
-						if ticker.Name == channel {
+						if ticker.Symbol == channel {
 							// o.tickerList[i].Time = timeHM
 							o.tickerList[i].Value = response[0]["data"]
 							o.tickerList[i].ticket++
@@ -276,7 +277,7 @@ func (o *OKExAPI) Start() error {
 								Time: formatTimeOKEX(),
 							}
 							if o.Ticker != nil {
-								o.Ticker.Ticker(o.GetExchangeName(), ticker.Tag, tickerValue)
+								o.Ticker.Ticker(o.GetExchangeName(), ticker.Pair, tickerValue)
 							}
 							goto __END
 						}
@@ -297,26 +298,79 @@ func (o *OKExAPI) Start() error {
 
 }
 
+// Close close all handles and free the resources
 func (o *OKExAPI) Close() {
 	if o.conn != nil {
 		o.conn.Close()
 	}
 }
 
-/*
-① X值为：btc, ltc
-② Y值为：this_week
-*/
-func (o *OKExAPI) StartContractTicker(pair string, period string, tag string) {
+// StartContractTicker start the ticker
+// ① X值为：btc, ltc
+// ② Y值为：this_week
+// func (o *OKExAPI) StartContractTicker(pair string, period string, tag string) {
 
-	coins := ParsePair(pair)
+// 	coins := ParsePair(pair)
 
-	channel := strings.Replace(ChannelContractTicker, "X", coins[0], 1)
-	channel = strings.Replace(channel, "Y", period, 1)
+// 	channel := strings.Replace(ChannelContractTicker, "X", coins[0], 1)
+// 	channel = strings.Replace(channel, "Y", period, 1)
+
+// 	ticker := TickerListItem{
+// 		Pair:   tag,
+// 		Symbol: channel,
+// 	}
+
+// 	o.tickerList = append(o.tickerList, ticker)
+
+// 	data := map[string]string{
+// 		"event":   "addChannel",
+// 		"channel": channel,
+// 	}
+
+// 	o.command(data, nil)
+// }
+
+// // StartCurrentTicker start the ticker
+// // ① X值为：ltc_btc eth_btc etc_btc bch_btc btc_usdt
+// // eth_usdt ltc_usdt etc_usdt bch_usdt etc_eth bt1_btc
+// // bt2_btc btg_btc qtum_btc hsr_btc neo_btc gas_btc
+// // qtum_usdt hsr_usdt neo_usdt gas_usdt
+// func (o *OKExAPI) StartCurrentTicker(pair string, tag string) {
+// 	coins := ParsePair(pair)
+// 	channel := strings.Replace(ChannelCurrentChannelTicker, "X", coins[0]+"_"+coins[1], 1)
+
+// 	ticker := TickerListItem{
+// 		Pair:   tag,
+// 		Symbol: channel,
+// 	}
+
+// 	o.tickerList = append(o.tickerList, ticker)
+
+// 	data := map[string]string{
+// 		"event":   "addChannel",
+// 		"channel": channel,
+// 	}
+
+// 	o.command(data, nil)
+// }
+
+func (o *OKExAPI) StartTicker(pair string, option map[string]interface{}) {
+
+	var coins []string
+	var channel string
+	if o.exchangeType == ExchangeTypeFuture {
+		coins = ParsePair(pair)
+
+		channel = strings.Replace(ChannelContractTicker, "X", coins[0], 1)
+		channel = strings.Replace(channel, "Y", option["period"].(string), 1)
+	} else if o.exchangeType == ExchangeTypeSpot {
+		coins = ParsePair(pair)
+		channel = strings.Replace(ChannelCurrentChannelTicker, "X", coins[0]+"_"+coins[1], 1)
+	}
 
 	ticker := TickerListItem{
-		Tag:  tag,
-		Name: channel,
+		Pair:   pair,
+		Symbol: channel,
 	}
 
 	o.tickerList = append(o.tickerList, ticker)
@@ -329,31 +383,7 @@ func (o *OKExAPI) StartContractTicker(pair string, period string, tag string) {
 	o.command(data, nil)
 }
 
-/*
-① X值为：ltc_btc eth_btc etc_btc bch_btc btc_usdt
-eth_usdt ltc_usdt etc_usdt bch_usdt etc_eth bt1_btc
-bt2_btc btg_btc qtum_btc hsr_btc neo_btc gas_btc
-qtum_usdt hsr_usdt neo_usdt gas_usdt
-*/
-func (o *OKExAPI) StartCurrentTicker(pair string, tag string) {
-	coins := ParsePair(pair)
-	channel := strings.Replace(ChannelCurrentChannelTicker, "X", coins[0]+"_"+coins[1], 1)
-
-	ticker := TickerListItem{
-		Tag:  tag,
-		Name: channel,
-	}
-
-	o.tickerList = append(o.tickerList, ticker)
-
-	data := map[string]string{
-		"event":   "addChannel",
-		"channel": channel,
-	}
-
-	o.command(data, nil)
-}
-
+// GetExchangeName get the name of the exchanges
 func (o *OKExAPI) GetExchangeName() string {
 	if o.exchangeType == ExchangeTypeFuture {
 		return NameOKEXFuture
@@ -364,26 +394,21 @@ func (o *OKExAPI) GetExchangeName() string {
 	return "Invalid Exchange type"
 }
 
-func (o *OKExAPI) GetTickerValue(tag string) *TickerValue {
+func (o *OKExAPI) GetTicker(pair string) *TickerValue {
 	for _, ticker := range o.tickerList {
-		if ticker.Tag == tag {
+		if ticker.Pair == pair {
 			if ticker.Value != nil {
 				// return ticker.Value.(map[string]interface{})
 				if ticker.oldticket == ticker.ticket {
-					logger.Errorf("[%s][%s]Ticker数据未更新", o.GetExchangeName(), ticker.Name)
+					logger.Errorf("[%s][%s]Ticker数据未更新", o.GetExchangeName(), ticker.Pair)
 					o.triggerEvent(EventLostConnection)
 					return nil
-				} else {
-					ticker.oldticket = ticker.ticket
 				}
 
+				ticker.oldticket = ticker.ticket
+
 				tmp := ticker.Value.(map[string]interface{})
-				// if o.exchangeType == ExchangeTypeFuture {
-				// 	lastValue = tmp["last"].(float64)
-				// } else if o.exchangeType == ExchangeTypeSpot {
-				// 	value, _ := strconv.ParseFloat(tmp["last"].(string), 64)
-				// 	lastValue = value
-				// }
+
 				lastValue, _ := strconv.ParseFloat(tmp["last"].(string), 64)
 				volume, _ := strconv.ParseFloat(tmp["vol"].(string), 64)
 
@@ -1043,4 +1068,9 @@ func (o *OKExAPI) getTradeTypeString(orderType TradeType) string {
 
 	logger.Errorf("[%s]getTradeType: Invalid type", o.GetExchangeName())
 	return ""
+}
+
+var okexTradeTypeString = map[TradeType]string{
+	TradeTypeOpenLong:  "1",
+	TradeTypeOpenShort: "2",
 }

@@ -23,7 +23,7 @@ func (b *BittrexAPI) Init() {
 			select {
 			case <-time.After(1 * time.Second):
 				if counter < len(b.tickerList) {
-					b.ticker(b.tickerList[counter].Name)
+					b.ticker(b.tickerList[counter].Pair)
 					counter++
 				} else {
 					counter = 0
@@ -61,7 +61,7 @@ func (b *BittrexAPI) ticker(pair string) {
 
 	if b.tickerList != nil {
 		for i, ticker := range b.tickerList {
-			if ticker.Name == pair {
+			if ticker.Pair == pair {
 				b.tickerList[i].Value = values
 				break
 			}
@@ -76,8 +76,8 @@ func (b *BittrexAPI) AddTicker(coinA string, coinB string, tag string) {
 
 	// log.Printf("Pair:%v", pair)
 	ticker := TickerListItem{
-		Tag:  tag,
-		Name: pair,
+		Pair:   tag,
+		Symbol: pair,
 	}
 
 	b.tickerList = append(b.tickerList, ticker)
@@ -87,9 +87,9 @@ func (b *BittrexAPI) GetExchangeName() string {
 	return "Bittrex"
 }
 
-func (b *BittrexAPI) GetTickerValue(tag string) map[string]interface{} {
+func (b *BittrexAPI) GetTicker(pair string) map[string]interface{} {
 	for _, ticker := range b.tickerList {
-		if ticker.Tag == tag {
+		if ticker.Pair == pair {
 			if ticker.Value != nil {
 				return ticker.Value.(map[string]interface{})
 			}
