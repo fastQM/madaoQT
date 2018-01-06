@@ -126,8 +126,8 @@ type TickerListItem struct {
 	Period string
 	Value  interface{}
 
-	ticket    uint64
-	oldticket uint64
+	tickerCount uint64
+	oldCount    uint64
 }
 
 type DepthListItem struct {

@@ -336,25 +336,25 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 
 func (a *IAnalyzer) Watch() {
 
-	// for coinName, _ := range a.coins {
-	for key := range a.config.Area {
-		coinName := key + "/usdt"
+	// for pair, _ := range a.coins {
+	for coin := range a.config.Area {
+		pair := coin + "/usdt"
 
-		valueFuture := a.future.GetTicker(coinName)
-		valueCurrent := a.spot.GetTicker(coinName)
+		valueFuture := a.future.GetTicker(pair)
+		valueCurrent := a.spot.GetTicker(pair)
 
 		if valueFuture == nil || valueCurrent == nil {
 			Logger.Errorf("not valid ticker")
 			return
 		}
 
-		Logger.Debugf("Current Coin:%v spot:%v future:%v", coinName, valueCurrent, valueFuture)
+		Logger.Debugf("Current Coin:%v spot:%v future:%v", pair, valueCurrent, valueFuture)
 		difference := (valueFuture.Last - valueCurrent.Last) * 100 / valueCurrent.Last
 		msg := fmt.Sprintf("币种:%s, 合约价格：%.2f, 现货价格：%.2f, 价差：%.2f%%",
-			coinName, valueFuture.Last, valueCurrent.Last, difference)
+			pair, valueFuture.Last, valueCurrent.Last, difference)
 
 		a.diffDB.Insert(Mongo.DiffValue{
-			Coin:         key,
+			Coin:         coin,
 			SpotPrice:    valueCurrent.Last,
 			SpotVolume:   valueCurrent.Volume,
 			FuturePrice:  valueFuture.Last,
@@ -367,13 +367,13 @@ func (a *IAnalyzer) Watch() {
 
 		a.wsPublish("okexdiff", msg)
 
-		if a.checkPosition(coinName, valueFuture.Last, valueCurrent.Last) {
+		if a.checkPosition(coin, valueFuture.Last, valueCurrent.Last) {
 			Logger.Info("持仓中...不做交易")
 			continue
 		}
 
 		if valueFuture != nil && valueCurrent != nil {
-			if math.Abs(difference) > a.config.Area[key].Open {
+			if math.Abs(difference) > a.config.Area[coin].Open {
 				if valueFuture.Last > valueCurrent.Last {
 					Logger.Info("卖出合约，买入现货")
 
@@ -381,7 +381,7 @@ func (a *IAnalyzer) Watch() {
 
 					a.placeOrdersByQuantity(a.future, Exchange.TradeConfig{
 						Batch:  batch,
-						Pair:   coinName,
+						Pair:   pair,
 						Type:   Exchange.TradeTypeOpenShort,
 						Price:  valueFuture.Last,
 						Amount: 5,
@@ -389,7 +389,7 @@ func (a *IAnalyzer) Watch() {
 					},
 						a.spot, Exchange.TradeConfig{
 							Batch:  batch,
-							Pair:   coinName,
+							Pair:   pair,
 							Type:   Exchange.TradeTypeBuy,
 							Price:  valueCurrent.Last,
 							Amount: 50 / valueCurrent.Last,
@@ -403,7 +403,7 @@ func (a *IAnalyzer) Watch() {
 
 					a.placeOrdersByQuantity(a.future, Exchange.TradeConfig{
 						Batch:  batch,
-						Pair:   coinName,
+						Pair:   pair,
 						Type:   Exchange.TradeTypeOpenLong,
 						Price:  valueFuture.Last,
 						Amount: 5,
@@ -411,7 +411,7 @@ func (a *IAnalyzer) Watch() {
 					},
 						a.spot, Exchange.TradeConfig{
 							Batch:  batch,
-							Pair:   coinName,
+							Pair:   pair,
 							Type:   Exchange.TradeTypeSell,
 							Price:  valueCurrent.Last,
 							Amount: 50 / valueCurrent.Last,

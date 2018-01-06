@@ -133,7 +133,7 @@ func (o *OKExAPI) SetConfigure(config Config) {
 	o.exchangeType = config.Custom["exchangeType"].(ExchangeType)
 
 	if o.apiKey == "" || o.secretKey == "" {
-		logger.Debug("没有配置API，不可执行交易操作")
+		logger.Debug("The current connection doesn`t support trading without API")
 	}
 
 }
@@ -161,6 +161,7 @@ func (o *OKExAPI) Start() error {
 		for {
 			_, message, err := c.ReadMessage()
 			if err != nil {
+				c.Close()
 				logger.Errorf("Fail to read:%v", err)
 				go o.triggerEvent(EventLostConnection)
 				return
@@ -268,7 +269,7 @@ func (o *OKExAPI) Start() error {
 						if ticker.Symbol == channel {
 							// o.tickerList[i].Time = timeHM
 							o.tickerList[i].Value = response[0]["data"]
-							o.tickerList[i].ticket++
+							o.tickerList[i].tickerCount++
 
 							tmp := o.tickerList[i].Value.(map[string]interface{})
 							lastValue, _ := strconv.ParseFloat(tmp["last"].(string), 64)
@@ -395,17 +396,29 @@ func (o *OKExAPI) GetExchangeName() string {
 }
 
 func (o *OKExAPI) GetTicker(pair string) *TickerValue {
-	for _, ticker := range o.tickerList {
+
+	const PermitRetryCount = 10
+
+	for index, ticker := range o.tickerList {
+		logger.Debugf("%v %v", ticker.Pair, pair)
 		if ticker.Pair == pair {
 			if ticker.Value != nil {
 				// return ticker.Value.(map[string]interface{})
-				if ticker.oldticket == ticker.ticket {
-					logger.Errorf("[%s][%s]Ticker数据未更新", o.GetExchangeName(), ticker.Pair)
-					o.triggerEvent(EventLostConnection)
-					return nil
-				}
+				// logger.Debugf("Value:%v", ticker)
+				// if (ticker.oldCount-ticker.tickerCount >= 0) && (ticker.oldCount-ticker.tickerCount) < PermitRetryCount {
+				// 	logger.Errorf("[%s][%s]Ticker数据未更新", o.GetExchangeName(), ticker.Pair)
+				// 	o.tickerList[index].oldCount++
 
-				ticker.oldticket = ticker.ticket
+				// } else if (ticker.oldCount - ticker.tickerCount) >= PermitRetryCount {
+				// 	o.triggerEvent(EventLostConnection)
+				// 	logger.Debugf("here2")
+				// 	return nil
+				// }
+				logger.Debugf("here3")
+
+				logger.Debugf("[%s], ticker:%v previous:%v", o.GetExchangeName(), ticker.tickerCount, ticker.oldCount)
+
+				o.tickerList[index].oldCount = ticker.tickerCount
 
 				tmp := ticker.Value.(map[string]interface{})
 

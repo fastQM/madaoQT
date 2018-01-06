@@ -5,10 +5,10 @@ import (
 )
 
 func TestBinanceStreamTrade(t *testing.T) {
-	binance := new(Binance)
+	// binance := new(Binance)
 
-	binance.Start()
+	// binance.Start()
 
-	select {}
+	// select {}
 
 }
