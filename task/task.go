@@ -308,6 +308,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 				Error: TaskErrorSuccess,
 				// Balance:  balance.(map[string]interface{})["balance"].(float64),
 				// AvgPrice: avePrice,
+				DealAmount: dealAmount,
 			}
 			return
 

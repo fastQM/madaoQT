@@ -64,7 +64,7 @@ func (w *WebsocketServer) Publish(topic string, msg string) {
 func (w *WebsocketServer) handleConnection(c websocket.Connection) {
 
 	c.OnMessage(func(msg []byte) {
-		Logger.Debugf("recv:%s from:%s", msg, c.ID())
+		Logger.Debugf("recv:%s", msg)
 		data := ParseRequestMsg(string(msg))
 		if data != nil {
 			if data.Cmd == CmdTypeSubscribe && data.Data != nil {

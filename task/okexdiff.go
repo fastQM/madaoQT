@@ -336,7 +336,9 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 
 func (a *IAnalyzer) Watch() {
 
-	// for pair, _ := range a.coins {
+	// var orderAmount = 50
+	// var orderFutureQuantity = orderAmount / 10
+
 	for coin := range a.config.Area {
 		pair := coin + "/usdt"
 
@@ -461,21 +463,21 @@ func (a *IAnalyzer) Close() {
 func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfig Exchange.TradeConfig,
 	spot Exchange.IExchange, spotConfig Exchange.TradeConfig) {
 
-	if true {
-		return
-	}
+	// if true {
+	// 	return
+	// }
 
 	if a.status != StatusProcessing {
 		Logger.Infof("Invalid Status %v", a.status)
 		return
 	}
 
-	channelFuture := ProcessTradeRoutine(future, futureConfig, a.tradeDB)
-	channelSpot := ProcessTradeRoutine(spot, spotConfig, a.tradeDB)
-
 	pair := Exchange.ParsePair(futureConfig.Pair)
 	a.fund.OpenPosition(Exchange.ExchangeTypeFuture, future, futureConfig.Batch, pair[0], futureConfig.Type)
 	a.fund.OpenPosition(Exchange.ExchangeTypeSpot, spot, spotConfig.Batch, pair[0], spotConfig.Type)
+
+	channelFuture := ProcessTradeRoutine(future, futureConfig, a.tradeDB)
+	channelSpot := ProcessTradeRoutine(spot, spotConfig, a.tradeDB)
 
 	var waitGroup sync.WaitGroup
 	var futureResult, spotResult TradeResult
@@ -582,7 +584,7 @@ func (a *IAnalyzer) checkPosition(coin string, futurePrice float64, spotPrice fl
 
 				if condition {
 
-					Logger.Error("条件平仓...")
+					Logger.Info("条件平仓...")
 
 					op.futureConfig.Price = futurePrice
 					op.spotConfig.Price = spotPrice

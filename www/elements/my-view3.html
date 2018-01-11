@@ -159,7 +159,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           },
           limitclose: {
             type: Number,
-            value: 3,
+            value: 30,
           },
           log: {
             type: String,
@@ -202,8 +202,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this.$.launchBtn.style.backgroundColor = "red"
 
         var config = {}
-        config.limitopen = parseFloat(this.limitopen)
-        config.limitclose = parseFloat(this.limitclose)
+        config.limitopen = parseFloat(this.limitopen)/100,
+        config.limitclose = parseFloat(this.limitclose)/100,
         config.area = {}
         for(var i=0;i<this.coins.length;i++){
           if(this.coins[i].checked){
@@ -220,7 +220,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this.config = JSON.stringify(config)
         this.$.ajaxStart.generateRequest()
         this.$.globalServices.WebsocketSubscribe("okexdiff", function(message){
-          this.log += (message + "\n")
+          this.log = (message + "\n" + this.log)
         }.bind(this))
       }
 

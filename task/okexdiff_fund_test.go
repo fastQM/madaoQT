@@ -15,8 +15,8 @@ func _TestSpotFund(t *testing.T) {
 	fundManager := new(OkexFundManage)
 	fundManager.Init()
 
-	spotExchange := Exchange.NewOKExSpotApi(&Exchange.InitConfig{
-		Api:    constApiKey,
+	spotExchange := Exchange.NewOKExSpotApi(&Exchange.Config{
+		API:    constApiKey,
 		Secret: constSecretKey,
 	})
 	spotExchange.Start()
@@ -24,7 +24,7 @@ func _TestSpotFund(t *testing.T) {
 	fundManager.OpenPosition(Exchange.ExchangeTypeSpot, spotExchange, batch, "eth", Exchange.TradeTypeBuy)
 
 	spotExchange.Trade(Exchange.TradeConfig{
-		Coin:   "eth/usdt",
+		Pair:   "eth/usdt",
 		Type:   Exchange.TradeTypeBuy,
 		Amount: 0.01,
 		Price:  700,
@@ -33,7 +33,7 @@ func _TestSpotFund(t *testing.T) {
 	Utils.SleepAsyncBySecond(10)
 
 	spotExchange.Trade(Exchange.TradeConfig{
-		Coin:   "eth/usdt",
+		Pair:   "eth/usdt",
 		Type:   Exchange.TradeTypeSell,
 		Amount: 0.01,
 		Price:  690,
@@ -51,8 +51,8 @@ func TestFutureFund(t *testing.T) {
 	fundManager := new(OkexFundManage)
 	fundManager.Init()
 
-	spotExchange := Exchange.NewOKExFutureApi(&Exchange.InitConfig{
-		Api:    constApiKey,
+	spotExchange := Exchange.NewOKExFutureApi(&Exchange.Config{
+		API:    constApiKey,
 		Secret: constSecretKey,
 	})
 	spotExchange.Start()
@@ -60,7 +60,7 @@ func TestFutureFund(t *testing.T) {
 	fundManager.OpenPosition(Exchange.ExchangeTypeFuture, spotExchange, batch, "eth", Exchange.TradeTypeOpenLong)
 
 	spotExchange.Trade(Exchange.TradeConfig{
-		Coin:   "eth/usdt",
+		Pair:   "eth/usdt",
 		Type:   Exchange.TradeTypeOpenLong,
 		Amount: 1,
 		Price:  690,
@@ -69,7 +69,7 @@ func TestFutureFund(t *testing.T) {
 	Utils.SleepAsyncBySecond(10)
 
 	spotExchange.Trade(Exchange.TradeConfig{
-		Coin:   "eth/usdt",
+		Pair:   "eth/usdt",
 		Type:   Exchange.TradeTypeCloseLong,
 		Amount: 1,
 		Price:  670,
@@ -79,5 +79,11 @@ func TestFutureFund(t *testing.T) {
 
 	fundManager.ClosePosition(Exchange.ExchangeTypeFuture, spotExchange, batch, "eth")
 
+	fundManager.CalcRatio()
+}
+
+func TestGetAllRatio(t *testing.T){
+	fundManager := new(OkexFundManage)
+	fundManager.Init()
 	fundManager.CalcRatio()
 }

@@ -204,6 +204,7 @@ func (h *OkexFundManage) CalcRatio() {
 
 	for _, record := range records {
 		if record.Status == Mongo.FundStatusClosed {
+			Logger.Infof("Batch:%s", record.Batch)
 			if record.OpenType == Exchange.TradeTypeString[Exchange.TradeTypeBuy] || record.OpenType == Exchange.TradeTypeString[Exchange.TradeTypeOpenLong] {
 				Logger.Infof("Ratio:%v", (record.CloseBalance-record.OpenBalance)*100/record.OpenBalance)
 			} else {

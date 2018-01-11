@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	Utils "madaoQT/utils"
+
 	Websocket "github.com/gorilla/websocket"
 )
 
@@ -293,6 +295,8 @@ func (o *OKExAPI) Start() error {
 
 	o.conn = c
 
+	// wait for the connection to be ready
+	Utils.SleepAsyncBySecond(3)
 	go o.triggerEvent(EventConnected)
 
 	return nil
@@ -399,8 +403,7 @@ func (o *OKExAPI) GetTicker(pair string) *TickerValue {
 
 	const PermitRetryCount = 10
 
-	for index, ticker := range o.tickerList {
-		logger.Debugf("%v %v", ticker.Pair, pair)
+	for _, ticker := range o.tickerList {
 		if ticker.Pair == pair {
 			if ticker.Value != nil {
 				// return ticker.Value.(map[string]interface{})
@@ -414,11 +417,8 @@ func (o *OKExAPI) GetTicker(pair string) *TickerValue {
 				// 	logger.Debugf("here2")
 				// 	return nil
 				// }
-				logger.Debugf("here3")
 
-				logger.Debugf("[%s], ticker:%v previous:%v", o.GetExchangeName(), ticker.tickerCount, ticker.oldCount)
-
-				o.tickerList[index].oldCount = ticker.tickerCount
+				// o.tickerList[index].oldCount = ticker.tickerCount
 
 				tmp := ticker.Value.(map[string]interface{})
 
@@ -656,7 +656,7 @@ func (o *OKExAPI) command(data map[string]string, parameters map[string]string) 
 	}
 
 	if Debug {
-		log.Printf("Cmd:%v", string(cmd))
+		logger.Debugf("Command[%s]", string(cmd))
 	}
 
 	o.conn.WriteMessage(Websocket.TextMessage, cmd)
@@ -728,7 +728,11 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 	recvChan := make(chan interface{})
 	o.messageChannels.Store(channel, recvChan)
 
-	o.command(data, parameters)
+	if err := o.command(data, parameters);err != nil{
+		return &TradeResult{
+			Error: err,
+		}
+	}
 
 	select {
 	case <-time.After(DefaultTimeoutSec * time.Second):

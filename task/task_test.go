@@ -16,19 +16,21 @@ const pair = "ltc/usdt"
 
 func _TestProcessFutureTrade(t *testing.T) {
 	okexFuture := new(Exchange.OKExAPI)
-	okexFuture.Init(Exchange.InitConfig{
-		Api:    constOKEXApiKey,
+	okexFuture.SetConfigure(Exchange.Config{
+		API:    constOKEXApiKey,
 		Secret: constOEXSecretKey,
 		Custom: map[string]interface{}{"exchangeType": Exchange.ExchangeTypeFuture},
 	})
 
 	okexFuture.Start()
 
-	okexFuture.StartContractTicker(pair, "this_week", "ltc_contract_this_week")
+	okexFuture.StartTicker(pair, map[string]interface{}{
+		"period": "this_week",
+	})
 
 	var tickerValue *Exchange.TickerValue
 	for {
-		tickerValue = okexFuture.GetTickerValue("ltc_contract_this_week")
+		tickerValue = okexFuture.GetTicker(pair)
 		if tickerValue != nil {
 			Logger.Debugf("Ticker Value:%v", tickerValue)
 			break
@@ -36,7 +38,7 @@ func _TestProcessFutureTrade(t *testing.T) {
 	}
 
 	resultChan := ProcessTradeRoutine(okexFuture, Exchange.TradeConfig{
-		Coin:   pair,
+		Pair:   pair,
 		Type:   Exchange.TradeTypeOpenLong,
 		Price:  tickerValue.Last,
 		Amount: 1,
@@ -51,19 +53,19 @@ func _TestProcessFutureTrade(t *testing.T) {
 
 func _TestProcessSpotTrade(t *testing.T) {
 	okexSpot := new(Exchange.OKExAPI)
-	okexSpot.Init(Exchange.InitConfig{
-		Api:    constOKEXApiKey,
+	okexSpot.SetConfigure(Exchange.Config{
+		API:    constOKEXApiKey,
 		Secret: constOEXSecretKey,
 		Custom: map[string]interface{}{"exchangeType": Exchange.ExchangeTypeSpot},
 	})
 
 	okexSpot.Start()
 
-	okexSpot.StartCurrentTicker(pair, "ltc_spot_this_week")
+	okexSpot.StartTicker(pair, nil)
 
 	var tickerValue *Exchange.TickerValue
 	for {
-		tickerValue = okexSpot.GetTickerValue("ltc_spot_this_week")
+		tickerValue = okexSpot.GetTicker(pair)
 		if tickerValue != nil {
 			Logger.Debugf("Ticker Value:%v", tickerValue)
 			break
@@ -71,7 +73,7 @@ func _TestProcessSpotTrade(t *testing.T) {
 	}
 
 	resultChan := ProcessTradeRoutine(okexSpot, Exchange.TradeConfig{
-		Coin:   pair,
+		Pair:   pair,
 		Type:   Exchange.TradeTypeBuy,
 		Price:  tickerValue.Last,
 		Amount: 0.01,

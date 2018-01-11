@@ -2,8 +2,8 @@ package mongo
 
 import "github.com/kataras/golog"
 
-// const MongoURL = "mongodb://localhost"
-const MongoURL = "mongodb://192.168.0.102"
+const MongoURL = "mongodb://localhost"
+// const MongoURL = "mongodb://192.168.0.102"
 const Database = "madaoQT"
 
 const ChartCollectin = "Chart"

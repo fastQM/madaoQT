@@ -50,8 +50,6 @@ func TestGetCurrentDepth(t *testing.T) {
 func TestOKEXContractTicker(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.SetConfigure(Config{
-		// API:    constAPIKey,
-		// Secret: constSecretKey,
 		Custom: map[string]interface{}{"exchangeType": ExchangeTypeFuture},
 	})
 
@@ -81,8 +79,6 @@ func TestOKEXContractTicker(t *testing.T) {
 func TestOKEXCurrentTicker(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.SetConfigure(Config{
-		// API:    constAPIKey,
-		// Secret: constSecretKey,
 		Custom: map[string]interface{}{"exchangeType": ExchangeTypeSpot},
 	})
 
@@ -106,7 +102,7 @@ func TestOKEXCurrentTicker(t *testing.T) {
 	}
 }
 
-func _TestFutureTrade(t *testing.T) {
+func TestFutureTrade(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.SetConfigure(Config{
 		API:    constAPIKey,
@@ -114,10 +110,12 @@ func _TestFutureTrade(t *testing.T) {
 		Custom: map[string]interface{}{"exchangeType": ExchangeTypeFuture},
 	})
 
+	okex.Start()
+
 	configs := TradeConfig{
-		Pair:   "ltc/usd",
+		Pair:   "eth/usd",
 		Type:   TradeTypeOpenLong,
-		Price:  60.01,
+		Price:  1177,
 		Amount: 1,
 	}
 
@@ -126,7 +124,7 @@ func _TestFutureTrade(t *testing.T) {
 
 }
 
-func _TestGetUserInfo(t *testing.T) {
+func TestGetUserInfo(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.SetConfigure(Config{
 		API:    constAPIKey,
@@ -137,18 +135,18 @@ func _TestGetUserInfo(t *testing.T) {
 	log.Printf("balance:%v", okex.GetBalance())
 }
 
-func _TestCancelFutureOrder(t *testing.T) {
+func TestCancelFutureOrder(t *testing.T) {
 	okex := new(OKExAPI)
-
 	okex.SetConfigure(Config{
 		API:    constAPIKey,
 		Secret: constSecretKey,
 		Custom: map[string]interface{}{"exchangeType": ExchangeTypeFuture},
 	})
+	okex.Start()
 
 	order := OrderInfo{
-		OrderID: "14922014209",
-		Pair:    "ltc_usd",
+		OrderID: "19124409771",
+		Pair:    "eth/usd",
 	}
 
 	log.Printf("CancelOrder:%v", okex.CancelOrder(order))
@@ -170,7 +168,7 @@ func _TestSpotCancelOrder(t *testing.T) {
 	log.Printf("CancelOrder:%v", okex.CancelOrder(order))
 }
 
-func _TestSpotOrder(t *testing.T) {
+func TestSpotOrder(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.SetConfigure(Config{
 		API:    constAPIKey,
@@ -178,18 +176,20 @@ func _TestSpotOrder(t *testing.T) {
 		Custom: map[string]interface{}{"exchangeType": ExchangeTypeSpot},
 	})
 
+	okex.Start()
+
 	configs := TradeConfig{
-		Pair:   "ltc/usdt",
+		Pair:   "eth/usdt",
 		Type:   TradeTypeBuy,
-		Price:  60,
-		Amount: 1,
+		Price:  1188,
+		Amount: 0.01,
 	}
 
 	result := okex.Trade(configs)
 	logger.Debugf("Result:%v", result)
 }
 
-func _TestSpotGetOrderInfo(t *testing.T) {
+func TestSpotGetOrderInfo(t *testing.T) {
 	okex := new(OKExAPI)
 
 	okex.SetConfigure(Config{
@@ -197,19 +197,15 @@ func _TestSpotGetOrderInfo(t *testing.T) {
 		Secret: constSecretKey,
 		Custom: map[string]interface{}{"exchangeType": ExchangeTypeSpot},
 	})
-
-	// configs := map[string]interface{}{
-	// 	"order_id": "-1",
-	// 	"symbol":   "ltc_usdt",
-	// }
+	okex.Start()
 
 	log.Printf("OrderInfo:%v", okex.GetOrderInfo(OrderInfo{
-		OrderID: "-1",
-		Pair:    "ltc/usdt",
+		OrderID: "79863957",
+		Pair:    "eth/usdt",
 	}))
 }
 
-func _TestFutureGetOrderInfo(t *testing.T) {
+func TestFutureGetOrderInfo(t *testing.T) {
 	okex := new(OKExAPI)
 
 	okex.SetConfigure(Config{
@@ -220,14 +216,9 @@ func _TestFutureGetOrderInfo(t *testing.T) {
 
 	okex.Start()
 
-	// configs := map[string]interface{}{
-	// 	"order_id": "15188890865",
-	// 	"symbol":   "ltc_usd",
-	// }
-
 	log.Printf("OrderInfo:%v", okex.GetOrderInfo(OrderInfo{
-		OrderID: "-1",
-		Pair:    "ltc/usd",
+		OrderID: "19124672779",
+		Pair:    "eth/usd",
 	}))
 }
 
