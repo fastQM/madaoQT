@@ -12,8 +12,6 @@ import (
 	"sync"
 	"time"
 
-	Utils "madaoQT/utils"
-
 	Websocket "github.com/gorilla/websocket"
 )
 
@@ -71,9 +69,13 @@ type OKExAPI struct {
 	secretKey string
 
 	tickerList   []TickerListItem
-	depthList    []DepthListItem
+	ticker int64
+	lastTicker int64
+	errorCounter int
+
 	event        chan EventType
 	exchangeType ExchangeType
+	period string
 
 	/* Each channel has a depth */
 	messageChannels sync.Map
@@ -96,7 +98,10 @@ func NewOKExFutureApi(config *Config) *OKExAPI {
 		config = &Config{}
 	}
 
-	config.Custom = map[string]interface{}{"exchangeType": ExchangeTypeFuture}
+	config.Custom = map[string]interface{}{
+		"exchangeType": ExchangeTypeFuture,
+		"period": "this_week",
+	}
 	future := new(OKExAPI)
 	future.SetConfigure(*config)
 	return future
@@ -128,11 +133,20 @@ func (o *OKExAPI) SetConfigure(config Config) {
 
 	o.Ticker = config.Ticker
 	o.tickerList = nil
-	o.depthList = nil
 	o.event = make(chan EventType)
 	o.apiKey = config.API
 	o.secretKey = config.Secret
 	o.exchangeType = config.Custom["exchangeType"].(ExchangeType)
+	
+	if o.exchangeType == ExchangeTypeFuture{
+		period := config.Custom["period"]
+		if period == nil {
+			logger.Error("period is not set for future exchange")
+			return
+		}
+
+		o.period = period.(string)
+	}
 
 	if o.apiKey == "" || o.secretKey == "" {
 		logger.Debug("The current connection doesn`t support trading without API")
@@ -269,9 +283,9 @@ func (o *OKExAPI) Start() error {
 				if o.tickerList != nil {
 					for i, ticker := range o.tickerList {
 						if ticker.Symbol == channel {
+							o.ticker++
 							// o.tickerList[i].Time = timeHM
 							o.tickerList[i].Value = response[0]["data"]
-							o.tickerList[i].tickerCount++
 
 							tmp := o.tickerList[i].Value.(map[string]interface{})
 							lastValue, _ := strconv.ParseFloat(tmp["last"].(string), 64)
@@ -295,8 +309,6 @@ func (o *OKExAPI) Start() error {
 
 	o.conn = c
 
-	// wait for the connection to be ready
-	Utils.SleepAsyncBySecond(3)
 	go o.triggerEvent(EventConnected)
 
 	return nil
@@ -359,7 +371,7 @@ func (o *OKExAPI) Close() {
 // 	o.command(data, nil)
 // }
 
-func (o *OKExAPI) StartTicker(pair string, option map[string]interface{}) {
+func (o *OKExAPI) StartTicker(pair string) {
 
 	var coins []string
 	var channel string
@@ -367,7 +379,7 @@ func (o *OKExAPI) StartTicker(pair string, option map[string]interface{}) {
 		coins = ParsePair(pair)
 
 		channel = strings.Replace(ChannelContractTicker, "X", coins[0], 1)
-		channel = strings.Replace(channel, "Y", option["period"].(string), 1)
+		channel = strings.Replace(channel, "Y", o.period, 1)
 	} else if o.exchangeType == ExchangeTypeSpot {
 		coins = ParsePair(pair)
 		channel = strings.Replace(ChannelCurrentChannelTicker, "X", coins[0]+"_"+coins[1], 1)
@@ -406,19 +418,18 @@ func (o *OKExAPI) GetTicker(pair string) *TickerValue {
 	for _, ticker := range o.tickerList {
 		if ticker.Pair == pair {
 			if ticker.Value != nil {
-				// return ticker.Value.(map[string]interface{})
-				// logger.Debugf("Value:%v", ticker)
-				// if (ticker.oldCount-ticker.tickerCount >= 0) && (ticker.oldCount-ticker.tickerCount) < PermitRetryCount {
-				// 	logger.Errorf("[%s][%s]Ticker数据未更新", o.GetExchangeName(), ticker.Pair)
-				// 	o.tickerList[index].oldCount++
 
-				// } else if (ticker.oldCount - ticker.tickerCount) >= PermitRetryCount {
-				// 	o.triggerEvent(EventLostConnection)
-				// 	logger.Debugf("here2")
-				// 	return nil
-				// }
-
-				// o.tickerList[index].oldCount = ticker.tickerCount
+				if o.ticker == o.lastTicker{
+					o.errorCounter++
+					if o.errorCounter>10{
+						logger.Debug("Reset Connection")
+						o.triggerEvent(EventLostConnection)
+						return nil
+					}
+				}else{
+					o.lastTicker = o.ticker
+					o.errorCounter = 0
+				}
 
 				tmp := ticker.Value.(map[string]interface{})
 
@@ -503,37 +514,31 @@ func (o *OKExAPI) SwitchCurrentDepth(open bool, pair string, depth string) chan 
 
 }
 
-func (o *OKExAPI) GetDepthValue(coin string, price float64, limit float64, orderQuantity float64, tradeType TradeType) *DepthValue {
+func (o *OKExAPI) GetDepthValue(coin string) [][]DepthPrice {
 
 	var recvChan chan interface{}
 	coins := ParsePair(coin)
 
 	if o.exchangeType == ExchangeTypeFuture {
-		recvChan = o.SwithContractDepth(true, coins[0], "this_week", "20")
+		recvChan = o.SwithContractDepth(true, coins[0], o.period, "20")
 		// defer o.SwithContractDepth(false, coinA, "this_week", "20")
 	} else if o.exchangeType == ExchangeTypeSpot {
 		recvChan = o.SwitchCurrentDepth(true, coins[0]+"_"+coins[1], "20")
 		// defer o.SwitchCurrentDepth(false, coinA, coinB, "20")
 	}
 
-	// o.depthList = app__END(o.depthList, DepthListItem{
-	// 	Name: channel,
-	// })
 
 	select {
 	case <-time.After(DefaultTimeoutSec * time.Second):
 		log.Print("timeout to wait for the depths")
+		o.triggerEvent(EventLostConnection)
 		return nil
 	case recv := <-recvChan:
-		depth := new(DepthValue)
-
+		list := make([][]DepthPrice, 2)
 		data := recv.(map[string]interface{})
-		depth.Time = formatTimeOKEX()
 
 		asks := data["asks"].([]interface{})
 		bids := data["bids"].([]interface{})
-
-		var list []DepthPrice
 
 		if o.exchangeType == ExchangeTypeFuture {
 
@@ -541,35 +546,22 @@ func (o *OKExAPI) GetDepthValue(coin string, price float64, limit float64, order
 				askList := make([]DepthPrice, len(asks))
 				for i, ask := range asks {
 					values := ask.([]interface{})
-					// askList[i].price, _ = strconv.ParseFloat(values[UsdPriceIndex].(string), 64)
-					// askList[i].qty, _ = strconv.ParseFloat(values[CoinQuantity].(string), 64)
-					askList[i].price = values[UsdPriceIndex].(float64)
-					askList[i].qty = values[CoinQuantity].(float64)
+					askList[i].Price = values[UsdPriceIndex].(float64)
+					askList[i].Quantity = values[CoinQuantity].(float64)
 				}
 
-				depth.AskAverage, depth.AskQty = GetDepthAveragePrice(askList)
-				depth.AskByOrder, depth.AskPrice = GetDepthPriceByOrder(askList, orderQuantity)
-				if tradeType == TradeTypeOpenLong || tradeType == TradeTypeCloseShort {
-					list = RevertDepthArray(askList)
-				}
+				list[DepthTypeAsks] = askList
 			}
 
 			if bids != nil && len(bids) > 0 {
 				bidList := make([]DepthPrice, len(bids))
 				for i, bid := range bids {
 					values := bid.([]interface{})
-					// bidList[i].price, _ = strconv.ParseFloat(values[UsdPriceIndex].(string), 64)
-					// bidList[i].qty, _ = strconv.ParseFloat(values[CoinQuantity].(string), 64)
-					bidList[i].price = values[UsdPriceIndex].(float64)
-					bidList[i].qty = values[CoinQuantity].(float64)
+					bidList[i].Price = values[UsdPriceIndex].(float64)
+					bidList[i].Quantity = values[CoinQuantity].(float64)
 				}
 
-				depth.BidAverage, depth.BidQty = GetDepthAveragePrice(bidList)
-				depth.BidByOrder, depth.BidPrice = GetDepthPriceByOrder(bidList, orderQuantity)
-
-				if tradeType == TradeTypeOpenShort || tradeType == TradeTypeCloseLong {
-					list = bidList
-				}
+				list[DepthTypeBids] = bidList
 			}
 
 		} else if o.exchangeType == ExchangeTypeSpot {
@@ -577,39 +569,26 @@ func (o *OKExAPI) GetDepthValue(coin string, price float64, limit float64, order
 				askList := make([]DepthPrice, len(asks))
 				for i, ask := range asks {
 					values := ask.([]interface{})
-					askList[i].price, _ = strconv.ParseFloat(values[0].(string), 64)
-					askList[i].qty, _ = strconv.ParseFloat(values[1].(string), 64)
+					askList[i].Price, _ = strconv.ParseFloat(values[0].(string), 64)
+					askList[i].Quantity, _ = strconv.ParseFloat(values[1].(string), 64)
 				}
 
-				depth.AskAverage, depth.AskQty = GetDepthAveragePrice(askList)
-				depth.AskByOrder, depth.AskPrice = GetDepthPriceByOrder(askList, orderQuantity)
-
-				if tradeType == TradeTypeBuy {
-					list = RevertDepthArray(askList)
-				}
-
+				list[DepthTypeAsks] = askList
 			}
 
 			if bids != nil && len(bids) > 0 {
 				bidList := make([]DepthPrice, len(bids))
 				for i, bid := range bids {
 					values := bid.([]interface{})
-					bidList[i].price, _ = strconv.ParseFloat(values[0].(string), 64)
-					bidList[i].qty, _ = strconv.ParseFloat(values[1].(string), 64)
+					bidList[i].Price, _ = strconv.ParseFloat(values[0].(string), 64)
+					bidList[i].Quantity, _ = strconv.ParseFloat(values[1].(string), 64)
 				}
 
-				depth.BidAverage, depth.BidQty = GetDepthAveragePrice(bidList)
-				depth.BidByOrder, depth.BidPrice = GetDepthPriceByOrder(bidList, orderQuantity)
-
-				if tradeType == TradeTypeSell {
-					list = bidList
-				}
+				list[DepthTypeBids] = bidList
 			}
 		}
 
-		depth.LimitTradePrice, depth.LimitTradeAmount = GetDepthPriceByPrice(list, price, limit, orderQuantity)
-		// log.Printf("Result:%v", depth)
-		return depth
+		return list
 	}
 }
 
@@ -698,7 +677,7 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 		parameters = map[string]string{
 			"api_key":       o.apiKey,
 			"symbol":        coins[0] + "_usd",
-			"contract_type": "this_week",
+			"contract_type": o.period,
 			"price":         strconv.FormatFloat(configs.Price, 'f', 2, 64),
 			// the exact amount orders is amount/level_rate
 			"amount":      strconv.FormatFloat(configs.Amount, 'f', 2, 64),
@@ -736,6 +715,7 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 
 	select {
 	case <-time.After(DefaultTimeoutSec * time.Second):
+		o.triggerEvent(EventLostConnection)
 		return &TradeResult{
 			Error: errors.New("Timeout"),
 		}
@@ -779,7 +759,7 @@ func (o *OKExAPI) CancelOrder(order OrderInfo) *TradeResult {
 			"api_key":       o.apiKey,
 			"order_id":      order.OrderID,
 			"symbol":        coins[0] + "_" + coins[1],
-			"contract_type": "this_week",
+			"contract_type": o.period,
 		}
 
 	} else if o.exchangeType == ExchangeTypeSpot {
@@ -805,6 +785,7 @@ func (o *OKExAPI) CancelOrder(order OrderInfo) *TradeResult {
 
 	select {
 	case <-time.After(DefaultTimeoutSec * time.Second):
+		o.triggerEvent(EventLostConnection)
 		return nil
 	case recv := <-recvChan:
 		if recv != nil {
@@ -844,7 +825,7 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 		parameters = map[string]string{
 			"api_key": o.apiKey,
 			// "secret_key": constSecretKey,
-			"contract_type": "this_week",
+			"contract_type": o.period,
 			// "status":        "1",
 			"current_page": "1",
 			"page_length":  "1",
@@ -914,6 +895,7 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 		return result
 	case <-time.After(DefaultTimeoutSec * time.Second):
 		log.Printf("Timeout to get user info")
+		o.triggerEvent(EventLostConnection)
 		return nil
 	}
 }
@@ -1010,6 +992,7 @@ func (o *OKExAPI) GetBalance() map[string]interface{} {
 		return nil
 	case <-time.After(DefaultTimeoutSec * time.Second):
 		log.Printf("Timeout to get user info")
+		o.triggerEvent(EventLostConnection)
 		return nil
 	}
 

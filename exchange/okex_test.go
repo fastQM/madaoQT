@@ -9,28 +9,35 @@ import (
 const constAPIKey = "a982120e-8505-41db-9ae3-0c62dd27435c"
 const constSecretKey = "71430C7FA63A067724FB622FB3031970"
 
-func _TestGetAveragePrice(t *testing.T) {
-	values := []DepthPrice{
-		{price: 155, qty: 10},
-		{price: 165, qty: 10},
-		{price: 155, qty: 10},
-	}
-
-	value1, value2 := GetDepthPriceByOrder(values, 25)
-	log.Printf("Ave:%v%v", value1, value2)
-}
 
 func TestGetContractDepth(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.SetConfigure(Config{
 		// API:    constAPIKey,
 		// Secret: constSecretKey,
-		Custom: map[string]interface{}{"exchangeType": ExchangeTypeFuture},
+		Custom: map[string]interface{}{
+			"exchangeType": ExchangeTypeFuture,
+			"period": "this_week",
+		},
 	})
 
 	okex.Start()
-	value := okex.GetDepthValue("eth/usdt", 884, 0.005, 3, TradeTypeOpenLong)
-	log.Printf("Value:%v", value)
+
+	counter := 3
+
+	for{
+		select{
+		case <-time.After(1*time.Second):
+			value := okex.GetDepthValue("eth/usdt")
+			log.Printf("Value:%v", value)
+			if counter > 0 {
+				counter--
+			} else {
+				return
+			}
+		}
+	}
+
 }
 
 func TestGetCurrentDepth(t *testing.T) {
@@ -43,27 +50,42 @@ func TestGetCurrentDepth(t *testing.T) {
 
 	okex.Start()
 
-	value := okex.GetDepthValue("eth/usdt", 877, 0.005, 3, TradeTypeBuy)
-	logger.Infof("Value:%v", value)
+	// value := okex.GetDepthValue("eth/usdt", 877, 0.005, 3, TradeTypeBuy)
+	// logger.Infof("Value:%v", value)
+	counter := 3
+
+	for{
+		select{
+		case <-time.After(1*time.Second):
+			value := okex.GetDepthValue("eth/usdt")
+			log.Printf("Value:%v", value)
+			if counter > 0 {
+				counter--
+			} else {
+				return
+			}
+		}
+	}
 }
 
 func TestOKEXContractTicker(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.SetConfigure(Config{
-		Custom: map[string]interface{}{"exchangeType": ExchangeTypeFuture},
+		Custom: map[string]interface{}{
+			"exchangeType": ExchangeTypeFuture,
+			"period": "this_week",
+		},
 	})
 
 	okex.Start()
 
-	okex.StartTicker("ltc/usdt", map[string]interface{}{
-		"period": "this_week",
-	})
+	okex.StartTicker("eth/usdt")
 
-	counter := 3
+	counter := 10
 	for {
 		select {
 		case <-time.After(1 * time.Second):
-			values := okex.GetTicker("ltc/usdt")
+			values := okex.GetTicker("eth/usdt")
 			if values != nil {
 				log.Printf("Value:%v", values)
 			}
@@ -83,7 +105,7 @@ func TestOKEXCurrentTicker(t *testing.T) {
 	})
 
 	okex.Start()
-	okex.StartTicker("ltc/usdt", nil)
+	okex.StartTicker("ltc/usdt")
 
 	counter := 3
 	for {
@@ -107,7 +129,10 @@ func TestFutureTrade(t *testing.T) {
 	okex.SetConfigure(Config{
 		API:    constAPIKey,
 		Secret: constSecretKey,
-		Custom: map[string]interface{}{"exchangeType": ExchangeTypeFuture},
+		Custom: map[string]interface{}{
+			"exchangeType": ExchangeTypeFuture,
+			"period": "this_week",
+		},
 	})
 
 	okex.Start()
@@ -129,7 +154,10 @@ func TestGetUserInfo(t *testing.T) {
 	okex.SetConfigure(Config{
 		API:    constAPIKey,
 		Secret: constSecretKey,
-		Custom: map[string]interface{}{"exchangeType": ExchangeTypeFuture},
+		Custom: map[string]interface{}{
+			"exchangeType": ExchangeTypeFuture,
+			"period": "this_week",
+		},
 	})
 	okex.Start()
 	log.Printf("balance:%v", okex.GetBalance())
@@ -140,7 +168,10 @@ func TestCancelFutureOrder(t *testing.T) {
 	okex.SetConfigure(Config{
 		API:    constAPIKey,
 		Secret: constSecretKey,
-		Custom: map[string]interface{}{"exchangeType": ExchangeTypeFuture},
+		Custom: map[string]interface{}{
+			"exchangeType": ExchangeTypeFuture,
+			"period": "this_week",
+		},
 	})
 	okex.Start()
 
@@ -211,7 +242,10 @@ func TestFutureGetOrderInfo(t *testing.T) {
 	okex.SetConfigure(Config{
 		API:    constAPIKey,
 		Secret: constSecretKey,
-		Custom: map[string]interface{}{"exchangeType": ExchangeTypeFuture},
+		Custom: map[string]interface{}{
+			"exchangeType": ExchangeTypeFuture,
+			"period": "this_week",
+		},
 	})
 
 	okex.Start()

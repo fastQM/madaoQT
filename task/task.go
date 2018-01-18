@@ -147,7 +147,10 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 		var trade *Exchange.TradeResult
 		var depthInvalidCount int
 		var errorCode TaskErrorType
-		var depth *Exchange.DepthValue
+		// var depth *Exchange.DepthValue
+		var depth [][]Exchange.DepthPrice
+		var tradePrice, tradeAmount float64
+		var err error
 
 		for {
 
@@ -158,16 +161,15 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 			}
 
 			// 1. 根据深度情况计算价格下单
-			depth = exchange.GetDepthValue(tradeConfig.Pair,
-				tradeConfig.Price,
-				tradeConfig.Limit,
-				tradeConfig.Amount-dealAmount,
-				tradeConfig.Type)
+			// depth = exchange.GetDepthValue(tradeConfig.Pair,
+			// 	tradeConfig.Price,
+			// 	tradeConfig.Limit,
+			// 	tradeConfig.Amount-dealAmount,
+			// 	tradeConfig.Type)
+			depth = exchange.GetDepthValue(tradeConfig.Pair)
 
-			Logger.Debugf("深度信息:%v 下单信息：%v 已成交额度：%v", depth, tradeConfig, dealAmount)
-
-			if depth == nil || depth.LimitTradeAmount == 0 || depth.LimitTradePrice == 0 {
-				Logger.Debugf("无操作价格:%v", depth)
+			if depth == nil {
+				Logger.Debugf("无操作价格")
 				depthInvalidCount++
 				/*
 					连续十次无法达到操作价格，则退出
@@ -177,6 +179,19 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 					goto __ERROR
 				}
 				goto _NEXTLOOP
+			}else{
+				err, tradePrice, tradeAmount = getPlacedPrice(tradeConfig.Type, 
+											depth, 
+											tradeConfig.Price,
+											tradeConfig.Limit,
+											tradeConfig.Amount-dealAmount)
+
+				if err != nil{
+					Logger.Errorf("Trade Error:%v", err)
+					goto _NEXTLOOP
+				}
+				
+				Logger.Debugf("交易价格：%v 交易数量:%v", tradePrice, tradeAmount)
 			}
 
 			depthInvalidCount = 0
@@ -185,7 +200,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 				Pair:   tradeConfig.Pair,
 				Type:   tradeConfig.Type,
 				Amount: tradeConfig.Amount - dealAmount,
-				Price:  depth.LimitTradePrice,
+				Price:  tradePrice,
 			})
 
 			if err := dbTrades.Insert(&Mongo.TradesRecord{
@@ -193,8 +208,8 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 				Oper:     Exchange.TradeTypeString[tradeConfig.Type],
 				Exchange: exchange.GetExchangeName(),
 				Pair:     tradeConfig.Pair,
-				Quantity: depth.LimitTradeAmount,
-				Price:    depth.LimitTradePrice,
+				Quantity: tradeAmount,
+				Price:    tradePrice,
 				OrderID:  trade.OrderID,
 			}); err != nil {
 				Logger.Errorf("保存交易操作失败:%v", err)
@@ -346,6 +361,72 @@ func InPriceArea(price float64, baseprice float64, area float64) bool {
 	}
 
 	return false
+}
+
+func revertDepthArray(array []Exchange.DepthPrice) []Exchange.DepthPrice {
+	var tmp Exchange.DepthPrice
+	var length int
+
+	if len(array)%2 != 0 {
+		length = len(array) / 2
+	} else {
+		length = len(array)/2 - 1
+	}
+	for i := 0; i <= length; i++ {
+		tmp = array[i]
+		array[i] = array[len(array)-1-i]
+		array[len(array)-1-i] = tmp
+
+	}
+	return array
+}
+
+// getPlacedPrice calcutes the price to be placed 
+func getPlacedPrice(tradeType Exchange.TradeType,
+						items [][]Exchange.DepthPrice, 
+						price float64, 
+						limit float64, 
+						quantity float64) (error, float64, float64) {
+
+	if items == nil || items[Exchange.DepthTypeAsks] == nil || items[Exchange.DepthTypeBids] == nil {
+		return errors.New("Invalid depth list"), 0, 0
+	}
+
+	if len(items[Exchange.DepthTypeAsks]) == 0 || len(items[Exchange.DepthTypeBids]) == 0 {
+		return errors.New("the lenth of the depth is 0"), 0, 0
+	}
+
+	var list []Exchange.DepthPrice 
+	if tradeType == Exchange.TradeTypeOpenLong || tradeType == Exchange.TradeTypeCloseShort || tradeType == Exchange.TradeTypeBuy {
+		list = revertDepthArray(items[Exchange.DepthTypeAsks])
+	}else{
+		list = items[Exchange.DepthTypeBids]
+	}
+
+	limitPriceHigh := price * (1 + limit)
+	limitPriceLow := price * (1 - limit)
+	Logger.Debugf("有效价格范围：%v-%v", limitPriceLow, limitPriceHigh)
+
+	var tradePrice float64
+	var tradeQuantity float64
+	for _, item := range list {
+		if item.Price >= limitPriceLow && item.Price <= limitPriceHigh {
+
+			tradePrice = item.Price
+			tradeQuantity += item.Quantity
+
+			if tradeQuantity > quantity {
+				tradeQuantity = quantity
+				break
+			}
+
+		} else {
+			Logger.Debugf("超出价格范围")
+			break
+		}
+	}
+
+	return nil, tradePrice, tradeQuantity
 }
 
 func TranslateToContractNumber(price float64, coinQuantity float64) int {

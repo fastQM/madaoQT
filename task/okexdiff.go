@@ -5,6 +5,7 @@ package task
 */
 
 import (
+	"madaoQT/utils"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -146,31 +147,33 @@ func (a *IAnalyzer) GetBalances() map[string]interface{} {
 	var futures []map[string]interface{}
 
 	if a.spot != nil {
-		balances := a.spot.GetBalance()
-		for coin := range a.config.Area {
-			balance := balances[coin]
+		if balances := a.spot.GetBalance();balances != nil{
+			for coin := range a.config.Area {
+				balance := balances[coin]
+				spots = append(spots, map[string]interface{}{
+					"name":    coin,
+					"balance": balance.(map[string]interface{})["balance"].(float64),
+				})
+			}
+
+			balance := balances["usdt"]
 			spots = append(spots, map[string]interface{}{
-				"name":    coin,
+				"name":    "usdt",
 				"balance": balance.(map[string]interface{})["balance"].(float64),
 			})
 		}
-
-		balance := balances["usdt"]
-		spots = append(spots, map[string]interface{}{
-			"name":    "usdt",
-			"balance": balance.(map[string]interface{})["balance"].(float64),
-		})
 	}
 
 	if a.future != nil {
-		balances := a.future.GetBalance()
-		for coin := range a.config.Area {
-			balance := balances[coin]
-			futures = append(futures, map[string]interface{}{
-				"name":    coin,
-				"balance": balance.(map[string]interface{})["balance"].(float64),
-				"bond":    balance.(map[string]interface{})["bond"].(float64),
-			})
+		if balances := a.future.GetBalance();balances != nil{
+			for coin := range a.config.Area {
+				balance := balances[coin]
+				futures = append(futures, map[string]interface{}{
+					"name":    coin,
+					"balance": balance.(map[string]interface{})["balance"].(float64),
+					"bond":    balance.(map[string]interface{})["bond"].(float64),
+				})
+			}
 		}
 	}
 
@@ -271,10 +274,20 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 	// }
 
 	Logger.Info("启动OKEx合约监视程序")
-	futureExchange := Exchange.NewOKExFutureApi(&Exchange.Config{
+	// futureExchange := Exchange.NewOKExFutureApi(&Exchange.Config{
+	// 	API:    api,
+	// 	Secret: secret,
+	// })
+	futureExchange := new(Exchange.OKExAPI)
+
+	futureExchange.SetConfigure(Exchange.Config{
 		API:    api,
 		Secret: secret,
-	}) // 交易需要api
+		Custom: map[string]interface{}{
+			"exchangeType": Exchange.ExchangeTypeFuture,
+			"period": "this_week",
+		},
+	})
 	futureExchange.Start()
 
 	Logger.Info("启动OKEx现货监视程序")
@@ -296,12 +309,10 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 			select {
 			case event := <-futureExchange.WatchEvent():
 				if event == Exchange.EventConnected {
+					utils.SleepAsyncBySecond(3)
 					for k := range a.config.Area {
 						k = (k + "/usdt")
-						// futureExchange.StartContractTicker(k, "this_week", k+"future")
-						futureExchange.StartTicker(k, map[string]interface{}{
-							"period": "this_week",
-						})
+						futureExchange.StartTicker(k)
 					}
 					a.future = Exchange.IExchange(futureExchange)
 
@@ -310,10 +321,10 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 				}
 			case event := <-spotExchange.WatchEvent():
 				if event == Exchange.EventConnected {
-
+					utils.SleepAsyncBySecond(3)
 					for k := range a.config.Area {
 						k = (k + "/usdt")
-						spotExchange.StartTicker(k, nil)
+						spotExchange.StartTicker(k)
 					}
 
 					a.spot = spotExchange

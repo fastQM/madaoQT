@@ -144,7 +144,7 @@ func (h *HttpServer) setupExchanges() {
 			select {
 			case event := <-okexspot.WatchEvent():
 				if event == Exchange.EventConnected {
-					okexspot.StartTicker("ltc/usdt", nil)
+					okexspot.StartTicker("ltc/usdt")
 
 				} else if event == Exchange.EventLostConnection {
 					okexspot.Start()

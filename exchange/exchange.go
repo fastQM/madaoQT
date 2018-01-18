@@ -1,7 +1,6 @@
 package exchange
 
 import (
-	"log"
 	"strings"
 
 	"github.com/kataras/golog"
@@ -125,37 +124,6 @@ type TickerListItem struct {
 	Time   string
 	Period string
 	Value  interface{}
-
-	tickerCount uint64
-	oldCount    uint64
-}
-
-type DepthListItem struct {
-	Coin       string
-	Name       string
-	Time       string
-	Depth      string
-	AskAverage float64
-	AskQty     float64
-	BidAverage float64
-	BidQty     float64
-	AskByOrder float64
-	BidByOrder float64
-}
-
-type DepthValue struct {
-	Time       string
-	AskAverage float64
-	AskQty     float64
-	BidAverage float64
-	BidQty     float64
-	AskByOrder float64 // 下单深度均价
-	AskPrice   float64 // 下单价格
-	BidByOrder float64
-	BidPrice   float64
-
-	LimitTradePrice  float64
-	LimitTradeAmount float64
 }
 
 type TickerValue struct {
@@ -194,10 +162,12 @@ type TradeResult struct {
 	OrderID string
 }
 
+const DepthTypeBids = 0
+const DepthTypeAsks = 1
 /* 获取深度价格 */
 type DepthPrice struct {
-	price float64
-	qty   float64
+	Price float64
+	Quantity   float64
 }
 
 // IExchange the interface of a exchange
@@ -215,12 +185,13 @@ type IExchange interface {
 	Close()
 
 	// StartTicker() send message to the exchange to start the ticker of the given pairs
-	StartTicker(pair string, option map[string]interface{})
+	StartTicker(pair string)
 	// GetTicker(), better to use the ITicker to notify the ticker information
 	GetTicker(pair string) *TickerValue
 
 	// GetDepthValue() get the depth of the assigned price area and quantity
-	GetDepthValue(pair string, price float64, limit float64, orderQuantity float64, tradeType TradeType) *DepthValue
+	// GetDepthValue(pair string, price float64, limit float64, orderQuantity float64, tradeType TradeType) []DepthPrice
+	GetDepthValue(pair string) [][]DepthPrice
 	// GetBalance() get the balances of all the coins
 	GetBalance() map[string]interface{}
 
@@ -248,122 +219,70 @@ func RevertTradeType(tradeType TradeType) TradeType {
 	return TradeTypeUnknown
 }
 
-func RevertDepthArray(array []DepthPrice) []DepthPrice {
-	var tmp DepthPrice
-	var length int
-
-	if len(array)%2 != 0 {
-		length = len(array) / 2
-	} else {
-		length = len(array)/2 - 1
-	}
-	for i := 0; i <= length; i++ {
-		tmp = array[i]
-		array[i] = array[len(array)-1-i]
-		array[len(array)-1-i] = tmp
-
-	}
-	return array
-}
 
 /*
 	实际意义不大
 */
-func GetDepthAveragePrice(items []DepthPrice) (float64, float64) {
+// func GetDepthAveragePrice(items []DepthPrice) (float64, float64) {
 
-	if items == nil || len(items) == 0 {
-		return -1, -1
-	}
+// 	if items == nil || len(items) == 0 {
+// 		return -1, -1
+// 	}
 
-	var total float64
-	var quantity float64
+// 	var total float64
+// 	var quantity float64
 
-	for _, item := range items {
-		total += item.price * item.qty
-		quantity += item.qty
-	}
+// 	for _, item := range items {
+// 		total += item.price * item.qty
+// 		quantity += item.qty
+// 	}
 
-	return total / quantity, quantity
-}
+// 	return total / quantity, quantity
+// }
 
 /*
 	返回：（下单均价，下单价格）
 */
-func GetDepthPriceByOrder(items []DepthPrice, orderQty float64) (float64, float64) {
-	if items == nil || len(items) == 0 {
-		return -1, -1
-	}
+// func GetDepthPriceByOrder(items []DepthPrice, orderQty float64) (float64, float64) {
+// 	if items == nil || len(items) == 0 {
+// 		return -1, -1
+// 	}
 
-	// log.Printf("Depth:%v", items)
-	var total float64
-	var amount float64
-	for _, item := range items {
-		total += item.qty
-		amount += (item.qty * item.price)
-	}
+// 	// log.Printf("Depth:%v", items)
+// 	var total float64
+// 	var amount float64
+// 	for _, item := range items {
+// 		total += item.qty
+// 		amount += (item.qty * item.price)
+// 	}
 
-	if orderQty > total {
-		log.Printf("深度不够：%v", total)
-		return amount / total, -2
+// 	if orderQty > total {
+// 		log.Printf("深度不够：%v", total)
+// 		return amount / total, -2
 
-	}
+// 	}
 
-	var depth int
-	balance := orderQty
+// 	var depth int
+// 	balance := orderQty
 
-	for i, item := range items {
-		if balance-item.qty <= 0 {
-			depth = i
-			break
-		} else {
-			balance -= item.qty
-		}
-	}
+// 	for i, item := range items {
+// 		if balance-item.qty <= 0 {
+// 			depth = i
+// 			break
+// 		} else {
+// 			balance -= item.qty
+// 		}
+// 	}
 
-	total = 0
-	for i := 0; i < depth; i++ {
-		total += items[i].price * items[i].qty
-	}
+// 	total = 0
+// 	for i := 0; i < depth; i++ {
+// 		total += items[i].price * items[i].qty
+// 	}
 
-	total += (items[depth].price * balance)
+// 	total += (items[depth].price * balance)
 
-	return total / orderQty, items[depth].price
-}
-
-/*
-	返回：（下单价格，下单数量）
-*/
-func GetDepthPriceByPrice(items []DepthPrice, price float64, limit float64, quantity float64) (float64, float64) {
-	if items == nil || len(items) == 0 || limit <= 0 {
-		return -1, -1
-	}
-
-	limitPriceHigh := price * (1 + limit)
-	limitPriceLow := price * (1 - limit)
-	logger.Debugf("有效价格范围：%v-%v", limitPriceLow, limitPriceHigh)
-
-	var tradePrice float64
-	var tradeQuantity float64
-	for _, item := range items {
-		if item.price >= limitPriceLow && item.price <= limitPriceHigh {
-
-			tradePrice = item.price
-			tradeQuantity += item.qty
-
-			if tradeQuantity > quantity {
-				tradeQuantity = quantity
-				break
-			}
-
-		} else {
-			logger.Debugf("超出价格范围")
-			break
-		}
-	}
-
-	logger.Debugf("限价价格：%v 限价数量：%v", tradePrice, tradeQuantity)
-	return tradePrice, tradeQuantity
-}
+// 	return total / orderQty, items[depth].price
+// }
 
 func GetRatio(value1 float64, value2 float64) float64 {
 
