@@ -13,18 +13,36 @@ const FundStatusOpen = "open"
 const FundStatusOpened = "opened"
 const FundStatusClose = "close"
 const FundStatusClosed = "closed"
+const FUndStatusError = "error"
+
+// type FundInfo struct {
+// 	Type         string    `json:"type"`
+// 	Batch        string    `json:"batch"`
+// 	OpenType     string    `json:"opentype"`
+// 	Coin         string    `json:"coin"`
+// 	OpenTime     time.Time `json:"opentime"`
+// 	OpenBalance  float64   `json:"openbalance"`
+// 	CloseTime    time.Time `json:"closetime"`
+// 	CloseBalance float64   `json:"closebalance"`
+// 	Exchange     string    `json:"exchange"`
+// 	Status       string    `json:"status"`
+// }
 
 type FundInfo struct {
-	Type         string    `json:"type"`
-	Batch        string    `json:"batch"`
-	OpenType     string    `json:"opentype"`
-	Coin         string    `json:"coin"`
-	OpenTime     time.Time `json:"opentime"`
-	OpenBalance  float64   `json:"openbalance"`
-	CloseTime    time.Time `json:"closetime"`
-	CloseBalance float64   `json:"closebalance"`
-	Exchange     string    `json:"exchange"`
-	Status       string    `json:"status"`
+	Batch     string    `json:"batch"`
+	Pair      string    `json:"pair"`
+	OpenTime  time.Time `json:"opentime"`
+	CloseTime time.Time `json:"closetime"`
+	Status    string    `json:"status"`
+
+	SpotType     string  `json:"spottype"`
+	FutureType   string  `json:"futuretype"`
+	SpotOpen     float64 `json:"spotopen"`
+	SpotClose    float64 `json:"spotclose"`
+	SpotAmount   float64 `json:"spotamount"`
+	FutureOpen   float64 `json:"futureopen"`
+	FutureClose  float64 `json:"futureclose"`
+	FutureAmount float64 `json:"futureamount"`
 }
 
 type Funds struct {
@@ -88,6 +106,20 @@ func (t *Funds) FindAll() (error, []FundInfo) {
 	var result []FundInfo
 	if t.session != nil {
 		err := t.collection.Find(nil).All(&result)
+		if err != nil {
+			return err, nil
+		}
+
+		return nil, result
+	}
+
+	return errors.New("Connection is lost"), nil
+}
+
+func (t *Funds) Find(conditions map[string]interface{}) (error, []FundInfo) {
+	var result []FundInfo
+	if t.session != nil {
+		err := t.collection.Find(bson.M(conditions)).All(&result)
 		if err != nil {
 			return err, nil
 		}

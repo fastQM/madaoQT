@@ -71,8 +71,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
               <paper-input name="close" type="number" label="平仓差价百分比" value="{{item.close}}" required alwaysFloatLabel>
                 <div slot="suffix">%</div>
               </paper-input>
-              <paper-input name="position" type="number" label="合约仓位比例" value="{{item.position}}" required alwaysFloatLabel>
-                <div slot="suffix">%</div>
+              <paper-input name="amount" type="number" label="开仓金额" value="{{item.amount}}" required alwaysFloatLabel>
+                <div slot="prefix">$</div>
               </paper-input>
               <paper-checkbox checked="{{item.checked}}">执行</paper-checkbox>
             </div>
@@ -176,9 +176,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         super.ready()
         this.coins = [
           // all value will divide 100
-          {name: "eth", open:3, close:1.5, position: 10, checked:true},
-          {name: "btc", open:3, close:0.5, position: 10, checked:true},
-          {name: "ltc", open:3, close:1.5, position: 10, checked:true},
+          {name: "eth", open:3, close:1.5, amount: 50, checked:false},
+          {name: "btc", open:3, close:0.5, amount: 50, checked:false},
+          {name: "ltc", open:3, close:1.5, amount: 50, checked:false},
         ]
 
       }
@@ -211,7 +211,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             config.area[this.coins[i].name] = {
               open: parseFloat(this.coins[i].open),
               close: parseFloat(this.coins[i].close),
-              position: parseFloat(this.coins[i].position),
+              amount: parseFloat(this.coins[i].amount),
             }
             
           }

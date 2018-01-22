@@ -8,6 +8,7 @@ import (
 
 	"github.com/kataras/golog"
 
+	Global "madaoQT/config"
 	Exchange "madaoQT/exchange"
 	Mongo "madaoQT/mongo"
 	Utils "madaoQT/utils"
@@ -22,7 +23,7 @@ func init() {
 	logger := golog.New()
 	Logger = logger
 	Logger.SetLevel("debug")
-	Logger.SetTimeFormat("2006-01-02 06:04:05")
+	Logger.SetTimeFormat(Global.TimeFormat)
 	Logger.SetPrefix("[TASK]")
 }
 
@@ -59,6 +60,7 @@ var TaskErrorMsg = map[TaskErrorType]string{
 type TradeResult struct {
 	Error      TaskErrorType
 	DealAmount float64 // 已成交金额，如果部分成交，需要将该部分平仓
+	AvgPrice   float64
 }
 
 type TaskExplanation struct {
@@ -143,7 +145,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 		defer close(channel)
 
 		// var dealAmount, totalCost, avePrice float64
-		var dealAmount float64
+		var dealAmount, totalCost, avePrice float64
 		var trade *Exchange.TradeResult
 		var depthInvalidCount int
 		var errorCode TaskErrorType
@@ -179,18 +181,19 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 					goto __ERROR
 				}
 				goto _NEXTLOOP
-			}else{
-				err, tradePrice, tradeAmount = getPlacedPrice(tradeConfig.Type, 
-											depth, 
-											tradeConfig.Price,
-											tradeConfig.Limit,
-											tradeConfig.Amount-dealAmount)
+			} else {
+				Logger.Debugf("深度:%v", depth)
+				err, tradePrice, tradeAmount = getPlacedPrice(tradeConfig.Type,
+					depth,
+					tradeConfig.Price,
+					tradeConfig.Limit,
+					tradeConfig.Amount-dealAmount)
 
-				if err != nil{
+				if err != nil {
 					Logger.Errorf("Trade Error:%v", err)
 					goto _NEXTLOOP
 				}
-				
+
 				Logger.Debugf("交易价格：%v 交易数量:%v", tradePrice, tradeAmount)
 			}
 
@@ -242,7 +245,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 					if info[0].Status == Exchange.OrderStatusDone {
 						dealAmount += info[0].DealAmount
-						// totalCost += (info[0].AvgPrice * info[0].DealAmount) //手续费如何？
+						totalCost += (info[0].AvgPrice * info[0].DealAmount) //手续费如何？
 						dbTrades.SetDone(trade.OrderID)
 						goto __CheckDealAmount
 					}
@@ -291,7 +294,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 							// })
 
 							dealAmount += info[0].DealAmount
-							// totalCost += (info[0].AvgPrice * info[0].DealAmount)
+							totalCost += (info[0].AvgPrice * info[0].DealAmount)
 							Logger.Debugf("成功取消订单：%v, 已成交金额:%v", info[0].OrderID, dealAmount)
 							goto __CheckDealAmount
 
@@ -309,20 +312,22 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 			}
 
 		__ERROR:
+			avePrice = totalCost / dealAmount
 			channel <- TradeResult{
 				Error:      errorCode,
 				DealAmount: dealAmount,
+				AvgPrice:   avePrice,
 			}
 
 			return
 		__CheckBalance:
 			// balance = exchange.GetBalance()[coin]
-			// avePrice = totalCost / dealAmount
+			avePrice = totalCost / dealAmount
 			// Logger.Debugf("交易完成，余额：%v 成交均价：%v", balance, avePrice)
 			channel <- TradeResult{
 				Error: TaskErrorSuccess,
 				// Balance:  balance.(map[string]interface{})["balance"].(float64),
-				// AvgPrice: avePrice,
+				AvgPrice:   avePrice,
 				DealAmount: dealAmount,
 			}
 			return
@@ -381,12 +386,12 @@ func revertDepthArray(array []Exchange.DepthPrice) []Exchange.DepthPrice {
 	return array
 }
 
-// getPlacedPrice calcutes the price to be placed 
+// getPlacedPrice calcutes the price to be placed
 func getPlacedPrice(tradeType Exchange.TradeType,
-						items [][]Exchange.DepthPrice, 
-						price float64, 
-						limit float64, 
-						quantity float64) (error, float64, float64) {
+	items [][]Exchange.DepthPrice,
+	price float64,
+	limit float64,
+	quantity float64) (error, float64, float64) {
 
 	if items == nil || items[Exchange.DepthTypeAsks] == nil || items[Exchange.DepthTypeBids] == nil {
 		return errors.New("Invalid depth list"), 0, 0
@@ -396,10 +401,10 @@ func getPlacedPrice(tradeType Exchange.TradeType,
 		return errors.New("the lenth of the depth is 0"), 0, 0
 	}
 
-	var list []Exchange.DepthPrice 
+	var list []Exchange.DepthPrice
 	if tradeType == Exchange.TradeTypeOpenLong || tradeType == Exchange.TradeTypeCloseShort || tradeType == Exchange.TradeTypeBuy {
 		list = revertDepthArray(items[Exchange.DepthTypeAsks])
-	}else{
+	} else {
 		list = items[Exchange.DepthTypeBids]
 	}
 
@@ -437,13 +442,24 @@ func TranslateToContractNumber(price float64, coinQuantity float64) int {
 	静态加载的任务
 */
 
+type StatusType int
+
+const (
+	StatusNone StatusType = iota
+	StatusProcessing
+	StatusOrdering
+	StatusError
+)
+
 type ITask interface {
 	GetTaskName() string
 	GetDefaultConfig() interface{}
 	GetBalances() map[string]interface{}
 	GetTrades() []Mongo.TradesRecord
+
 	Start(api string, secret string, configJSON string) error
 	Close()
+	GetStatus() int
 }
 
 func LoadStaticTask() []ITask {

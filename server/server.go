@@ -10,7 +10,7 @@ import (
 	"github.com/kataras/iris/mvc"
 	"github.com/kataras/iris/sessions"
 
-	Config "madaoQT/config"
+	Global "madaoQT/config"
 	Exchange "madaoQT/exchange"
 	Controllers "madaoQT/server/controllers"
 	Websocket "madaoQT/server/websocket"
@@ -35,7 +35,7 @@ func init() {
 	logger := golog.New()
 	Logger = logger
 	Logger.SetLevel("debug")
-	Logger.Info("Web package init() finished")
+	Logger.SetTimeFormat(Global.TimeFormat)
 }
 
 func (h *HttpServer) setupRoutes() {
@@ -99,7 +99,7 @@ func (h *HttpServer) SetupHttpServer() {
 	views := iris.HTML("./www/www", ".html")
 	views.Reload(true) //开发模式，强制每次请求都更新页面
 
-	if Config.ProductionEnv {
+	if Global.ProductionEnv {
 		// h.app.StaticEmbedded("/static", "./views/node_modules", Asset, AssetNames)
 
 	} else {

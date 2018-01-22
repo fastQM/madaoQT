@@ -25,8 +25,6 @@ func (c *ChartsController) GetBy(coin string) iris.Map {
 
 	defer okexdiff.Close()
 
-	Logger.Debugf("Coin:%v", coin)
-
 	records, err := okexdiff.FindAll(map[string]interface{}{
 		"coin": coin,
 	})

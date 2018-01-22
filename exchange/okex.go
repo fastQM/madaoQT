@@ -18,8 +18,8 @@ import (
 const NameOKEXSpot = "OkexSpot"
 const NameOKEXFuture = "OkexFuture"
 
-const future__ENDPoint = "wss://real.okex.com:10440/websocket/okexapi"
-const spot__ENDPoint = "wss://real.okex.com:10441/websocket"
+const futureEndPoint = "wss://real.okex.com:10440/websocket/okexapi"
+const spotEndPoint = "wss://real.okex.com:10441/websocket"
 
 // event
 const EventAddChannel = "addChannel"
@@ -69,13 +69,13 @@ type OKExAPI struct {
 	secretKey string
 
 	tickerList   []TickerListItem
-	ticker int64
-	lastTicker int64
+	ticker       int64
+	lastTicker   int64
 	errorCounter int
 
 	event        chan EventType
 	exchangeType ExchangeType
-	period string
+	period       string
 
 	/* Each channel has a depth */
 	messageChannels sync.Map
@@ -100,7 +100,7 @@ func NewOKExFutureApi(config *Config) *OKExAPI {
 
 	config.Custom = map[string]interface{}{
 		"exchangeType": ExchangeTypeFuture,
-		"period": "this_week",
+		"period":       "this_week",
 	}
 	future := new(OKExAPI)
 	future.SetConfigure(*config)
@@ -137,8 +137,8 @@ func (o *OKExAPI) SetConfigure(config Config) {
 	o.apiKey = config.API
 	o.secretKey = config.Secret
 	o.exchangeType = config.Custom["exchangeType"].(ExchangeType)
-	
-	if o.exchangeType == ExchangeTypeFuture{
+
+	if o.exchangeType == ExchangeTypeFuture {
 		period := config.Custom["period"]
 		if period == nil {
 			logger.Error("period is not set for future exchange")
@@ -159,18 +159,18 @@ func (o *OKExAPI) Start() error {
 	var url string
 
 	if o.exchangeType == ExchangeTypeFuture {
-		url = future__ENDPoint
+		url = futureEndPoint
 	} else if o.exchangeType == ExchangeTypeSpot {
-		url = spot__ENDPoint
+		url = spotEndPoint
 	} else {
 		return errors.New("Invalid exchange type")
 	}
 
 	c, _, err := Websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
-		errMsg := fmt.Sprintf("Fail to dial: %v", err)
+		logger.Errorf("Fail to dial:%v", err)
 		go o.triggerEvent(EventLostConnection)
-		return errors.New(errMsg)
+		return err
 	}
 
 	go func() {
@@ -322,55 +322,6 @@ func (o *OKExAPI) Close() {
 	}
 }
 
-// StartContractTicker start the ticker
-// ① X值为：btc, ltc
-// ② Y值为：this_week
-// func (o *OKExAPI) StartContractTicker(pair string, period string, tag string) {
-
-// 	coins := ParsePair(pair)
-
-// 	channel := strings.Replace(ChannelContractTicker, "X", coins[0], 1)
-// 	channel = strings.Replace(channel, "Y", period, 1)
-
-// 	ticker := TickerListItem{
-// 		Pair:   tag,
-// 		Symbol: channel,
-// 	}
-
-// 	o.tickerList = append(o.tickerList, ticker)
-
-// 	data := map[string]string{
-// 		"event":   "addChannel",
-// 		"channel": channel,
-// 	}
-
-// 	o.command(data, nil)
-// }
-
-// // StartCurrentTicker start the ticker
-// // ① X值为：ltc_btc eth_btc etc_btc bch_btc btc_usdt
-// // eth_usdt ltc_usdt etc_usdt bch_usdt etc_eth bt1_btc
-// // bt2_btc btg_btc qtum_btc hsr_btc neo_btc gas_btc
-// // qtum_usdt hsr_usdt neo_usdt gas_usdt
-// func (o *OKExAPI) StartCurrentTicker(pair string, tag string) {
-// 	coins := ParsePair(pair)
-// 	channel := strings.Replace(ChannelCurrentChannelTicker, "X", coins[0]+"_"+coins[1], 1)
-
-// 	ticker := TickerListItem{
-// 		Pair:   tag,
-// 		Symbol: channel,
-// 	}
-
-// 	o.tickerList = append(o.tickerList, ticker)
-
-// 	data := map[string]string{
-// 		"event":   "addChannel",
-// 		"channel": channel,
-// 	}
-
-// 	o.command(data, nil)
-// }
-
 func (o *OKExAPI) StartTicker(pair string) {
 
 	var coins []string
@@ -412,21 +363,22 @@ func (o *OKExAPI) GetExchangeName() string {
 }
 
 func (o *OKExAPI) GetTicker(pair string) *TickerValue {
-
-	const PermitRetryCount = 10
-
 	for _, ticker := range o.tickerList {
 		if ticker.Pair == pair {
 			if ticker.Value != nil {
 
-				if o.ticker == o.lastTicker{
+				if o.ticker == o.lastTicker {
 					o.errorCounter++
-					if o.errorCounter>10{
+					if o.errorCounter > 10 {
 						logger.Debug("Reset Connection")
-						o.triggerEvent(EventLostConnection)
+						o.conn.Close()
+						o.errorCounter = 0
+						o.ticker = 0
+						o.lastTicker = 0
+						go o.triggerEvent(EventLostConnection)
 						return nil
 					}
-				}else{
+				} else {
 					o.lastTicker = o.ticker
 					o.errorCounter = 0
 				}
@@ -527,11 +479,10 @@ func (o *OKExAPI) GetDepthValue(coin string) [][]DepthPrice {
 		// defer o.SwitchCurrentDepth(false, coinA, coinB, "20")
 	}
 
-
 	select {
 	case <-time.After(DefaultTimeoutSec * time.Second):
 		log.Print("timeout to wait for the depths")
-		o.triggerEvent(EventLostConnection)
+		go o.triggerEvent(EventLostConnection)
 		return nil
 	case recv := <-recvChan:
 		list := make([][]DepthPrice, 2)
@@ -707,7 +658,7 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 	recvChan := make(chan interface{})
 	o.messageChannels.Store(channel, recvChan)
 
-	if err := o.command(data, parameters);err != nil{
+	if err := o.command(data, parameters); err != nil {
 		return &TradeResult{
 			Error: err,
 		}
@@ -715,7 +666,7 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 
 	select {
 	case <-time.After(DefaultTimeoutSec * time.Second):
-		o.triggerEvent(EventLostConnection)
+		go o.triggerEvent(EventLostConnection)
 		return &TradeResult{
 			Error: errors.New("Timeout"),
 		}
@@ -785,7 +736,7 @@ func (o *OKExAPI) CancelOrder(order OrderInfo) *TradeResult {
 
 	select {
 	case <-time.After(DefaultTimeoutSec * time.Second):
-		o.triggerEvent(EventLostConnection)
+		go o.triggerEvent(EventLostConnection)
 		return nil
 	case recv := <-recvChan:
 		if recv != nil {
@@ -895,7 +846,7 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 		return result
 	case <-time.After(DefaultTimeoutSec * time.Second):
 		log.Printf("Timeout to get user info")
-		o.triggerEvent(EventLostConnection)
+		go o.triggerEvent(EventLostConnection)
 		return nil
 	}
 }
@@ -992,7 +943,7 @@ func (o *OKExAPI) GetBalance() map[string]interface{} {
 		return nil
 	case <-time.After(DefaultTimeoutSec * time.Second):
 		log.Printf("Timeout to get user info")
-		o.triggerEvent(EventLostConnection)
+		go o.triggerEvent(EventLostConnection)
 		return nil
 	}
 

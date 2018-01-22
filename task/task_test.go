@@ -19,14 +19,15 @@ func _TestProcessFutureTrade(t *testing.T) {
 	okexFuture.SetConfigure(Exchange.Config{
 		API:    constOKEXApiKey,
 		Secret: constOEXSecretKey,
-		Custom: map[string]interface{}{"exchangeType": Exchange.ExchangeTypeFuture},
+		Custom: map[string]interface{}{
+			"exchangeType": Exchange.ExchangeTypeFuture,
+			"period":       "this_week",
+		},
 	})
 
 	okexFuture.Start()
 
-	okexFuture.StartTicker(pair, map[string]interface{}{
-		"period": "this_week",
-	})
+	okexFuture.StartTicker(pair)
 
 	var tickerValue *Exchange.TickerValue
 	for {
@@ -61,7 +62,7 @@ func _TestProcessSpotTrade(t *testing.T) {
 
 	okexSpot.Start()
 
-	okexSpot.StartTicker(pair, nil)
+	okexSpot.StartTicker(pair)
 
 	var tickerValue *Exchange.TickerValue
 	for {

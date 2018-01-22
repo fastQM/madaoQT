@@ -3,6 +3,8 @@ package exchange
 import (
 	"strings"
 
+	Global "madaoQT/config"
+
 	"github.com/kataras/golog"
 )
 
@@ -13,7 +15,7 @@ func init() {
 	_logger := golog.New()
 	logger = _logger
 	logger.SetLevel("debug")
-	logger.SetTimeFormat("2006-01-02 06:04:05")
+	logger.SetTimeFormat(Global.TimeFormat)
 }
 
 // ExchangeType the type of the exchange, spot or the future exchange
@@ -73,6 +75,17 @@ var TradeTypeString = map[TradeType]string{
 	TradeTypeSell:       "Sell",
 	TradeTypeCancel:     "cancel",
 	TradeTypeUnknown:    "Unknown_TradeType",
+}
+
+func TradeTypeInt(tradeType string) TradeType {
+
+	for i := 0; i < int(TradeTypeUnknown); i++ {
+		if TradeTypeString[TradeType(i)] == tradeType {
+			return TradeType(i)
+		}
+	}
+
+	return -1
 }
 
 const (
@@ -164,10 +177,11 @@ type TradeResult struct {
 
 const DepthTypeBids = 0
 const DepthTypeAsks = 1
+
 /* 获取深度价格 */
 type DepthPrice struct {
-	Price float64
-	Quantity   float64
+	Price    float64
+	Quantity float64
 }
 
 // IExchange the interface of a exchange
@@ -218,7 +232,6 @@ func RevertTradeType(tradeType TradeType) TradeType {
 
 	return TradeTypeUnknown
 }
-
 
 /*
 	实际意义不大

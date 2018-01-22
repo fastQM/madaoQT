@@ -139,6 +139,21 @@ _ERROR:
 	}
 }
 
+func (t *TaskController) GetStatus() iris.Map {
+
+	if task, ok := t.Tasks.Load("okexdiff"); ok {
+		result := task.(Task.ITask).GetStatus()
+		return iris.Map{
+			"result": true,
+			"data":   result,
+		}
+	}	
+
+	return iris.Map{
+		"result": false,
+	}
+}
+
 func (t *TaskController) GetBalances() iris.Map {
 
 	if task, ok := t.Tasks.Load("okexdiff"); ok {
