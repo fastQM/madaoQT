@@ -121,3 +121,53 @@ func _TestStartTask(t *testing.T) {
 
 	task.ExitTask()
 }
+
+func TestCalcPrice(t *testing.T) {
+	var totalQuantity, totalAmount, askPrice float64
+	isFuture := true
+	var amount float64
+	var quantity float64
+	var askFlag bool
+	amount = 5000
+	quantity = 5
+
+	asks := []Exchange.DepthPrice{
+		{983.497, 0.3152}, {983.186, 0.2237}, {982.471, 1.2723}, {982.292, 0.6413}, {980.897, 4.0779},
+	}
+	for _, depth := range asks {
+
+		if isFuture {
+			if (totalQuantity + depth.Quantity) >= quantity {
+
+				totalAmount += depth.Price * (quantity - totalQuantity)
+				totalQuantity = quantity
+				log.Printf("totalQuantity %v totalAmount %v", totalQuantity, totalAmount)
+				askFlag = true
+				askPrice = totalAmount / totalQuantity
+				break
+			} else {
+
+				totalQuantity += depth.Quantity
+				totalAmount += depth.Quantity * depth.Price
+				log.Printf("totalQuantity %v totalAmount %v", totalQuantity, totalAmount)
+			}
+		} else {
+			if (totalAmount + depth.Price*depth.Quantity) >= amount {
+
+				totalQuantity += (amount - totalAmount) / depth.Price
+				totalAmount = amount
+				log.Printf("totalQuantity %v totalAmount %v amount %v", totalQuantity, totalAmount, (amount - totalAmount))
+				askFlag = true
+				askPrice = totalAmount / totalQuantity
+				break
+			} else {
+				totalQuantity += depth.Quantity
+				totalAmount += depth.Quantity * depth.Price
+				log.Printf("totalQuantity %v totalAmount %v", totalQuantity, totalAmount)
+			}
+		}
+
+	}
+
+	log.Printf("Flag %v Price %v", askFlag, askPrice)
+}

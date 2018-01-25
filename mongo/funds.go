@@ -10,10 +10,8 @@ import (
 )
 
 const FundStatusOpen = "open"
-const FundStatusOpened = "opened"
 const FundStatusClose = "close"
-const FundStatusClosed = "closed"
-const FUndStatusError = "error"
+const FundStatusError = "error"
 
 // type FundInfo struct {
 // 	Type         string    `json:"type"`

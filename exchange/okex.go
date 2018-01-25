@@ -668,7 +668,7 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 	case <-time.After(DefaultTimeoutSec * time.Second):
 		go o.triggerEvent(EventLostConnection)
 		return &TradeResult{
-			Error: errors.New("Timeout"),
+			Error: errors.New("Timeout to trade"),
 		}
 	case recv := <-recvChan:
 		// log.Printf("message:%v", message)

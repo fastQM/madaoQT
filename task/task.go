@@ -2,6 +2,7 @@ package task
 
 import (
 	"errors"
+	"math"
 	"os"
 	"os/exec"
 	"time"
@@ -137,7 +138,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 	// var balance interface{} // 实际余额后台返回为准
 	// coin := Exchange.ParsePair(tradeConfig.Coin)[0]
 	channel := make(chan TradeResult)
-	stopTime := time.Now().Add(1 * time.Minute)
+	stopTime := time.Now().Add(5 * time.Minute)
 
 	Logger.Debugf("Trade Params:%v", tradeConfig)
 
@@ -191,6 +192,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 				if err != nil {
 					Logger.Errorf("Trade Error:%v", err)
+					Utils.SleepAsyncBySecond(3)
 					goto _NEXTLOOP
 				}
 
@@ -220,10 +222,10 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 			if trade != nil && trade.Error == nil {
 
-				loop := 10
+				loop := 20
 
 				for {
-					Utils.SleepAsyncBySecond(1)
+					Utils.SleepAsyncBySecond(3)
 
 					info := exchange.GetOrderInfo(Exchange.OrderInfo{
 						OrderID: trade.OrderID,
@@ -351,18 +353,41 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 }
 
-func InPriceArea(price float64, baseprice float64, area float64) bool {
+func OutFuturePriceArea(futureConfig Exchange.TradeConfig, askPrice float64, bidPrice float64, area float64) bool {
 
 	if area <= 0 {
 		Logger.Errorf("Invalid Area:%v", area)
 		return false
 	}
 
-	high := baseprice * (1 + area)
-	low := baseprice * (1 - area)
+	if futureConfig.Type == Exchange.TradeTypeCloseLong {
+		if askPrice > futureConfig.Price*(1+area) {
+			return true
+		}
+	} else if futureConfig.Type == Exchange.TradeTypeCloseShort {
+		if bidPrice < futureConfig.Price*(1-area) {
+			return true
+		}
+	}
 
-	if price <= high && price >= low {
-		return true
+	return false
+}
+
+func CheckPriceDiff(spotConfig Exchange.TradeConfig, futureConfig Exchange.TradeConfig,
+	askFuturePrice float64, bidFuturePrice float64, askSpotPrice float64, bidSpotPrice float64, close float64) bool {
+
+	if spotConfig.Type == Exchange.TradeTypeBuy && futureConfig.Type == Exchange.TradeTypeCloseLong {
+		if math.Abs(askSpotPrice-bidFuturePrice)*100/bidFuturePrice < close {
+			return true
+		}
+	} else if spotConfig.Type == Exchange.TradeTypeSell && futureConfig.Type == Exchange.TradeTypeCloseShort {
+		if math.Abs(askFuturePrice-bidSpotPrice)*100/bidSpotPrice < close {
+			return true
+		}
+
+	} else {
+		Logger.Error("无效的交易配置")
+		return false
 	}
 
 	return false
@@ -402,40 +427,170 @@ func getPlacedPrice(tradeType Exchange.TradeType,
 	}
 
 	var list []Exchange.DepthPrice
+	var tradePrice, tradeQuantity float64
+
 	if tradeType == Exchange.TradeTypeOpenLong || tradeType == Exchange.TradeTypeCloseShort || tradeType == Exchange.TradeTypeBuy {
+		// we need the depth listed from low to high
 		list = revertDepthArray(items[Exchange.DepthTypeAsks])
-	} else {
-		list = items[Exchange.DepthTypeBids]
-	}
+		limitPriceHigh := price * (1 + limit)
+		Logger.Debugf("买入操作，接受最高价格：%v", limitPriceHigh)
+		for _, item := range list {
+			if item.Price <= limitPriceHigh {
 
-	limitPriceHigh := price * (1 + limit)
-	limitPriceLow := price * (1 - limit)
-	Logger.Debugf("有效价格范围：%v-%v", limitPriceLow, limitPriceHigh)
+				tradePrice = item.Price
+				tradeQuantity += item.Quantity
 
-	var tradePrice float64
-	var tradeQuantity float64
-	for _, item := range list {
-		if item.Price >= limitPriceLow && item.Price <= limitPriceHigh {
+				if tradeQuantity > quantity {
+					tradeQuantity = quantity
+					break
+				}
 
-			tradePrice = item.Price
-			tradeQuantity += item.Quantity
-
-			if tradeQuantity > quantity {
-				tradeQuantity = quantity
-				break
+			} else {
+				Logger.Debugf("超出价格范围")
+				return errors.New("exceed the price limit"), 0, 0
 			}
+		}
 
-		} else {
-			Logger.Debugf("超出价格范围")
-			break
+	} else {
+		// we need the depth listed from higt to low
+		list = items[Exchange.DepthTypeBids]
+
+		limitPriceLow := price * (1 - limit)
+		Logger.Debugf("卖出操作，接受最低价格：%v", limitPriceLow)
+		for _, item := range list {
+			if item.Price >= limitPriceLow {
+
+				tradePrice = item.Price
+				tradeQuantity += item.Quantity
+
+				if tradeQuantity > quantity {
+					tradeQuantity = quantity
+					break
+				}
+
+			} else {
+				Logger.Debugf("超出价格范围")
+				return errors.New("exceed the price limit"), 0, 0
+			}
 		}
 	}
+
+	// limitPriceHigh := price * (1 + limit)
+	// limitPriceLow := price * (1 - limit)
+	// Logger.Debugf("有效价格范围：%v-%v", limitPriceLow, limitPriceHigh)
+
+	// for _, item := range list {
+	// 	if item.Price >= limitPriceLow && item.Price <= limitPriceHigh {
+
+	// 		tradePrice = item.Price
+	// 		tradeQuantity += item.Quantity
+
+	// 		if tradeQuantity > quantity {
+	// 			tradeQuantity = quantity
+	// 			break
+	// 		}
+
+	// 	} else {
+	// 		Logger.Debugf("超出价格范围")
+	// 		break
+	// 	}
+	// }
 
 	return nil, tradePrice, tradeQuantity
 }
 
 func TranslateToContractNumber(price float64, coinQuantity float64) int {
 	return int(coinQuantity * price / 10)
+}
+
+func CalcDepthPrice(isFuture bool, exchange Exchange.IExchange, pair string, amount float64) (error, float64, float64) {
+
+	var asks, bids []Exchange.DepthPrice
+	var quantity, askPrice, bidPrice float64
+	var askFlag, bidFlag bool
+	depths := exchange.GetDepthValue(pair)
+	Logger.Debugf("Future:%v 深度:%v", isFuture, depths)
+	if depths != nil {
+		asks = revertDepthArray(depths[Exchange.DepthTypeAsks])
+		bids = depths[Exchange.DepthTypeBids]
+	}
+
+	amount *= 2
+
+	if isFuture {
+		quantity = amount / constContractRatio[Exchange.ParsePair(pair)[0]]
+	}
+
+	// Logger.Debugf("Asks:%v", asks)
+	// Logger.Debugf("Bids:%v", bids)
+
+	if asks != nil && len(asks) != 0 {
+		var totalQuantity, totalAmount float64
+		for _, depth := range asks {
+
+			if isFuture {
+				if (totalQuantity + depth.Quantity) >= quantity {
+
+					totalAmount += depth.Price * (quantity - totalQuantity)
+					totalQuantity = quantity
+					askFlag = true
+					askPrice = totalAmount / totalQuantity
+					break
+				} else {
+					totalQuantity += depth.Quantity
+					totalAmount += depth.Quantity * depth.Price
+				}
+			} else {
+				if (totalAmount + depth.Price*depth.Quantity) >= amount {
+					totalQuantity += (amount - totalAmount) / depth.Price
+					totalAmount = amount
+					askFlag = true
+					askPrice = totalAmount / totalQuantity
+					break
+				} else {
+					totalQuantity += depth.Quantity
+					totalAmount += depth.Quantity * depth.Price
+				}
+			}
+
+		}
+	}
+
+	if bids != nil && len(bids) != 0 {
+		var totalQuantity, totalAmount float64
+		for _, depth := range bids {
+			if isFuture {
+				if (totalQuantity + depth.Quantity) >= quantity {
+
+					totalAmount += depth.Price * (quantity - totalQuantity)
+					totalQuantity = quantity
+					bidFlag = true
+					bidPrice = totalAmount / totalQuantity
+					break
+				} else {
+					totalQuantity += depth.Quantity
+					totalAmount += depth.Quantity * depth.Price
+				}
+			} else {
+				if (totalAmount + depth.Price*depth.Quantity) >= amount {
+					totalQuantity += (amount - totalAmount) / depth.Price
+					totalAmount = amount
+					bidFlag = true
+					bidPrice = totalAmount / totalQuantity
+					break
+				} else {
+					totalQuantity += depth.Quantity
+					totalAmount += depth.Quantity * depth.Price
+				}
+			}
+		}
+	}
+
+	if askFlag && bidFlag {
+		return nil, askPrice, bidPrice
+	}
+
+	return errors.New("Invalid depth"), 0, 0
 }
 
 /*

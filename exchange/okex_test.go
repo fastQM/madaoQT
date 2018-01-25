@@ -9,7 +9,6 @@ import (
 const constAPIKey = "a982120e-8505-41db-9ae3-0c62dd27435c"
 const constSecretKey = "71430C7FA63A067724FB622FB3031970"
 
-
 func TestGetContractDepth(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.SetConfigure(Config{
@@ -17,7 +16,7 @@ func TestGetContractDepth(t *testing.T) {
 		// Secret: constSecretKey,
 		Custom: map[string]interface{}{
 			"exchangeType": ExchangeTypeFuture,
-			"period": "this_week",
+			"period":       "this_week",
 		},
 	})
 
@@ -25,9 +24,9 @@ func TestGetContractDepth(t *testing.T) {
 
 	counter := 3
 
-	for{
-		select{
-		case <-time.After(1*time.Second):
+	for {
+		select {
+		case <-time.After(1 * time.Second):
 			value := okex.GetDepthValue("eth/usdt")
 			log.Printf("Value:%v", value)
 			if counter > 0 {
@@ -54,9 +53,9 @@ func TestGetCurrentDepth(t *testing.T) {
 	// logger.Infof("Value:%v", value)
 	counter := 3
 
-	for{
-		select{
-		case <-time.After(1*time.Second):
+	for {
+		select {
+		case <-time.After(1 * time.Second):
 			value := okex.GetDepthValue("eth/usdt")
 			log.Printf("Value:%v", value)
 			if counter > 0 {
@@ -73,7 +72,7 @@ func TestOKEXContractTicker(t *testing.T) {
 	okex.SetConfigure(Config{
 		Custom: map[string]interface{}{
 			"exchangeType": ExchangeTypeFuture,
-			"period": "this_week",
+			"period":       "this_week",
 		},
 	})
 
@@ -131,7 +130,7 @@ func TestFutureTrade(t *testing.T) {
 		Secret: constSecretKey,
 		Custom: map[string]interface{}{
 			"exchangeType": ExchangeTypeFuture,
-			"period": "this_week",
+			"period":       "this_week",
 		},
 	})
 
@@ -156,7 +155,7 @@ func TestGetUserInfo(t *testing.T) {
 		Secret: constSecretKey,
 		Custom: map[string]interface{}{
 			"exchangeType": ExchangeTypeFuture,
-			"period": "this_week",
+			"period":       "this_week",
 		},
 	})
 	okex.Start()
@@ -170,7 +169,7 @@ func TestCancelFutureOrder(t *testing.T) {
 		Secret: constSecretKey,
 		Custom: map[string]interface{}{
 			"exchangeType": ExchangeTypeFuture,
-			"period": "this_week",
+			"period":       "this_week",
 		},
 	})
 	okex.Start()
@@ -244,14 +243,14 @@ func TestFutureGetOrderInfo(t *testing.T) {
 		Secret: constSecretKey,
 		Custom: map[string]interface{}{
 			"exchangeType": ExchangeTypeFuture,
-			"period": "this_week",
+			"period":       "this_week",
 		},
 	})
 
 	okex.Start()
 
 	log.Printf("OrderInfo:%v", okex.GetOrderInfo(OrderInfo{
-		OrderID: "19124672779",
+		OrderID: "21144549502",
 		Pair:    "eth/usd",
 	}))
 }

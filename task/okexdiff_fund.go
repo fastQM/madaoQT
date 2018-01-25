@@ -64,14 +64,14 @@ func (h *OkexFundManage) OpenPosition(batch string,
 	return nil
 }
 
-func (h *OkexFundManage) ClosePosition(batch string, spotClose float64, futureClose float64, success bool) error {
+func (h *OkexFundManage) ClosePosition(batch string, spotClose float64, futureClose float64, result string) error {
 
-	var result string
-	if success {
-		result = Mongo.FundStatusClosed
-	} else {
-		result = Mongo.FUndStatusError
-	}
+	// var result string
+	// if success {
+	// 	result = Mongo.FundStatusClosed
+	// } else {
+	// 	result = Mongo.FUndStatusError
+	// }
 
 	if err := h.fundDB.Update(map[string]interface{}{
 		"batch": batch,
