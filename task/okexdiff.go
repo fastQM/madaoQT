@@ -36,10 +36,11 @@ type IAnalyzer struct {
 	spot   Exchange.IExchange
 	fund   *OkexFundManage
 
-	status StatusType
-
-	ops     map[uint]*OperationItem
-	opIndex uint
+	status              StatusType
+	checkPeriodSec      time.Duration
+	checkNoTradeCounter int
+	ops                 map[uint]*OperationItem
+	opIndex             uint
 
 	tradeDB *Mongo.Trades
 	// orderDB *Mongo.Orders
@@ -49,6 +50,7 @@ type IAnalyzer struct {
 }
 
 type OperationItem struct {
+	Amount       float64
 	futureConfig Exchange.TradeConfig
 	spotConfig   Exchange.TradeConfig
 }
@@ -67,7 +69,8 @@ type TriggerArea struct {
 	Amount float64 `json:"amount"`
 }
 
-const CheckPeriodSec = 10
+// const CheckPeriodSec = 10
+const UnitAmount = 50
 
 var defaultConfig = AnalyzerConfig{
 	// Trigger: map[string]float64{
@@ -181,8 +184,26 @@ func (a *IAnalyzer) GetBalances() map[string]interface{} {
 	}
 }
 
-func (a *IAnalyzer) GetPositions() {
+func (a *IAnalyzer) GetPositions() []map[string]interface{} {
 
+	var positions []map[string]interface{}
+	if a.ops != nil {
+		for _, op := range a.ops {
+			if op != nil {
+				position := map[string]interface{}{
+					"amount":     op.Amount,
+					"batch":      op.futureConfig.Batch,
+					"pair":       op.futureConfig.Pair,
+					"futuretype": Exchange.TradeTypeString[op.futureConfig.Type],
+					"spottype":   Exchange.TradeTypeString[op.spotConfig.Type],
+				}
+				positions = append(positions, position)
+			}
+		}
+
+		return positions
+	}
+	return nil
 }
 
 func (a *IAnalyzer) GetTrades() []Mongo.TradesRecord {
@@ -216,6 +237,27 @@ func (a *IAnalyzer) GetStatus() int {
 	return int(a.status)
 }
 
+func (a *IAnalyzer) adjustDuration(hasTrade bool) {
+	if hasTrade {
+		if a.checkPeriodSec == 10 {
+			Logger.Debugf("检测周期变成3秒")
+			a.checkPeriodSec = 3
+		}
+		a.checkNoTradeCounter = 0
+	} else {
+		if a.checkPeriodSec == 3 {
+
+			if a.checkNoTradeCounter >= 10 {
+				Logger.Debugf("检测周期变成10秒")
+				a.checkPeriodSec = 10
+				a.checkNoTradeCounter = 0
+			} else {
+				a.checkNoTradeCounter++
+			}
+		}
+	}
+}
+
 func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 
 	if a.status != StatusNone {
@@ -239,7 +281,7 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 	Logger.Infof("Config:%v", a.config)
 
 	a.ops = make(map[uint]*OperationItem)
-
+	a.checkPeriodSec = 10
 	a.tradeDB = &Mongo.Trades{
 		Config: &Mongo.DBConfig{
 			CollectionName: "DiffOKExFutureSpotTrade",
@@ -327,7 +369,7 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 				} else if event == Exchange.EventLostConnection {
 					go a.reconnect(spotExchange)
 				}
-			case <-time.After(CheckPeriodSec * time.Second):
+			case <-time.After(a.checkPeriodSec * time.Second):
 				if a.status == StatusError || a.status == StatusNone {
 					Logger.Debug("状态异常或退出")
 					return
@@ -387,6 +429,7 @@ func (a *IAnalyzer) loadPosition() {
 			operation.futureConfig = futureConfig
 			operation.spotConfig = spotConfig
 			a.ops[a.opIndex] = &operation
+			a.ops[a.opIndex].Amount = spotConfig.Amount * spotConfig.Price
 			a.opIndex++
 		}
 	}
@@ -400,17 +443,9 @@ func (a *IAnalyzer) Watch() {
 	for coin := range a.config.Area {
 		pair := coin + "/usdt"
 
-		// valueFuture := a.future.GetTicker(pair)
-		// valueCurrent := a.spot.GetTicker(pair)
-
-		// if valueFuture == nil || valueCurrent == nil {
-		// 	Logger.Errorf("not valid ticker")
-		// 	return
-		// }
-
 		var diff1, diff2 float64
-		err1, askFuture, bidFuture := CalcDepthPrice(true, a.future, pair, a.config.Area[coin].Amount)
-		err2, askSpot, bidSpot := CalcDepthPrice(false, a.spot, pair, a.config.Area[coin].Amount)
+		err1, askFuture, bidFuture := CalcDepthPrice(true, a.future, pair, UnitAmount)
+		err2, askSpot, bidSpot := CalcDepthPrice(false, a.spot, pair, UnitAmount)
 
 		if err1 == nil && err2 == nil {
 			diff1 = (bidSpot - askFuture) * 100 / bidSpot
@@ -449,15 +484,26 @@ func (a *IAnalyzer) Watch() {
 			return
 		}
 
+		// 检测是否需要平仓
 		if a.checkPosition(coin, askFuture, bidFuture, askSpot, bidSpot) {
-			Logger.Info("持仓中...不做交易")
+			a.adjustDuration(true)
+			Logger.Info("已执行平仓操作...不做交易")
 			continue
 		}
 
+		// 检测是否有足够的开仓资金
+		placeAmount := a.checkFunds(pair)
+		if placeAmount == 0 {
+			Logger.Info("无可用仓位...不开仓")
+			a.adjustDuration(false)
+			continue
+		}
+
+		// 检测是否需要开仓
 		if diff2 > a.config.Area[coin].Open {
 
 			Logger.Info("卖出合约，买入现货")
-
+			a.adjustDuration(true)
 			batch := Utils.GetRandomHexString(12)
 
 			a.placeOrdersByQuantity(a.future, Exchange.TradeConfig{
@@ -465,7 +511,7 @@ func (a *IAnalyzer) Watch() {
 				Pair:   pair,
 				Type:   Exchange.TradeTypeOpenShort,
 				Price:  askFuture,
-				Amount: a.config.Area[coin].Amount / constContractRatio[coin],
+				Amount: placeAmount / constContractRatio[coin],
 				Limit:  a.config.LimitOpen,
 			},
 				a.spot, Exchange.TradeConfig{
@@ -473,13 +519,13 @@ func (a *IAnalyzer) Watch() {
 					Pair:   pair,
 					Type:   Exchange.TradeTypeBuy,
 					Price:  bidSpot,
-					Amount: a.config.Area[coin].Amount / bidSpot,
+					Amount: placeAmount / bidSpot,
 					Limit:  a.config.LimitOpen,
 				})
 
 		} else if diff1 > a.config.Area[coin].Open {
 			Logger.Info("买入合约, 卖出现货")
-
+			a.adjustDuration(true)
 			batch := Utils.GetRandomHexString(12)
 
 			a.placeOrdersByQuantity(a.future, Exchange.TradeConfig{
@@ -487,7 +533,7 @@ func (a *IAnalyzer) Watch() {
 				Pair:   pair,
 				Type:   Exchange.TradeTypeOpenLong,
 				Price:  bidFuture,
-				Amount: a.config.Area[coin].Amount / constContractRatio[coin],
+				Amount: placeAmount / constContractRatio[coin],
 				Limit:  a.config.LimitOpen,
 			},
 				a.spot, Exchange.TradeConfig{
@@ -495,9 +541,11 @@ func (a *IAnalyzer) Watch() {
 					Pair:   pair,
 					Type:   Exchange.TradeTypeSell,
 					Price:  askSpot,
-					Amount: a.config.Area[coin].Amount / askSpot,
+					Amount: placeAmount / askSpot,
 					Limit:  a.config.LimitOpen,
 				})
+		} else {
+			a.adjustDuration(false)
 		}
 	}
 
@@ -594,6 +642,7 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 
 		Logger.Debug("锁仓成功")
 		a.ops[a.opIndex] = &operation
+		a.ops[a.opIndex].Amount = spotConfig.Amount * spotConfig.Price
 		a.opIndex++
 		return
 
@@ -639,6 +688,34 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 	}
 
 	return
+}
+
+func (a *IAnalyzer) checkFunds(pair string, diff float64) float64 {
+	var usedAmount, ratio float64
+	step := 0.5
+	for _, op := range a.ops {
+		if op != nil && op.futureConfig.Pair == pair {
+			usedAmount += op.Amount
+		}
+	}
+	coin := Exchange.ParsePair(pair)[0]
+
+	base := a.config.Area[coin].Open
+	if diff > base && diff < base+step {
+		ratio = 0.3
+	} else if diff >= (base+step) && diff < (base+2*step) {
+		ratio = 0.6
+	} else if diff >= (base + 2*step) {
+		ratio = 1
+	}
+
+	Logger.Debugf("已开仓：%v 开仓总量:%v 当前价差(%v)可开仓比例:%v", usedAmount, a.config.Area[coin].Amount, diff, ratio)
+
+	if (usedAmount + UnitAmount) > a.config.Area[coin].Amount {
+		return 0
+	}
+
+	return UnitAmount
 
 }
 
@@ -722,13 +799,13 @@ func (a *IAnalyzer) checkPosition(coin string, askFuturePrice float64, bidFuture
 						a.status = StatusError
 					}
 
-					break
+					return true
 				}
 
 			}
 		}
 
-		return true
+		// return false
 	}
 
 	return false

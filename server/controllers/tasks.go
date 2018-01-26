@@ -147,7 +147,7 @@ func (t *TaskController) GetStatus() iris.Map {
 			"result": true,
 			"data":   result,
 		}
-	}	
+	}
 
 	return iris.Map{
 		"result": false,
@@ -177,6 +177,24 @@ func (t *TaskController) GetTrades() iris.Map {
 		return iris.Map{
 			"result": true,
 			"data":   result,
+		}
+	}
+
+	return iris.Map{
+		"result": false,
+	}
+}
+
+func (t *TaskController) GetPositions() iris.Map {
+
+	if task, ok := t.Tasks.Load("okexdiff"); ok {
+		result := task.(Task.ITask).GetPositions()
+		if result != nil {
+			Logger.Debugf("GetPositions:%v", result)
+			return iris.Map{
+				"result": true,
+				"data":   result,
+			}
 		}
 	}
 

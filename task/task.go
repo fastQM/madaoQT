@@ -611,7 +611,7 @@ type ITask interface {
 	GetDefaultConfig() interface{}
 	GetBalances() map[string]interface{}
 	GetTrades() []Mongo.TradesRecord
-
+	GetPositions() []map[string]interface{}
 	Start(api string, secret string, configJSON string) error
 	Close()
 	GetStatus() int
