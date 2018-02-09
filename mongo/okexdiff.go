@@ -67,10 +67,17 @@ func (t *OKExDiff) Insert(record DiffValue) error {
 	return errors.New("Connection is lost")
 }
 
-func (t *OKExDiff) FindAll(filter map[string]interface{}) ([]DiffValue, error) {
+func (t *OKExDiff) FindAll(coin string, start time.Time, end time.Time) ([]DiffValue, error) {
+
 	var result []DiffValue
 	if t.session != nil {
-		err := t.collection.Find(bson.M(filter)).All(&result)
+		err := t.collection.Find(bson.M{
+			"coin": coin,
+			"time": bson.M{
+				"$gte": start,
+				"$lte": end,
+			},
+		}).All(&result)
 		if err != nil {
 			return nil, err
 		}

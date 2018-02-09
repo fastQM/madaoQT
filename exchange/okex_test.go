@@ -9,7 +9,7 @@ import (
 const constAPIKey = "a982120e-8505-41db-9ae3-0c62dd27435c"
 const constSecretKey = "71430C7FA63A067724FB622FB3031970"
 
-func TestGetContractDepth(t *testing.T) {
+func TestGetFutureDepth(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.SetConfigure(Config{
 		// API:    constAPIKey,
@@ -22,7 +22,7 @@ func TestGetContractDepth(t *testing.T) {
 
 	okex.Start()
 
-	counter := 3
+	counter := 10
 
 	for {
 		select {
@@ -39,7 +39,7 @@ func TestGetContractDepth(t *testing.T) {
 
 }
 
-func TestGetCurrentDepth(t *testing.T) {
+func TestGetSpotDepth(t *testing.T) {
 	okex := new(OKExAPI)
 	okex.SetConfigure(Config{
 		// API:    constAPIKey,
@@ -49,9 +49,7 @@ func TestGetCurrentDepth(t *testing.T) {
 
 	okex.Start()
 
-	// value := okex.GetDepthValue("eth/usdt", 877, 0.005, 3, TradeTypeBuy)
-	// logger.Infof("Value:%v", value)
-	counter := 3
+	counter := 10
 
 	for {
 		select {
@@ -211,8 +209,8 @@ func TestSpotOrder(t *testing.T) {
 	configs := TradeConfig{
 		Pair:   "eth/usdt",
 		Type:   TradeTypeBuy,
-		Price:  1188,
-		Amount: 0.01,
+		Price:  1155,
+		Amount: 0.011,
 	}
 
 	result := okex.Trade(configs)

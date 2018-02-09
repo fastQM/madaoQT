@@ -16,6 +16,7 @@ func init() {
 	logger = _logger
 	logger.SetLevel("debug")
 	logger.SetTimeFormat(Global.TimeFormat)
+	logger.SetPrefix("[EXCH]")
 }
 
 // ExchangeType the type of the exchange, spot or the future exchange

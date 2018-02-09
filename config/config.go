@@ -5,9 +5,13 @@ package config
 */
 
 // ProductionEnv indicate test or production enviroment
-const ProductionEnv = false
+const ProductionEnv = true
+
 // TimeFormat is the format of the time
 const TimeFormat = "2006-01-02 15:04:05"
+
+// Version is the version of this software
+const Version = "0.9.1"
 
 /*
 	dynamic configuration

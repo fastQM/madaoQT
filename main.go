@@ -18,12 +18,15 @@ func init() {
 	logger := golog.New()
 	Logger = logger
 	Logger.SetLevel("debug")
+	Logger.SetTimeFormat(Config.TimeFormat)
+	Logger.SetPrefix("[MAIN]")
 }
 
 func handleCmd() {
 	var cmd string
 	for {
 		fmt.Scanln(&cmd)
+
 		switch cmd {
 		case "q":
 			Logger.Info("Exiting...")
@@ -35,6 +38,7 @@ func handleCmd() {
 
 func main() {
 
+	Logger.Infof("当前系统版本:%v", Config.Version)
 	go handleCmd()
 
 	http := new(Server.HttpServer)

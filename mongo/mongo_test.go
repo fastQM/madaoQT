@@ -22,7 +22,7 @@ func TestInsertTradeRecord(t *testing.T) {
 			Time:     time.Now(),
 			Oper:     "buy",
 			Exchange: "okex",
-			Coin:     "btc",
+			Pair:     "btc",
 			Quantity: 123.45,
 		}
 		tradesDB.Insert(record)

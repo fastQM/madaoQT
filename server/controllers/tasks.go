@@ -119,8 +119,6 @@ func (t *TaskController) PostStart() iris.Map {
 			}
 		}
 
-		Logger.Debugf("Record:%v", record)
-
 		err = task.(Task.ITask).Start(record.API, record.Secret, string(body))
 		if err != nil {
 			errMsg = err.Error()
@@ -173,7 +171,7 @@ func (t *TaskController) GetTrades() iris.Map {
 
 	if task, ok := t.Tasks.Load("okexdiff"); ok {
 		result := task.(Task.ITask).GetTrades()
-		Logger.Debugf("getTrades:%v", result)
+		// Logger.Debugf("getTrades:%v", result)
 		return iris.Map{
 			"result": true,
 			"data":   result,
@@ -203,26 +201,61 @@ func (t *TaskController) GetPositions() iris.Map {
 	}
 }
 
-// func (t *TaskController) GetOrders() iris.Map {
+func (t *TaskController) GetFailed() iris.Map {
+	if task, ok := t.Tasks.Load("okexdiff"); ok {
+		result := task.(Task.ITask).GetFailedPositions()
+		if result != nil {
+			Logger.Debugf("GetFailedPositions:%v", result)
+			return iris.Map{
+				"result": true,
+				"data":   result,
+			}
+		}
+	}
 
-// 	if task, ok := t.Tasks.Load("okexdiff"); ok {
-// 		result := task.(Task.ITask).GetOrders()
-// 		return iris.Map{
-// 			"result": true,
-// 			"data":   result,
-// 		}
-// 	}
+	return iris.Map{
+		"result": false,
+	}
+}
 
-// 	return iris.Map{
-// 		"result": false,
-// 	}
-// }
+func (t *TaskController) PostFix() iris.Map {
+
+	if task, ok := t.Tasks.Load("okexdiff"); ok {
+		body, err := ioutil.ReadAll(t.Ctx.Request().Body)
+		if err != nil {
+			Logger.Debugf("fail to read:%v", err)
+			return iris.Map{
+				"result": false,
+				"error":  errorCodeInvalidParameters,
+			}
+		}
+
+		Logger.Infof("Body:%v", string(body))
+
+		result := task.(Task.ITask).FixFailedPosition(string(body))
+		if result == nil {
+			return iris.Map{
+				"result": true,
+			}
+		} else {
+			return iris.Map{
+				"result": false,
+				"error":  result.Error(),
+			}
+		}
+
+	}
+
+	return iris.Map{
+		"result": false,
+	}
+}
 
 func (t *TaskController) GetStop() iris.Map {
 
-	if ok, result := t.authen(); !ok {
-		return result
-	}
+	// if ok, result := t.authen(); !ok {
+	// 	return result
+	// }
 
 	if task, ok := t.Tasks.Load("okexdiff"); ok {
 		task.(Task.ITask).Close()

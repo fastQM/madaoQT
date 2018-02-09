@@ -4,6 +4,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kataras/iris/view"
+
 	"github.com/gorilla/securecookie"
 	"github.com/kataras/golog"
 	"github.com/kataras/iris"
@@ -41,9 +43,10 @@ func init() {
 func (h *HttpServer) setupRoutes() {
 
 	routers := map[string]string{
-		"/":      "index.html",
-		"/login": "login.html",
-		"/test":  "test.html",
+		"/":       "index.html",
+		"/login":  "login.html",
+		"/profit": "profit.html",
+		"/test":   "test.html",
 	}
 
 	for k, _ := range routers {
@@ -54,6 +57,10 @@ func (h *HttpServer) setupRoutes() {
 			}
 		})
 	}
+
+	h.app.OnErrorCode(iris.StatusNotFound, func(ctx iris.Context) {
+		ctx.View("index.html")
+	})
 }
 
 func (h *HttpServer) setupSessions() {
@@ -96,16 +103,22 @@ func (h *HttpServer) SetupHttpServer() {
 	h.ws = new(Websocket.WebsocketServer)
 	h.ws.SetupWebsocket(h.app)
 
-	views := iris.HTML("./www/www", ".html")
-	views.Reload(true) //开发模式，强制每次请求都更新页面
+	var views *view.HTMLEngine
 
 	if Global.ProductionEnv {
-		// h.app.StaticEmbedded("/static", "./views/node_modules", Asset, AssetNames)
+		views = iris.HTML("./www/www", ".html").Binary(Asset, AssetNames)
+		h.app.StaticEmbedded("/bower_components", "./www/bower_components", Asset, AssetNames)
+		h.app.StaticEmbedded("/elements", "./www/elements", Asset, AssetNames)
+		h.app.StaticEmbedded("/images", "./www/images", Asset, AssetNames)
+		h.app.StaticEmbedded("/assets", "./www/assets", Asset, AssetNames)
 
 	} else {
+		views = iris.HTML("./www/www", ".html")
+		views.Reload(true) //开发模式，强制每次请求都更新页面
 		h.app.StaticWeb("/bower_components", "./www/bower_components")
 		h.app.StaticWeb("/elements", "./www/elements")
 		h.app.StaticWeb("/images", "./www/images")
+		h.app.StaticWeb("/assets", "./www/assets")
 
 	}
 
@@ -122,10 +135,6 @@ func (h *HttpServer) SetupHttpServer() {
 
 	h.app.Run(iris.Addr(":8080"))
 }
-
-// func (h *HttpServer) BroadcastByWebsocket(msg interface{}) {
-// 	h.ws.BroadcastAll(msg)
-// }
 
 func (h *HttpServer) setupExchanges() {
 	okexspot := Exchange.NewOKExSpotApi(&Exchange.Config{

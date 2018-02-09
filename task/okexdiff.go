@@ -5,6 +5,7 @@ package task
 */
 
 import (
+	"container/list"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +22,7 @@ import (
 	Message "madaoQT/server/websocket"
 
 	Websocket "github.com/gorilla/websocket"
+	Cron "github.com/robfig/cron"
 )
 
 const Explanation = "To make profit from the difference between the future`s price and the current`s"
@@ -44,9 +46,15 @@ type IAnalyzer struct {
 
 	tradeDB *Mongo.Trades
 	// orderDB *Mongo.Orders
-	diffDB *Mongo.OKExDiff
+	diffDB      *Mongo.OKExDiff
+	diffList    *list.List
+	diffBalance float64
+	forceClose  bool
 
 	conn *Websocket.Conn
+	cron *Cron.Cron
+
+	errorCount int
 }
 
 type OperationItem struct {
@@ -58,9 +66,12 @@ type OperationItem struct {
 type AnalyzerConfig struct {
 	API        string
 	Secret     string
-	Area       map[string]TriggerArea `json:"area"`
-	LimitOpen  float64                `json:"limitopen"`
-	LimitClose float64                `json:"limitclose"`
+	Area       map[string]*TriggerArea `json:"area"`
+	LimitOpen  float64                 `json:"limitopen"`
+	LimitClose float64                 `json:"limitclose"`
+	UnitAmount float64                 `json:"unitamount"`
+	AutoAdjust bool                    `json:"autoadjust"`
+	StepValue  float64                 `json:"stepvalue"`
 }
 
 type TriggerArea struct {
@@ -70,7 +81,9 @@ type TriggerArea struct {
 }
 
 // const CheckPeriodSec = 10
-const UnitAmount = 50
+// const UnitAmount = 50
+const TradingPeriod = 1
+const CheckingPeriod = 10
 
 var defaultConfig = AnalyzerConfig{
 	// Trigger: map[string]float64{
@@ -81,12 +94,14 @@ var defaultConfig = AnalyzerConfig{
 	// 	"btc": 0.5,
 	// 	"ltc": 1.5,
 	// },
-	Area: map[string]TriggerArea{
+	Area: map[string]*TriggerArea{
 		"btc": {1.6, 0.5, 10},
 		"ltc": {3, 1.5, 10},
 	},
 	LimitClose: 0.03,  // 止损幅度
 	LimitOpen:  0.005, // 允许操作价格的波动范围
+	UnitAmount: 50,
+	StepValue:  0.8,
 }
 
 var constContractRatio = map[string]float64{
@@ -139,6 +154,52 @@ func (a *IAnalyzer) wsPublish(topic string, message string) {
 				Logger.Errorf("Fail to write message:%v", err)
 			}
 		}
+	}
+}
+
+func (a *IAnalyzer) RecordBalances() {
+	balanceDB := new(Mongo.Balances)
+	if err := balanceDB.Connect(); err != nil {
+		Logger.Errorf("Fail to connect BalanceDB:%v", err)
+		return
+	}
+	defer balanceDB.Close()
+
+	var coinInfos Mongo.BalanceInfo
+	balances := a.GetBalances()
+	if balances != nil {
+		for coin := range a.config.Area {
+			var coinInfo Mongo.CoinInfo
+			coinInfo.Coin = coin
+			for _, v := range balances["spots"].([]map[string]interface{}) {
+				if v["name"] == coin {
+					coinInfo.Balance += v["balance"].(float64)
+					break
+				}
+			}
+
+			for _, v := range balances["futures"].([]map[string]interface{}) {
+				if v["name"] == coin {
+					coinInfo.Balance += v["balance"].(float64)
+					coinInfos.Coins = append(coinInfos.Coins, coinInfo)
+					break
+				}
+			}
+		}
+
+		for _, v := range balances["spots"].([]map[string]interface{}) {
+			var coinInfo Mongo.CoinInfo
+			coinInfo.Coin = "usdt"
+			if v["name"] == "usdt" {
+				coinInfo.Balance += v["balance"].(float64)
+				coinInfos.Coins = append(coinInfos.Coins, coinInfo)
+				break
+			}
+		}
+	}
+
+	if len(coinInfos.Coins) != 0 {
+		balanceDB.Insert(coinInfos)
 	}
 }
 
@@ -206,6 +267,76 @@ func (a *IAnalyzer) GetPositions() []map[string]interface{} {
 	return nil
 }
 
+func (a *IAnalyzer) GetFailedPositions() []map[string]interface{} {
+
+	var records []Mongo.FundInfo
+	var err error
+
+	if a.fund == nil {
+		Logger.Error("MongoDB is not connected")
+		return nil
+	}
+
+	if err, records = a.fund.GetFailedPositions(); err != nil {
+		log.Printf("Error:%v", err)
+	}
+
+	var positions []map[string]interface{}
+	for _, record := range records {
+
+		if math.IsNaN(record.FutureOpen) {
+			record.FutureOpen = 0
+		}
+
+		if math.IsNaN(record.FutureClose) {
+			record.FutureClose = 0
+		}
+
+		if math.IsNaN(record.SpotOpen) {
+			record.SpotOpen = 0
+		}
+
+		if math.IsNaN(record.SpotClose) {
+			record.SpotClose = 0
+		}
+
+		position := map[string]interface{}{
+			"time":         record.OpenTime,
+			"batch":        record.Batch,
+			"pair":         record.Pair,
+			"futuretype":   record.FutureType,
+			"futureopen":   record.FutureOpen,
+			"futureclose":  record.FutureClose,
+			"futureamount": record.FutureAmount,
+			"spottype":     record.SpotType,
+			"spotopen":     record.SpotOpen,
+			"spotclose":    record.SpotClose,
+			"spotamount":   record.SpotAmount,
+		}
+		positions = append(positions, position)
+	}
+
+	return positions
+}
+
+func (a *IAnalyzer) FixFailedPosition(updateJson string) error {
+
+	if updateJson != "" {
+		var config map[string]interface{}
+		err := json.Unmarshal([]byte(updateJson), &config)
+		if err != nil {
+			log.Printf("Fail to get config:%v", err)
+			return errors.New(TaskErrorMsg[TaskInvalidConfig])
+		}
+
+		return a.fund.FixFailedPosition(config)
+
+	}
+
+	return errors.New(TaskErrorMsg[TaskInvalidInput])
+
+}
+
 func (a *IAnalyzer) GetTrades() []Mongo.TradesRecord {
 	if a.tradeDB != nil {
 		err, records := a.tradeDB.FindAll()
@@ -238,18 +369,19 @@ func (a *IAnalyzer) GetStatus() int {
 }
 
 func (a *IAnalyzer) adjustDuration(hasTrade bool) {
+
 	if hasTrade {
-		if a.checkPeriodSec == 10 {
-			Logger.Debugf("检测周期变成3秒")
-			a.checkPeriodSec = 3
+		if a.checkPeriodSec == CheckingPeriod {
+			Logger.Debugf("检测周期变成1秒")
+			a.checkPeriodSec = TradingPeriod
 		}
 		a.checkNoTradeCounter = 0
 	} else {
-		if a.checkPeriodSec == 3 {
-
-			if a.checkNoTradeCounter >= 10 {
+		if a.checkPeriodSec == TradingPeriod {
+			// 5 minutes without trading
+			if a.checkNoTradeCounter >= 300 {
 				Logger.Debugf("检测周期变成10秒")
-				a.checkPeriodSec = 10
+				a.checkPeriodSec = CheckingPeriod
 				a.checkNoTradeCounter = 0
 			} else {
 				a.checkNoTradeCounter++
@@ -281,12 +413,19 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 	Logger.Infof("Config:%v", a.config)
 
 	a.ops = make(map[uint]*OperationItem)
-	a.checkPeriodSec = 10
+	a.diffList = list.New()
+	a.checkPeriodSec = CheckingPeriod
+	a.forceClose = false
+	a.errorCount = 0
 	a.tradeDB = &Mongo.Trades{
 		Config: &Mongo.DBConfig{
 			CollectionName: "DiffOKExFutureSpotTrade",
 		},
 	}
+
+	a.cron = Cron.New()
+	a.cron.AddFunc("@daily", a.RecordBalances)
+	a.cron.Start()
 
 	err := a.tradeDB.Connect()
 	if err != nil {
@@ -342,32 +481,38 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 
 	// load current positions
 	a.loadPosition()
+	a.loadDiffHistory()
 
 	go func() {
 		for {
 			select {
 			case event := <-futureExchange.WatchEvent():
 				if event == Exchange.EventConnected {
-					// for k := range a.config.Area {
-					// 	k = (k + "/usdt")
-					// 	futureExchange.StartTicker(k)
-					// }
+					// 提早发送命令
+					for k := range a.config.Area {
+						pair := (k + "/usdt")
+						futureExchange.GetDepthValue(pair)
+					}
 					a.future = Exchange.IExchange(futureExchange)
 
 				} else if event == Exchange.EventLostConnection {
-					go a.reconnect(futureExchange)
+					if a.status != StatusNone && a.status != StatusError {
+						go a.reconnect(futureExchange)
+					}
 				}
 			case event := <-spotExchange.WatchEvent():
 				if event == Exchange.EventConnected {
-					// for k := range a.config.Area {
-					// 	k = (k + "/usdt")
-					// 	spotExchange.StartTicker(k)
-					// }
+					for k := range a.config.Area {
+						pair := (k + "/usdt")
+						spotExchange.GetDepthValue(pair)
+					}
 
 					a.spot = Exchange.IExchange(spotExchange)
 
 				} else if event == Exchange.EventLostConnection {
-					go a.reconnect(spotExchange)
+					if a.status != StatusNone && a.status != StatusError {
+						go a.reconnect(spotExchange)
+					}
 				}
 			case <-time.After(a.checkPeriodSec * time.Second):
 				if a.status == StatusError || a.status == StatusNone {
@@ -435,6 +580,67 @@ func (a *IAnalyzer) loadPosition() {
 	}
 }
 
+func (a *IAnalyzer) loadDiffHistory() {
+	now := time.Now()
+	start := now.Add(-12 * time.Hour)
+	log.Printf("开始时间:%v 结束时间:%v", start, now)
+	records, err := a.diffDB.FindAll("eth", start, now)
+
+	if err != nil {
+		log.Printf("Error:%v", err)
+		return
+	}
+
+	var totalDiff float64
+	for _, record := range records {
+		totalDiff += record.Diff
+		a.diffList.PushBack(record.Diff)
+	}
+
+	a.diffBalance = totalDiff / float64(len(records))
+	log.Printf("波动中值:%v", a.diffBalance)
+}
+
+func (a *IAnalyzer) updateDiffArea(coin string, currentDiff float64) {
+	if a.diffList == nil || a.diffList.Len() < 4096 {
+		a.diffList.PushBack(currentDiff)
+		length := a.diffList.Len()
+		var total float64
+		for e := a.diffList.Front(); e != nil; e = e.Next() {
+			total += e.Value.(float64)
+		}
+
+		a.diffBalance = total / float64(length)
+
+	} else {
+		front := a.diffList.Front()
+		total := a.diffBalance * float64(a.diffList.Len())
+		total = (total - front.Value.(float64) + currentDiff)
+
+		a.diffList.Remove(front)
+		a.diffList.PushBack(currentDiff)
+		a.diffBalance = total / float64(a.diffList.Len())
+	}
+
+	if a.config.AutoAdjust {
+		min := a.diffBalance
+		if min < 1.0 {
+			min = 1.0
+		}
+
+		a.config.Area[coin].Open = (min + a.config.StepValue)
+
+		// 平仓差价一般不修改
+		// close := min - DiffStep
+		// if close > 0.5 {
+		// 	close = 0.5
+		// }
+		// a.config.Area[coin].Close = close
+	}
+
+	Logger.Infof("波动中值:%.2f 开仓价差:%v 平仓价差:%v 自动调整价差:%v", a.diffBalance, a.config.Area[coin].Open, a.config.Area[coin].Close, a.config.AutoAdjust)
+}
+
 func (a *IAnalyzer) Watch() {
 
 	// var orderAmount = 50
@@ -444,8 +650,8 @@ func (a *IAnalyzer) Watch() {
 		pair := coin + "/usdt"
 
 		var diff1, diff2 float64
-		err1, askFuture, bidFuture := CalcDepthPrice(true, a.future, pair, UnitAmount)
-		err2, askSpot, bidSpot := CalcDepthPrice(false, a.spot, pair, UnitAmount)
+		err1, askFuture, askFuturePlacePrice, bidFuture, bidFuturePlacePrice := CalcDepthPrice(true, a.future, pair, a.config.UnitAmount)
+		err2, askSpot, askSpotPlacePrice, bidSpot, bidSpotPlacePrice := CalcDepthPrice(false, a.spot, pair, a.config.UnitAmount)
 
 		if err1 == nil && err2 == nil {
 			diff1 = (bidSpot - askFuture) * 100 / bidSpot
@@ -458,6 +664,7 @@ func (a *IAnalyzer) Watch() {
 
 			Logger.Info(msg2)
 			if diff1 > 0 {
+				a.updateDiffArea(coin, diff1)
 				a.diffDB.Insert(Mongo.DiffValue{
 					Coin:      coin,
 					SpotPrice: bidSpot,
@@ -468,6 +675,7 @@ func (a *IAnalyzer) Watch() {
 					Time: time.Now(),
 				})
 			} else {
+				a.updateDiffArea(coin, diff2)
 				a.diffDB.Insert(Mongo.DiffValue{
 					Coin:      coin,
 					SpotPrice: askSpot,
@@ -492,10 +700,22 @@ func (a *IAnalyzer) Watch() {
 		}
 
 		// 检测是否有足够的开仓资金
-		placeAmount := a.checkFunds(pair)
+		var diff float64
+		if diff1 > 0 {
+			diff = diff1
+		} else {
+			diff = diff2
+		}
+
+		placeAmount := a.checkFunds(pair, diff)
 		if placeAmount == 0 {
 			Logger.Info("无可用仓位...不开仓")
 			a.adjustDuration(false)
+			continue
+		}
+
+		if !a.checkOpenTime() {
+			Logger.Info("周五10点至17点不开仓")
 			continue
 		}
 
@@ -510,7 +730,7 @@ func (a *IAnalyzer) Watch() {
 				Batch:  batch,
 				Pair:   pair,
 				Type:   Exchange.TradeTypeOpenShort,
-				Price:  askFuture,
+				Price:  askFuturePlacePrice,
 				Amount: placeAmount / constContractRatio[coin],
 				Limit:  a.config.LimitOpen,
 			},
@@ -518,7 +738,7 @@ func (a *IAnalyzer) Watch() {
 					Batch:  batch,
 					Pair:   pair,
 					Type:   Exchange.TradeTypeBuy,
-					Price:  bidSpot,
+					Price:  bidSpotPlacePrice,
 					Amount: placeAmount / bidSpot,
 					Limit:  a.config.LimitOpen,
 				})
@@ -532,7 +752,7 @@ func (a *IAnalyzer) Watch() {
 				Batch:  batch,
 				Pair:   pair,
 				Type:   Exchange.TradeTypeOpenLong,
-				Price:  bidFuture,
+				Price:  bidFuturePlacePrice,
 				Amount: placeAmount / constContractRatio[coin],
 				Limit:  a.config.LimitOpen,
 			},
@@ -540,7 +760,7 @@ func (a *IAnalyzer) Watch() {
 					Batch:  batch,
 					Pair:   pair,
 					Type:   Exchange.TradeTypeSell,
-					Price:  askSpot,
+					Price:  askSpotPlacePrice,
 					Amount: placeAmount / askSpot,
 					Limit:  a.config.LimitOpen,
 				})
@@ -554,6 +774,8 @@ func (a *IAnalyzer) Watch() {
 }
 
 func (a *IAnalyzer) Close() {
+
+	Logger.Info("关闭任务")
 
 	a.status = StatusNone
 
@@ -631,7 +853,7 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 	spotConfig.Type = Exchange.RevertTradeType(spotConfig.Type)
 
 	futureConfig.Amount = futureResult.DealAmount
-	spotConfig.Amount = math.Trunc(spotResult.DealAmount*100) / 100 // 后台的限制, 如果数值是0.299,可交易数量是0.29
+	spotConfig.Amount = spotResult.DealAmount
 
 	Logger.Debugf("spotConfig.Amount:%v", spotConfig.Amount)
 
@@ -642,7 +864,7 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 
 		Logger.Debug("锁仓成功")
 		a.ops[a.opIndex] = &operation
-		a.ops[a.opIndex].Amount = spotConfig.Amount * spotConfig.Price
+		a.ops[a.opIndex].Amount = spotResult.AvgPrice * spotResult.DealAmount
 		a.opIndex++
 		return
 
@@ -657,7 +879,8 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 					Logger.Debugf("现货平仓结果:%v", spotResult)
 					if spotResult.Error != TaskErrorSuccess {
 						Logger.Errorf("平仓失败，请手工检查:%v", spotResult)
-						a.status = StatusError
+						// a.status = StatusError
+						a.countError()
 					}
 					waitGroup.Done()
 				}
@@ -672,7 +895,8 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 				Logger.Debugf("合约平仓结果:%v", futureResult)
 				if futureResult.Error != TaskErrorSuccess {
 					Logger.Errorf("平仓失败，请手工检查:%v", futureResult)
-					a.status = StatusError
+					// a.status = StatusError
+					a.countError()
 				}
 				waitGroup.Done()
 			}
@@ -680,9 +904,9 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 
 		waitGroup.Wait()
 		if spotResult.Error == TaskErrorSuccess && futureResult.Error == TaskErrorSuccess {
-			a.fund.ClosePosition(spotConfig.Batch, 0, 0, Mongo.FundStatusClose)
+			a.fund.ClosePosition(spotConfig.Batch, spotResult.AvgPrice, futureResult.AvgPrice, Mongo.FundStatusClose)
 		} else {
-			a.fund.ClosePosition(spotConfig.Batch, 0, 0, Mongo.FundStatusError)
+			a.fund.ClosePosition(spotConfig.Batch, spotResult.AvgPrice, futureResult.AvgPrice, Mongo.FundStatusError)
 		}
 
 	}
@@ -690,9 +914,27 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 	return
 }
 
+func (a *IAnalyzer) checkOpenTime() bool {
+	now := time.Now()
+	if now.Weekday() == time.Friday && (now.Hour() > 10 && now.Hour() < 17) {
+		return false
+	}
+
+	return true
+}
+
+func (a *IAnalyzer) checkCloseTime() bool {
+	now := time.Now()
+	if now.Weekday() == time.Friday && now.Hour() > 16 {
+		return false
+	}
+
+	return true
+}
+
 func (a *IAnalyzer) checkFunds(pair string, diff float64) float64 {
 	var usedAmount, ratio float64
-	step := 0.5
+
 	for _, op := range a.ops {
 		if op != nil && op.futureConfig.Pair == pair {
 			usedAmount += op.Amount
@@ -700,22 +942,34 @@ func (a *IAnalyzer) checkFunds(pair string, diff float64) float64 {
 	}
 	coin := Exchange.ParsePair(pair)[0]
 
+	// base := a.config.Area[coin].Open
+	// if diff > base && diff < base+step {
+	// 	ratio = 0.3
+	// } else if diff >= (base+step) && diff < (base+2*step) {
+	// 	ratio = 0.6
+	// } else if diff >= (base + 2*step) {
+	// 	ratio = 1
+	// }
+
 	base := a.config.Area[coin].Open
-	if diff > base && diff < base+step {
-		ratio = 0.3
-	} else if diff >= (base+step) && diff < (base+2*step) {
+	if diff > base && diff < (base+a.config.StepValue) {
 		ratio = 0.6
-	} else if diff >= (base + 2*step) {
+	} else if diff >= (base + a.config.StepValue) {
 		ratio = 1
 	}
+	// } else if diff >= (base+a.config.StepValue) && diff < (base+2*a.config.StepValue) {
+	// 	ratio = 0.8
+	// } else if diff >= (base + 2*a.config.StepValue) {
+	// 	ratio = 1
+	// }
 
-	Logger.Debugf("已开仓：%v 开仓总量:%v 当前价差(%v)可开仓比例:%v", usedAmount, a.config.Area[coin].Amount, diff, ratio)
+	Logger.Infof("开仓单位：%v 已开仓：%v 开仓总量:%v 当前价差:%.2f 可开仓比例:%v", a.config.UnitAmount, usedAmount, a.config.Area[coin].Amount, diff, ratio)
 
-	if (usedAmount + UnitAmount) > a.config.Area[coin].Amount {
+	if (usedAmount + a.config.UnitAmount) > (a.config.Area[coin].Amount * ratio) {
 		return 0
 	}
 
-	return UnitAmount
+	return a.config.UnitAmount
 
 }
 
@@ -729,13 +983,12 @@ func (a *IAnalyzer) checkPosition(coin string, askFuturePrice float64, bidFuture
 			}
 
 			closeConditions := []bool{
-				OutFuturePriceArea(op.futureConfig, askFuturePrice, bidFuturePrice, a.config.LimitClose), // 防止爆仓
-				// !InPriceArea(spotPrice, op.spotConfig.Price, a.config.LimitClose),
-				// math.Abs((futurePrice-spotPrice)*100/spotPrice) < a.config.Area[coin].Close,
+				a.forceClose,
+				// OutFuturePriceArea(op.futureConfig, askFuturePrice, bidFuturePrice, a.config.LimitClose), // 防止爆仓
 				CheckPriceDiff(op.spotConfig, op.futureConfig, askFuturePrice, bidFuturePrice, askSpotPrice, bidSpotPrice, a.config.Area[coin].Close),
 			}
 
-			Logger.Debugf("Conditions:%v", closeConditions)
+			// Logger.Debugf("Conditions:%v", closeConditions)
 
 			for _, condition := range closeConditions {
 
@@ -792,11 +1045,15 @@ func (a *IAnalyzer) checkPosition(coin string, askFuturePrice float64, bidFuture
 						Logger.Info("平仓完成")
 						delete(a.ops, index)
 						a.fund.ClosePosition(op.spotConfig.Batch, spotResult.AvgPrice, futureResult.AvgPrice, Mongo.FundStatusClose)
+						if len(a.ops) == 0 {
+							a.forceClose = false
+						}
 
 					} else {
 						Logger.Error("平仓失败，请手工检查")
-						a.fund.ClosePosition(op.spotConfig.Batch, 0, 0, Mongo.FundStatusError)
-						a.status = StatusError
+						a.fund.ClosePosition(op.spotConfig.Batch, spotResult.AvgPrice, futureResult.AvgPrice, Mongo.FundStatusError)
+						//a.status = StatusError
+						a.countError()
 					}
 
 					return true
@@ -809,4 +1066,14 @@ func (a *IAnalyzer) checkPosition(coin string, askFuturePrice float64, bidFuture
 	}
 
 	return false
+}
+
+func (a *IAnalyzer) countError() {
+	Logger.Errorf("Error Counter:%v", a.errorCount)
+	if a.errorCount < 10 {
+		a.errorCount++
+	} else {
+		a.errorCount = 0
+		a.status = StatusError
+	}
 }

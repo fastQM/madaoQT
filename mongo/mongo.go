@@ -1,18 +1,20 @@
 package mongo
 
 import (
-	"github.com/kataras/golog"
 	Global "madaoQT/config"
+
+	"github.com/kataras/golog"
 )
 
 const MongoURL = "mongodb://localhost"
+
 // const MongoURL = "mongodb://192.168.0.102"
 const Database = "madaoQT"
 
 const ChartCollectin = "Chart"
 const TradeRecordCollection = "TradeRecord"
 const ExchangeCollection = "Exchanges"
-const OrderCollection = "Orders"
+const BalancesCollection = "Balances"
 const FundCollection = "Funds"
 const OkexDiffHistory = "OkexDiffHistory"
 
