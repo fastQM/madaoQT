@@ -24,14 +24,24 @@ type ParaCompare struct {
 	huobi   Exchange.IExchange
 	binance Exchange.IExchange
 	okex    Exchange.IExchange
+	liqui   Exchange.IExchange
+	bittrex Exchange.IExchange
 
-	exchanges []Exchange.IExchange
+	exchanges map[string]Exchange.IExchange
 }
 
 func (p *ParaCompare) Start() error {
 	// 测试
 	p.huobi = new(Exchange.Huobi)
 	p.binance = new(Exchange.Binance)
+	p.liqui = new(Exchange.Liqui)
+	p.bittrex = new(Exchange.Bittrex)
+
+	p.exchanges = make(map[string]Exchange.IExchange)
+	p.exchanges[p.huobi.GetExchangeName()] = p.huobi
+	p.exchanges[p.binance.GetExchangeName()] = p.binance
+	p.exchanges[p.liqui.GetExchangeName()] = p.liqui
+	p.exchanges[p.bittrex.GetExchangeName()] = p.bittrex
 
 	spotExchange := Exchange.NewOKExSpotApi(&Exchange.Config{
 	// API:    api,
@@ -53,8 +63,10 @@ func (p *ParaCompare) Start() error {
 				// }
 
 				p.okex = Exchange.IExchange(spotExchange)
+				p.exchanges[p.okex.GetExchangeName()] = p.okex
 
 			} else if event == Exchange.EventLostConnection {
+
 				go Task.Reconnect(spotExchange)
 			}
 		case <-time.After(3 * time.Second):
@@ -71,18 +83,22 @@ func (p *ParaCompare) Watch() {
 	pair := "eth/usdt"
 	uintAmount := float64(100)
 
-	err2, askOkex, _, bidOkex, _ := Task.CalcDepthPrice(false, map[string]float64{}, p.okex, pair, uintAmount)
-	err3, askHuobi, _, bidHuobi, _ := Task.CalcDepthPrice(false, map[string]float64{}, p.huobi, pair, uintAmount)
-	err4, askBinance, _, bidBinance, _ := Task.CalcDepthPrice(false, map[string]float64{}, p.binance, pair, uintAmount)
-	if err2 == nil && err3 == nil && err4 == nil {
-		Logger.Infof("币种:%s, OKEX可买入价格：%.2f, OKEX可卖出价格：%.2f", pair, askOkex, bidOkex)
-		Logger.Infof("币种:%s, 火币可买入价格：%.2f, 火币可卖出价格：%.2f", pair, askHuobi, bidHuobi)
-		Logger.Infof("币种:%s, 币安可买入价格：%.2f, 币安可卖出价格：%.2f", pair, askBinance, bidBinance)
-		maxBid := GetMax(bidOkex, bidHuobi, bidBinance) // 可以卖出
-		minAsk := GetMin(askOkex, askHuobi, askBinance) // 可以买入
-
-		Logger.Infof("最高卖出价格:%.2f 最低买入价格:%.2f 最大利差:%.2f%%", maxBid, minAsk, (maxBid-minAsk)*100/minAsk)
+	var askList []float64
+	var bidList []float64
+	for _, exchange := range p.exchanges {
+		err, ask, _, bid, _ := Task.CalcDepthPrice(false, map[string]float64{}, exchange, pair, uintAmount)
+		if err == nil {
+			askList = append(askList, ask)
+			bidList = append(bidList, bid)
+			Logger.Infof("币种[%s][%s]可买入价格：%.2f, OKEX可卖出价格：%.2f", pair, exchange.GetExchangeName(), ask, bid)
+		} else {
+			Logger.Infof("[%s]获取深度失败", exchange.GetExchangeName())
+		}
 	}
+
+	maxBid := GetMax(bidList...) // 可以卖出
+	minAsk := GetMin(askList...) // 可以买入
+	Logger.Infof("最高卖出价格:%.2f 最低买入价格:%.2f 最大利差:%.2f%%", maxBid, minAsk, (maxBid-minAsk)*100/minAsk)
 
 }
 
