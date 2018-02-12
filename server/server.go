@@ -16,8 +16,10 @@ import (
 	Exchange "madaoQT/exchange"
 	Controllers "madaoQT/server/controllers"
 	Websocket "madaoQT/server/websocket"
-	Task "madaoQT/task"
 	Utils "madaoQT/utils"
+
+	// task
+	OkexDiff "madaoQT/task/okexdiff"
 )
 
 type HttpServer struct {
@@ -82,11 +84,6 @@ func (h *HttpServer) setupSessions() {
 
 func (h *HttpServer) setupControllers() {
 
-	// h.app.Controller("/helloworld", new(Controllers.HelloWorldController))
-	// h.app.Controller("/charts", new(Controllers.ChartsController))
-	// h.app.Controller("/user", &Controllers.UserController{Sessions: h.sess})
-	// h.app.Controller("/task", &Controllers.TaskController{Sessions: h.sess, Tasks: h.Tasks})
-	// h.app.Controller("/exchange", &Controllers.ExchangeController{Sessions: h.sess, Exchanges: h.exchanges})
 	mvc.New(h.app.Party("/helloworld")).Handle(new(Controllers.HelloWorldController))
 	mvc.New(h.app.Party("/charts")).Handle(new(Controllers.ChartsController))
 	mvc.New(h.app.Party("/user")).Handle(&Controllers.UserController{Sessions: h.sess})
@@ -106,11 +103,11 @@ func (h *HttpServer) SetupHttpServer() {
 	var views *view.HTMLEngine
 
 	if Global.ProductionEnv {
-		views = iris.HTML("./www/www", ".html").Binary(Asset, AssetNames)
-		h.app.StaticEmbedded("/bower_components", "./www/bower_components", Asset, AssetNames)
-		h.app.StaticEmbedded("/elements", "./www/elements", Asset, AssetNames)
-		h.app.StaticEmbedded("/images", "./www/images", Asset, AssetNames)
-		h.app.StaticEmbedded("/assets", "./www/assets", Asset, AssetNames)
+		// views = iris.HTML("./www/www", ".html").Binary(Asset, AssetNames)
+		// h.app.StaticEmbedded("/bower_components", "./www/bower_components", Asset, AssetNames)
+		// h.app.StaticEmbedded("/elements", "./www/elements", Asset, AssetNames)
+		// h.app.StaticEmbedded("/images", "./www/images", Asset, AssetNames)
+		// h.app.StaticEmbedded("/assets", "./www/assets", Asset, AssetNames)
 
 	} else {
 		views = iris.HTML("./www/www", ".html")
@@ -168,13 +165,8 @@ func (h *HttpServer) setupTasks() {
 	if h.Tasks == nil {
 		h.Tasks = &sync.Map{}
 	}
-	// load default task
-	// h.Tasks.Store("okexdiff", &Task.Task{
-	// 	Name: "okexdiff",
-	// })
-	tasks := Task.LoadStaticTask()
-	for _, task := range tasks {
-		h.Tasks.Store(task.GetTaskName(), task)
-	}
+
+	okexdiff := new(OkexDiff.IAnalyzer)
+	h.Tasks.Store(okexdiff.GetTaskName(), okexdiff)
 
 }

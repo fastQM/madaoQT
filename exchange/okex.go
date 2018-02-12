@@ -514,7 +514,7 @@ func (o *OKExAPI) GetDepthValue(coin string) [][]DepthPrice {
 						askList[i].Quantity = values[CoinQuantity].(float64)
 					}
 
-					list[DepthTypeAsks] = askList
+					list[DepthTypeAsks] = revertDepthArray(askList)
 				}
 
 				if bids != nil && len(bids) > 0 {
@@ -537,7 +537,7 @@ func (o *OKExAPI) GetDepthValue(coin string) [][]DepthPrice {
 						askList[i].Quantity, _ = strconv.ParseFloat(values[1].(string), 64)
 					}
 
-					list[DepthTypeAsks] = askList
+					list[DepthTypeAsks] = revertDepthArray(askList)
 				}
 
 				if bids != nil && len(bids) > 0 {

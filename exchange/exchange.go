@@ -176,7 +176,10 @@ type TradeResult struct {
 	OrderID string
 }
 
+// DepthTypeBids in which the prices should be from high to low
 const DepthTypeBids = 0
+
+// DepthTypeAsks in which the prices should be from low to high
 const DepthTypeAsks = 1
 
 /* 获取深度价格 */
@@ -234,69 +237,23 @@ func RevertTradeType(tradeType TradeType) TradeType {
 	return TradeTypeUnknown
 }
 
-/*
-	实际意义不大
-*/
-// func GetDepthAveragePrice(items []DepthPrice) (float64, float64) {
+func revertDepthArray(array []DepthPrice) []DepthPrice {
+	var tmp DepthPrice
+	var length int
 
-// 	if items == nil || len(items) == 0 {
-// 		return -1, -1
-// 	}
+	if len(array)%2 != 0 {
+		length = len(array) / 2
+	} else {
+		length = len(array)/2 - 1
+	}
+	for i := 0; i <= length; i++ {
+		tmp = array[i]
+		array[i] = array[len(array)-1-i]
+		array[len(array)-1-i] = tmp
 
-// 	var total float64
-// 	var quantity float64
-
-// 	for _, item := range items {
-// 		total += item.price * item.qty
-// 		quantity += item.qty
-// 	}
-
-// 	return total / quantity, quantity
-// }
-
-/*
-	返回：（下单均价，下单价格）
-*/
-// func GetDepthPriceByOrder(items []DepthPrice, orderQty float64) (float64, float64) {
-// 	if items == nil || len(items) == 0 {
-// 		return -1, -1
-// 	}
-
-// 	// log.Printf("Depth:%v", items)
-// 	var total float64
-// 	var amount float64
-// 	for _, item := range items {
-// 		total += item.qty
-// 		amount += (item.qty * item.price)
-// 	}
-
-// 	if orderQty > total {
-// 		log.Printf("深度不够：%v", total)
-// 		return amount / total, -2
-
-// 	}
-
-// 	var depth int
-// 	balance := orderQty
-
-// 	for i, item := range items {
-// 		if balance-item.qty <= 0 {
-// 			depth = i
-// 			break
-// 		} else {
-// 			balance -= item.qty
-// 		}
-// 	}
-
-// 	total = 0
-// 	for i := 0; i < depth; i++ {
-// 		total += items[i].price * items[i].qty
-// 	}
-
-// 	total += (items[depth].price * balance)
-
-// 	return total / orderQty, items[depth].price
-// }
+	}
+	return array
+}
 
 func GetRatio(value1 float64, value2 float64) float64 {
 

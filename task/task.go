@@ -198,7 +198,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 			// depthInvalidCount = 0
 
-			tradePrice = getPlacedPrice2(tradeConfig.Type, tradeConfig.Price, tradeConfig.Limit)
+			tradePrice = getPlacedPrice(tradeConfig.Type, tradeConfig.Price, tradeConfig.Limit)
 
 			trade = exchange.Trade(Exchange.TradeConfig{
 				Pair:   tradeConfig.Pair,
@@ -395,113 +395,7 @@ func CheckPriceDiff(spotConfig Exchange.TradeConfig, futureConfig Exchange.Trade
 	return false
 }
 
-func revertDepthArray(array []Exchange.DepthPrice) []Exchange.DepthPrice {
-	var tmp Exchange.DepthPrice
-	var length int
-
-	if len(array)%2 != 0 {
-		length = len(array) / 2
-	} else {
-		length = len(array)/2 - 1
-	}
-	for i := 0; i <= length; i++ {
-		tmp = array[i]
-		array[i] = array[len(array)-1-i]
-		array[len(array)-1-i] = tmp
-
-	}
-	return array
-}
-
-// getPlacedPrice calcutes the price to be placed
-func getPlacedPrice(tradeType Exchange.TradeType,
-	items [][]Exchange.DepthPrice,
-	price float64,
-	limit float64,
-	quantity float64) (error, float64, float64) {
-
-	if items == nil || items[Exchange.DepthTypeAsks] == nil || items[Exchange.DepthTypeBids] == nil {
-		return errors.New("Invalid depth list"), 0, 0
-	}
-
-	if len(items[Exchange.DepthTypeAsks]) == 0 || len(items[Exchange.DepthTypeBids]) == 0 {
-		return errors.New("the lenth of the depth is 0"), 0, 0
-	}
-
-	var list []Exchange.DepthPrice
-	var tradePrice, tradeQuantity float64
-
-	if tradeType == Exchange.TradeTypeOpenLong || tradeType == Exchange.TradeTypeCloseShort || tradeType == Exchange.TradeTypeBuy {
-		// we need the depth listed from low to high
-		list = revertDepthArray(items[Exchange.DepthTypeAsks])
-		limitPriceHigh := price * (1 + limit)
-		Logger.Debugf("买入操作，接受最高价格：%v", limitPriceHigh)
-		for _, item := range list {
-			if item.Price <= limitPriceHigh {
-
-				tradePrice = item.Price
-				tradeQuantity += item.Quantity
-
-				if tradeQuantity > quantity {
-					tradeQuantity = quantity
-					break
-				}
-
-			} else {
-				Logger.Debugf("超出价格范围")
-				return errors.New("exceed the price limit"), 0, 0
-			}
-		}
-
-	} else {
-		// we need the depth listed from higt to low
-		list = items[Exchange.DepthTypeBids]
-
-		limitPriceLow := price * (1 - limit)
-		Logger.Debugf("卖出操作，接受最低价格：%v", limitPriceLow)
-		for _, item := range list {
-			if item.Price >= limitPriceLow {
-
-				tradePrice = item.Price
-				tradeQuantity += item.Quantity
-
-				if tradeQuantity > quantity {
-					tradeQuantity = quantity
-					break
-				}
-
-			} else {
-				Logger.Debugf("超出价格范围")
-				return errors.New("exceed the price limit"), 0, 0
-			}
-		}
-	}
-
-	// limitPriceHigh := price * (1 + limit)
-	// limitPriceLow := price * (1 - limit)
-	// Logger.Debugf("有效价格范围：%v-%v", limitPriceLow, limitPriceHigh)
-
-	// for _, item := range list {
-	// 	if item.Price >= limitPriceLow && item.Price <= limitPriceHigh {
-
-	// 		tradePrice = item.Price
-	// 		tradeQuantity += item.Quantity
-
-	// 		if tradeQuantity > quantity {
-	// 			tradeQuantity = quantity
-	// 			break
-	// 		}
-
-	// 	} else {
-	// 		Logger.Debugf("超出价格范围")
-	// 		break
-	// 	}
-	// }
-
-	return nil, tradePrice, tradeQuantity
-}
-
-func getPlacedPrice2(tradeType Exchange.TradeType, price float64, limit float64) float64 {
+func getPlacedPrice(tradeType Exchange.TradeType, price float64, limit float64) float64 {
 
 	if tradeType == Exchange.TradeTypeOpenLong || tradeType == Exchange.TradeTypeCloseShort || tradeType == Exchange.TradeTypeBuy {
 		limitPriceHigh := price * (1 + limit)
@@ -519,7 +413,7 @@ func TranslateToContractNumber(price float64, coinQuantity float64) int {
 	return int(coinQuantity * price / 10)
 }
 
-func CalcDepthPrice(isFuture bool, exchange Exchange.IExchange, pair string, amount float64) (err error, askPrice float64, askPlacePrice float64, bidPrice float64, bidPlacePrice float64) {
+func CalcDepthPrice(isFuture bool, ratios map[string]float64, exchange Exchange.IExchange, pair string, amount float64) (err error, askPrice float64, askPlacePrice float64, bidPrice float64, bidPlacePrice float64) {
 
 	var asks, bids []Exchange.DepthPrice
 	var quantity float64
@@ -527,7 +421,7 @@ func CalcDepthPrice(isFuture bool, exchange Exchange.IExchange, pair string, amo
 	depths := exchange.GetDepthValue(pair)
 	// Logger.Debugf("Future:%v 深度:%v", isFuture, depths)
 	if depths != nil {
-		asks = revertDepthArray(depths[Exchange.DepthTypeAsks])
+		asks = depths[Exchange.DepthTypeAsks]
 		bids = depths[Exchange.DepthTypeBids]
 	} else {
 		return errors.New("未获取深度信息"), 0, 0, 0, 0
@@ -536,7 +430,7 @@ func CalcDepthPrice(isFuture bool, exchange Exchange.IExchange, pair string, amo
 	amount *= 2
 
 	if isFuture {
-		quantity = amount / constContractRatio[Exchange.ParsePair(pair)[0]]
+		quantity = amount / ratios[Exchange.ParsePair(pair)[0]]
 	}
 
 	// Logger.Debugf("Asks:%v", asks)
@@ -641,11 +535,20 @@ type ITask interface {
 	GetStatus() int
 }
 
-func LoadStaticTask() []ITask {
-	tasks := []ITask{}
+// func LoadStaticTask() []ITask {
+// 	tasks := []ITask{}
 
-	okexdiff := new(IAnalyzer)
-	tasks = append(tasks, okexdiff)
+// 	okexdiff := new(IAnalyzer)
+// 	tasks = append(tasks, okexdiff)
 
-	return tasks
+// 	return tasks
+// }
+
+func Reconnect(exchange Exchange.IExchange) {
+	Logger.Debug("Reconnecting......")
+	// utils.SleepAsyncBySecond(60)
+	if err := exchange.Start(); err != nil {
+		Logger.Errorf("Fail to start exchange %v with error:%v", exchange.GetExchangeName(), err)
+		return
+	}
 }

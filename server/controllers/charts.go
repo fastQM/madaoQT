@@ -7,7 +7,7 @@ import (
 	"github.com/kataras/iris"
 
 	Mongo "madaoQT/mongo"
-	Task "madaoQT/task"
+	OkexDiff "madaoQT/task/okexdiff"
 )
 
 type ChartsController struct {
@@ -71,7 +71,7 @@ func (c *ChartsController) GetDiffBy(coin string) iris.Map {
 }
 
 func (c *ChartsController) GetProfit() iris.Map {
-	fundManager := new(Task.OkexFundManage)
+	fundManager := new(OkexDiff.OkexFundManage)
 	fundManager.Init()
 	date := time.Date(2018, 2, 1, 0, 0, 0, 0, time.Local)
 	today := time.Now()
