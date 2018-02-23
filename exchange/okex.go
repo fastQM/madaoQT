@@ -158,6 +158,15 @@ func (o *OKExAPI) SetConfigure(config Config) {
 		logger.Debug("The current connection doesn`t support trading without API")
 	}
 
+	go func() {
+		for {
+			select {
+			case <-time.After(30 * time.Second):
+				o.ping()
+			}
+		}
+	}()
+
 }
 
 func (o *OKExAPI) Start() error {
@@ -197,6 +206,7 @@ func (o *OKExAPI) Start() error {
 				filters := []string{
 					"depth",
 					"ticker",
+					"pong",
 				}
 
 				var filtered = false
@@ -210,6 +220,10 @@ func (o *OKExAPI) Start() error {
 					logger.Debugf("[RECV]%s", message)
 				}
 
+			}
+
+			if strings.Contains(string(message), "pong") {
+				continue
 			}
 
 			var response []map[string]interface{}
@@ -325,6 +339,7 @@ func (o *OKExAPI) Start() error {
 func (o *OKExAPI) Close() {
 	if o.conn != nil {
 		o.conn.Close()
+		o.conn = nil
 	}
 }
 
@@ -355,6 +370,13 @@ func (o *OKExAPI) StartTicker(pair string) {
 	}
 
 	o.command(data, nil)
+}
+
+func (o *OKExAPI) ping() error {
+	data := map[string]string{
+		"event": "ping",
+	}
+	return o.command(data, nil)
 }
 
 // GetExchangeName get the name of the exchanges
@@ -602,7 +624,23 @@ func (o *OKExAPI) command(data map[string]string, parameters map[string]string) 
 	}
 
 	if Debug {
-		logger.Debugf("Command[%s]", string(cmd))
+
+		filters := []string{
+			"ping",
+		}
+
+		found := false
+
+		for _, filter := range filters {
+			if strings.Contains(string(cmd), filter) {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			logger.Debugf("Command[%s]", string(cmd))
+		}
 	}
 
 	o.conn.WriteMessage(Websocket.TextMessage, cmd)

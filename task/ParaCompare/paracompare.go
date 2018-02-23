@@ -41,7 +41,7 @@ func (p *ParaCompare) Start() error {
 	p.exchanges[p.huobi.GetExchangeName()] = p.huobi
 	p.exchanges[p.binance.GetExchangeName()] = p.binance
 	p.exchanges[p.liqui.GetExchangeName()] = p.liqui
-	p.exchanges[p.bittrex.GetExchangeName()] = p.bittrex
+	// p.exchanges[p.bittrex.GetExchangeName()] = p.bittrex
 
 	spotExchange := Exchange.NewOKExSpotApi(&Exchange.Config{
 	// API:    api,
@@ -69,7 +69,7 @@ func (p *ParaCompare) Start() error {
 
 				go Task.Reconnect(spotExchange)
 			}
-		case <-time.After(3 * time.Second):
+		case <-time.After(10 * time.Second):
 			p.Watch()
 		}
 	}
@@ -80,25 +80,32 @@ func (p *ParaCompare) Start() error {
 
 func (p *ParaCompare) Watch() {
 
-	pair := "eth/usdt"
-	uintAmount := float64(100)
+	pairs := []string{"eth/usdt", "btc/usdt", "ltc/usdt"}
+	for _, pair := range pairs {
 
-	var askList []float64
-	var bidList []float64
-	for _, exchange := range p.exchanges {
-		err, ask, _, bid, _ := Task.CalcDepthPrice(false, map[string]float64{}, exchange, pair, uintAmount)
-		if err == nil {
-			askList = append(askList, ask)
-			bidList = append(bidList, bid)
-			Logger.Infof("币种[%s][%s]可买入价格：%.2f, OKEX可卖出价格：%.2f", pair, exchange.GetExchangeName(), ask, bid)
-		} else {
-			Logger.Infof("[%s]获取深度失败", exchange.GetExchangeName())
+		uintAmount := float64(100)
+		// err, ask, _, bid, _ := Task.CalcDepthPrice(false, map[string]float64{}, p.bittrex, pair, uintAmount)
+
+		// if err == nil {
+		// 	Logger.Infof("币种[%s][%s]可买入价格：%.2f, 可卖出价格：%.2f", pair, p.bittrex.GetExchangeName(), ask, bid)
+		// }
+		var askList []float64
+		var bidList []float64
+		for _, exchange := range p.exchanges {
+			err, ask, _, bid, _ := Task.CalcDepthPrice(false, map[string]float64{}, exchange, pair, uintAmount)
+			if err == nil {
+				askList = append(askList, ask)
+				bidList = append(bidList, bid)
+				// Logger.Infof("币种[%s][%s]可买入价格：%.2f, 可卖出价格：%.2f", pair, exchange.GetExchangeName(), ask, bid)
+			} else {
+				Logger.Infof("[%s]获取深度失败", exchange.GetExchangeName())
+			}
 		}
-	}
 
-	maxBid := GetMax(bidList...) // 可以卖出
-	minAsk := GetMin(askList...) // 可以买入
-	Logger.Infof("最高卖出价格:%.2f 最低买入价格:%.2f 最大利差:%.2f%%", maxBid, minAsk, (maxBid-minAsk)*100/minAsk)
+		maxBid := GetMax(bidList...) // 可以卖出
+		minAsk := GetMin(askList...) // 可以买入
+		Logger.Infof("[%s]最高卖出价格:%.2f 最低买入价格:%.2f 最大利差:%.2f%%", pair, maxBid, minAsk, (maxBid-minAsk)*100/minAsk)
+	}
 
 }
 

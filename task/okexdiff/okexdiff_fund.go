@@ -163,7 +163,7 @@ func (h *OkexFundManage) CheckProfit(records []Mongo.FundInfo) float64 {
 		} else {
 			spotProfit = (record.SpotOpen - record.SpotClose) * record.SpotAmount
 		}
-		fee = (record.SpotOpen + record.SpotClose) * record.SpotAmount * 0.001
+		fee = (record.SpotOpen + record.SpotClose) * record.SpotAmount * 0.002
 
 		amount := constContractRatio[coin] * record.FutureAmount
 		if record.FutureOpen == 0 || record.FutureClose == 0 {
@@ -175,7 +175,7 @@ func (h *OkexFundManage) CheckProfit(records []Mongo.FundInfo) float64 {
 				futureProfit = (amount/record.FutureOpen - amount/record.FutureClose) * record.FutureClose * (-1)
 			}
 
-			fee += 100 * 2 * 0.00075
+			fee += 100 * 2 * 0.0005
 		}
 
 		log.Printf("[%v][%v]现货收益:%v 合约收益:%v 收益:%v", record.Batch, record.CloseTime, spotProfit, futureProfit, (spotProfit + futureProfit - fee))

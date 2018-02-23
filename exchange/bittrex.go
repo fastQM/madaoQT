@@ -3,7 +3,6 @@ package exchange
 import (
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -59,8 +58,8 @@ func (p *Bittrex) marketRequest(path string, params map[string]string) (error, m
 		return err, nil
 	}
 
-	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36")
+	// request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36")
 
 	var resp *http.Response
 	resp, err = http.DefaultClient.Do(request)
@@ -108,7 +107,6 @@ func (p *Bittrex) GetDepthValue(pair string) [][]DepthPrice {
 		logger.Errorf("无效深度:%v", err)
 		return nil
 	} else {
-		log.Printf("rsp:%v", response)
 		if response["success"].(bool) {
 			list := make([][]DepthPrice, 2)
 			data := response["result"].(map[string]interface{})

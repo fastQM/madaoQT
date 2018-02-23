@@ -103,11 +103,11 @@ func (h *HttpServer) SetupHttpServer() {
 	var views *view.HTMLEngine
 
 	if Global.ProductionEnv {
-		// views = iris.HTML("./www/www", ".html").Binary(Asset, AssetNames)
-		// h.app.StaticEmbedded("/bower_components", "./www/bower_components", Asset, AssetNames)
-		// h.app.StaticEmbedded("/elements", "./www/elements", Asset, AssetNames)
-		// h.app.StaticEmbedded("/images", "./www/images", Asset, AssetNames)
-		// h.app.StaticEmbedded("/assets", "./www/assets", Asset, AssetNames)
+		views = iris.HTML("./www/www", ".html").Binary(Asset, AssetNames)
+		h.app.StaticEmbedded("/bower_components", "./www/bower_components", Asset, AssetNames)
+		h.app.StaticEmbedded("/elements", "./www/elements", Asset, AssetNames)
+		h.app.StaticEmbedded("/images", "./www/images", Asset, AssetNames)
+		h.app.StaticEmbedded("/assets", "./www/assets", Asset, AssetNames)
 
 	} else {
 		views = iris.HTML("./www/www", ".html")

@@ -688,7 +688,7 @@ func (a *IAnalyzer) Watch() {
 			}
 
 		} else {
-			Logger.Errorf("无效深度不操作")
+			Logger.Debug("无效深度不操作")
 			return
 		}
 
