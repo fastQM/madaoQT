@@ -37,14 +37,14 @@ func (h *Binance) Start() error {
 	return nil
 }
 
-func (h *Binance) marketRequest(path string, params map[string]string) (error, map[string]interface{}) {
+func (h *Binance) marketRequest(path string, params map[string]string) (error, []byte) {
 	var req http.Request
 	req.ParseForm()
 	for k, v := range params {
 		req.Form.Add(k, v)
 	}
 	bodystr := strings.TrimSpace(req.Form.Encode())
-	logger.Debugf("Params:%v", bodystr)
+	// logger.Debugf("Params:%v", bodystr)
 	request, err := http.NewRequest("GET", BinanceURL+path+"?"+bodystr, nil)
 	if err != nil {
 		return err, nil
@@ -65,12 +65,12 @@ func (h *Binance) marketRequest(path string, params map[string]string) (error, m
 		return err, nil
 	}
 	// log.Printf("Body:%v", string(body))
-	var value map[string]interface{}
-	if err = json.Unmarshal(body, &value); err != nil {
-		return err, nil
-	}
+	// var value map[string]interface{}
+	// if err = json.Unmarshal(body, &value); err != nil {
+	// 	return err, nil
+	// }
 
-	return nil, value
+	return nil, body
 
 }
 
@@ -93,19 +93,26 @@ func (p *Binance) GetTicker(pair string) *TickerValue {
 func (p *Binance) GetDepthValue(pair string) [][]DepthPrice {
 	//ethusdt@depth20
 	coins := ParsePair(pair)
+	symbol := strings.ToUpper(coins[0] + coins[1])
 	if err, response := p.marketRequest("/api/v1/depth", map[string]string{
-		"symbol": strings.ToUpper(coins[0] + coins[1]),
+		"symbol": symbol,
 		// "limit":  "100",
 	}); err != nil {
 		logger.Errorf("无效深度:%v", err)
 		return nil
 	} else {
 
-		if response["code"] == nil {
+		var value map[string]interface{}
+		if err = json.Unmarshal(response, &value); err != nil {
+			logger.Errorf("解析错误:%v", err)
+			return nil
+		}
+
+		if value["code"] == nil {
 			list := make([][]DepthPrice, 2)
 
-			asks := response["asks"].([]interface{})
-			bids := response["bids"].([]interface{})
+			asks := value["asks"].([]interface{})
+			bids := value["bids"].([]interface{})
 
 			if asks != nil && len(asks) > 0 {
 				askList := make([]DepthPrice, len(asks))
@@ -156,4 +163,43 @@ func (p *Binance) CancelOrder(order OrderInfo) *TradeResult {
 // GetOrderInfo() get the information with order filter
 func (p *Binance) GetOrderInfo(filter OrderInfo) []OrderInfo {
 	return nil
+}
+
+func (p *Binance) GetKline(pair string, period string, limit int) []KlineValue {
+	coins := ParsePair(pair)
+	symbol := strings.ToUpper(coins[0] + coins[1])
+	if err, response := p.marketRequest("/api/v1/klines", map[string]string{
+		"symbol":   symbol,
+		"interval": period,
+		"limit":    strconv.Itoa(limit),
+	}); err != nil {
+		logger.Errorf("无效数据:%v", err)
+		return nil
+	} else {
+		var values [][]interface{}
+		if response != nil {
+			if err = json.Unmarshal(response, &values); err != nil {
+				logger.Errorf("Fail to Unmarshal:%v", err)
+				return nil
+			}
+
+			kline := make([]KlineValue, len(values))
+			for i, value := range values {
+				// kline[i].OpenTime = time.Unix((int64)(value[0].(float64)/1000), 0).Format(Global.TimeFormat)
+				kline[i].OpenTime = value[0].(float64) / 1000
+				kline[i].Open, _ = strconv.ParseFloat(value[1].(string), 64)
+				kline[i].High, _ = strconv.ParseFloat(value[2].(string), 64)
+				kline[i].Low, _ = strconv.ParseFloat(value[3].(string), 64)
+				kline[i].Close, _ = strconv.ParseFloat(value[4].(string), 64)
+				kline[i].Volumn, _ = strconv.ParseFloat(value[5].(string), 64)
+				// kline[i].CloseTime = time.Unix((int64)(value[6].(float64)/1000), 0).Format(Global.TimeFormat)
+				kline[i].CloseTime = value[6].(float64) / 1000
+
+			}
+
+			return kline
+		}
+
+		return nil
+	}
 }

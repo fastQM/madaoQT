@@ -207,24 +207,26 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 				Price:  tradePrice,
 			})
 
-			if err := dbTrades.Insert(&Mongo.TradesRecord{
-				Batch:    tradeConfig.Batch,
-				Oper:     Exchange.TradeTypeString[tradeConfig.Type],
-				Exchange: exchange.GetExchangeName(),
-				Pair:     tradeConfig.Pair,
-				Quantity: tradeAmount,
-				Price:    tradePrice,
-				OrderID:  trade.OrderID,
-			}); err != nil {
-				Logger.Errorf("保存交易操作失败:%v", err)
+			if dbTrades != nil {
+				if err := dbTrades.Insert(&Mongo.TradesRecord{
+					Batch:    tradeConfig.Batch,
+					Oper:     Exchange.TradeTypeString[tradeConfig.Type],
+					Exchange: exchange.GetExchangeName(),
+					Pair:     tradeConfig.Pair,
+					Quantity: tradeAmount,
+					Price:    tradePrice,
+					OrderID:  trade.OrderID,
+				}); err != nil {
+					Logger.Errorf("保存交易操作失败:%v", err)
+				}
 			}
 
 			if trade != nil && trade.Error == nil {
 				// 300 seconds = 5 minutes
-				loop := 100
+				loop := 300
 
 				for {
-					Utils.SleepAsyncBySecond(3)
+					Utils.SleepAsyncBySecond(1)
 
 					info := exchange.GetOrderInfo(Exchange.OrderInfo{
 						OrderID: trade.OrderID,
@@ -247,7 +249,9 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 					if info[0].Status == Exchange.OrderStatusDone {
 						dealAmount += info[0].DealAmount
 						totalCost += (info[0].AvgPrice * info[0].DealAmount) //手续费如何？
-						dbTrades.SetDone(trade.OrderID)
+						if dbTrades != nil {
+							dbTrades.SetDone(trade.OrderID)
+						}
 						goto __CheckDealAmount
 					}
 
@@ -283,7 +287,9 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 								goto __ERROR
 							}
 
-							dbTrades.SetCanceled(trade.OrderID)
+							if dbTrades != nil {
+								dbTrades.SetCanceled(trade.OrderID)
+							}
 
 							// dbOrders.Insert(&Mongo.OrderInfo{
 							// 	Batch:    tradeConfig.Batch,

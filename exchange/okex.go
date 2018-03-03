@@ -308,7 +308,7 @@ func (o *OKExAPI) Start() error {
 							o.tickerList[i].Value = response[0]["data"]
 
 							tmp := o.tickerList[i].Value.(map[string]interface{})
-							lastValue, _ := strconv.ParseFloat(tmp["last"].(string), 64)
+							lastValue, _ := tmp["last"].(float64)
 							tickerValue := TickerValue{
 								Last: lastValue,
 								Time: formatTimeOKEX(),
@@ -1073,6 +1073,10 @@ func (o *OKExAPI) getTradeTypeString(orderType TradeType) string {
 
 	logger.Errorf("[%s]getTradeType: Invalid type", o.GetExchangeName())
 	return ""
+}
+
+func (p *OKExAPI) GetKline(pair string, period string, limit int) []KlineValue {
+	return nil
 }
 
 var okexTradeTypeString = map[TradeType]string{

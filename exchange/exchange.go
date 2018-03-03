@@ -1,6 +1,7 @@
 package exchange
 
 import (
+	"log"
 	"strings"
 
 	Global "madaoQT/config"
@@ -149,6 +150,16 @@ type TickerValue struct {
 	Period string // 合约周期
 }
 
+type KlineValue struct {
+	OpenTime  float64
+	Open      float64
+	High      float64
+	Low       float64
+	Close     float64
+	Volumn    float64
+	CloseTime float64
+}
+
 type TradeConfig struct {
 	Batch string
 	Pair  string
@@ -219,6 +230,8 @@ type IExchange interface {
 	CancelOrder(order OrderInfo) *TradeResult
 	// GetOrderInfo() get the information with order filter
 	GetOrderInfo(filter OrderInfo) []OrderInfo
+
+	GetKline(pair string, period string, limit int) []KlineValue
 }
 
 // RevertTradeType the "close" operation of the original trading
@@ -253,6 +266,22 @@ func revertDepthArray(array []DepthPrice) []DepthPrice {
 
 	}
 	return array
+}
+
+func GetAverage(period int, values []KlineValue) float64 {
+
+	if values == nil || len(values) != period {
+		log.Print("Error:Invalid values")
+		return 0
+	}
+
+	var total float64
+	for _, value := range values {
+		total += value.Close
+	}
+
+	return total / float64(period)
+
 }
 
 func GetRatio(value1 float64, value2 float64) float64 {

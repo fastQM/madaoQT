@@ -18,6 +18,8 @@ const BalancesCollection = "Balances"
 const FundCollection = "Funds"
 const OkexDiffHistory = "OkexDiffHistory"
 
+const ErrorNotConnected = "Mongo is not connected"
+
 type DBConfig struct {
 	CollectionName string
 }
