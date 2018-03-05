@@ -15,6 +15,9 @@ import (
 	"github.com/kataras/golog"
 )
 
+const trendTaskExplaination = "该策略适用于可能在短期内(1-3天)出现大幅波动(10%-30%)的市场"
+
+// TrendTask 策略适用于在短期内(1-3天)出现大幅波动(10%-30%)的市场
 type TrendTask struct {
 	config TrendConfig
 
@@ -38,7 +41,7 @@ type TrendConfig struct {
 }
 
 type TrendPosition struct {
-	TimeStamp float64
+	TimeStamp int64
 	Amount    float64
 	config    Exchange.TradeConfig
 }
@@ -64,8 +67,10 @@ func init() {
 
 func (p *TrendTask) Start(api string, secret string, configJSON string) error {
 
+	Logger.Infof("%s", trendTaskExplaination)
+
 	p.config = TrendConfig{
-		UnitAmount:      100,
+		UnitAmount:      250,
 		LimitCloseRatio: 0.03,
 		LimitOpenRatio:  0.003,
 	}
@@ -127,11 +132,42 @@ func (p *TrendTask) Start(api string, secret string, configJSON string) error {
 
 	p.status = Task.StatusProcessing
 	p.positions = make(map[uint]*TrendPosition)
+	p.loadPosition()
 	return nil
 }
 
+func (p *TrendTask) loadPosition() {
+	var records []MongoTrend.FundInfo
+	var err error
+
+	if err, records = p.fundManager.CheckPosition(); err != nil {
+		Logger.Errorf("Fail to load positions:%v", err)
+		return
+	}
+
+	if records != nil && len(records) > 0 {
+		for _, record := range records {
+			var position TrendPosition
+			var config Exchange.TradeConfig
+			config.Batch = record.Batch
+			config.Amount = record.FutureAmount
+			config.Limit = p.config.LimitOpenRatio
+			config.Pair = record.Pair
+			config.Type = Exchange.TradeTypeInt(record.FutureType)
+			config.Price = record.FutureOpen
+			coin := Exchange.ParsePair(config.Pair)[0]
+			position.TimeStamp = record.OpenTime.Unix()
+			position.Amount = config.Amount * constContractRatio[coin]
+			position.config = config
+			p.positions[p.positionIndex] = &position
+			p.positionIndex++
+			Logger.Infof("Position:%v", position)
+		}
+	}
+}
+
 func (p *TrendTask) checkFunds() float64 {
-	funds := float64(500)
+	funds := float64(5000)
 	var usedAmount float64
 	for _, position := range p.positions {
 		usedAmount += position.Amount
@@ -195,7 +231,8 @@ func (p *TrendTask) Watch() {
 	// 1. 三条均线要保持平行，一旦顺序乱则清仓
 	// 2. 开仓后，价格柱破10日均线清仓;虽然可能只是下探均线，但是说明市场强势减弱，后续可以更轻松的建仓
 	// 3. 开多时，开仓价格应该高于十日均线；开空时，开仓价格需要低于十日均线
-	time := time.Unix((int64)(current.OpenTime), 0).Format(Global.TimeFormat)
+	timestamp := int64(current.OpenTime)
+	time := time.Unix(int64(timestamp), 0).Format(Global.TimeFormat)
 	Logger.Infof("[Time]%s [Last]%.2f [Avg5]%.2f [Avg10]%.2f [Avg20]%.2f [Diff]%.2f", time, lastDiff, avg5, avg10, avg20, avg10-avg20)
 	// Logger.Infof("Current Middle:%v", (current.High+current.Low)/2)
 	// 10日均线从高于20日均线变成低于20日均线
@@ -212,7 +249,7 @@ func (p *TrendTask) Watch() {
 			if bidSpotPlacePrice < avg5 {
 				Logger.Infof("执行做空，做空价格:%.2f", bidSpotPlacePrice)
 				batch := Utils.GetRandomHexString(12)
-				p.openPosition(current.OpenTime, Exchange.TradeConfig{
+				p.openPosition(timestamp, Exchange.TradeConfig{
 					Batch:  batch,
 					Pair:   pair,
 					Type:   Exchange.TradeTypeOpenShort,
@@ -234,7 +271,7 @@ func (p *TrendTask) Watch() {
 			if askSpotPlacePrice > avg5 {
 				Logger.Infof("执行做多,做多价格:%.2f", askSpotPlacePrice)
 				batch := Utils.GetRandomHexString(12)
-				p.openPosition(current.OpenTime, Exchange.TradeConfig{
+				p.openPosition(timestamp, Exchange.TradeConfig{
 					Batch:  batch,
 					Pair:   pair,
 					Type:   Exchange.TradeTypeOpenLong,
@@ -248,7 +285,7 @@ func (p *TrendTask) Watch() {
 
 }
 
-func (p *TrendTask) openPosition(timestamp float64, tradeConfig Exchange.TradeConfig) {
+func (p *TrendTask) openPosition(timestamp int64, tradeConfig Exchange.TradeConfig) {
 
 	channelFuture := Task.ProcessTradeRoutine(p.future, tradeConfig, nil)
 
@@ -266,7 +303,9 @@ func (p *TrendTask) openPosition(timestamp float64, tradeConfig Exchange.TradeCo
 
 	waitGroup.Wait()
 
-	if err := p.fundManager.OpenPosition(tradeConfig.Batch, tradeConfig.Pair,
+	if err := p.fundManager.OpenPosition(tradeConfig.Batch,
+		timestamp,
+		tradeConfig.Pair,
 		tradeConfig.Type,
 		futureResult.AvgPrice,
 		futureResult.DealAmount); err != nil {
@@ -320,7 +359,7 @@ func (p *TrendTask) CheckClosePosition(values []Exchange.KlineValue) bool {
 		config := position.config
 		Logger.Debugf("仓位配置:%v", config)
 
-		if current.OpenTime == position.TimeStamp {
+		if int64(current.OpenTime) == position.TimeStamp {
 			Logger.Info("忽略开仓期间的价格波动")
 			return false
 		}
@@ -439,7 +478,6 @@ func (p *TrendTask) CheckClosePosition(values []Exchange.KlineValue) bool {
 				}
 			}
 
-			// p.status = Task.StatusError
 			return true
 		}
 
