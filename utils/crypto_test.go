@@ -1,6 +1,8 @@
 package utils
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestEncryptDecrypt(t *testing.T) {
 
@@ -20,8 +22,4 @@ func TestEncryptDecrypt(t *testing.T) {
 	}
 
 	encrypt.Decrypt()
-}
-
-func TestSample(t *testing.T) {
-	ExampleNewGCM_encrypt()
 }

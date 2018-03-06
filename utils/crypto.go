@@ -5,9 +5,16 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"os"
+	"path"
+	"path/filepath"
+	"runtime"
+	"syscall"
+
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 const ModeEncrypt = 0
@@ -15,78 +22,106 @@ const ModeDecrypt = 1
 
 type FileEncrypt struct {
 	File   string
-	Key    string
-	Nonce  string
+	Key    []byte
+	Nonce  []byte
 	Mode   int
 	aesgcm cipher.AEAD
 	_nonce []byte
 }
 
-func (f *FileEncrypt) init() {
+func (f *FileEncrypt) init() error {
 
-	log.Printf("Filename:%s", f.File)
+	var err error
+	if runtime.GOOS == "windows" {
+		f.File = filepath.ToSlash(f.File)
+	}
+	log.Printf("[%s]Filename:%s", runtime.GOOS, f.File)
+
 	if len(f.Key) > 32 || len(f.Key) == 0 {
-		log.Fatalf("Invalide Key")
+
+		fmt.Print("请输入密码:\r\n")
+		f.Key, err = terminal.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return err
+		}
 	}
 
 	key := make([]byte, 32)
-	copy(key, []byte(f.Key))
-	log.Printf("Key:%x", key)
+	copy(key, f.Key)
+	// log.Printf("Key:%x", key)
 
 	if len(f.Nonce) > 12 || len(f.Nonce) == 0 {
-		log.Fatalf("Invalide Nonce")
+
+		fmt.Print("请输入随机数:\r\n")
+		f.Nonce, err = terminal.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return err
+		}
+
 	}
 	f._nonce = make([]byte, 12)
-	copy(f._nonce, []byte(f.Nonce))
-	log.Printf("Nonce:%x", f._nonce)
+	copy(f._nonce, f.Nonce)
+	// log.Printf("Nonce:%x", f._nonce)
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		log.Fatalf("Error:%v", err)
+		return err
 	}
 
 	aesgcm, err := cipher.NewGCM(block)
 	if err != nil {
-		log.Fatalf("Error:%v", err)
+		return err
 	}
 
 	f.aesgcm = aesgcm
+
+	return nil
 }
 
-func (f *FileEncrypt) Encrypt() {
-	f.execute(ModeEncrypt)
+func (f *FileEncrypt) Encrypt() error {
+	return f.execute(ModeEncrypt)
 }
 
-func (f *FileEncrypt) Decrypt() {
-	f.execute(ModeDecrypt)
+func (f *FileEncrypt) Decrypt() error {
+	return f.execute(ModeDecrypt)
 }
 
-func (f *FileEncrypt) execute(mode int) {
+func (f *FileEncrypt) execute(mode int) error {
 
-	f.init()
+	if err := f.init(); err != nil {
+		log.Printf("Init:%v", err)
+		return err
+	}
 
 	var PFunc func([]byte) []byte
-	var suffix string
+	var prefix string
 	var bufferSize int
+
+	filepath, filename := path.Split(f.File)
+	// log.Printf("apth:%s", filepath)
+	// log.Printf("name:%s", filename)
+
 	if mode == ModeEncrypt {
 		PFunc = f.GCM_encrypt
-		suffix = "-encrypted"
+		prefix = "encrypted-"
 		bufferSize = 4096
 	} else {
 		PFunc = f.GCM_decrypt
-		suffix = "-decrypted"
+		prefix = "decrypted-"
 		bufferSize = 4112
 	}
 
 	inFile, err := os.Open(f.File)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer inFile.Close()
 
-	outFile, err := os.OpenFile(f.File+suffix, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	log.Printf("Filename:%s", filepath+prefix+filename)
+
+	outFile, err := os.OpenFile(filepath+prefix+filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer outFile.Close()
 
@@ -99,8 +134,7 @@ func (f *FileEncrypt) execute(mode int) {
 		// log.Printf("Read len:%v error:%v", length, err)
 		if err == io.EOF && length == 0 {
 			outFileWriter.Flush()
-			log.Printf("DONE!")
-			return
+			return nil
 		}
 
 		plaintext := tmp[:length]
@@ -108,10 +142,42 @@ func (f *FileEncrypt) execute(mode int) {
 		_, err = outFileWriter.Write(ciphertext)
 		// log.Printf("Write len:%v count:%v error:%v", len(ciphertext), count, err)
 		if err != nil {
-			log.Printf("Error:%v", err)
-			return
+			return err
 		}
 
+	}
+}
+
+func (f *FileEncrypt) DecryptInMemory() (error, []byte) {
+
+	if err := f.init(); err != nil {
+		log.Printf("Init:%v", err)
+		return err, nil
+	}
+
+	var result []byte
+
+	PFunc := f.GCM_decrypt
+	bufferSize := 4112
+
+	inFile, err := os.Open(f.File)
+	if err != nil {
+		return err, nil
+	}
+	defer inFile.Close()
+
+	inFileReader := bufio.NewReader(inFile)
+
+	tmp := make([]byte, bufferSize)
+	for {
+		length, err := inFileReader.Read(tmp)
+		if err == io.EOF && length == 0 {
+			return nil, result
+		}
+
+		plaintext := tmp[:length]
+		ciphertext := PFunc(plaintext)
+		result = append(result, ciphertext...)
 	}
 }
 

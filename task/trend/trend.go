@@ -496,7 +496,7 @@ func main() {
 
 	err, record := mongo.FindOne("OkexSpot")
 	if err != nil || record == nil {
-		Logger.Errorf("Invalid record")
+		Logger.Errorf("Cannot load API/APKEY")
 		return
 	}
 

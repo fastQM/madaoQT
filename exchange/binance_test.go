@@ -23,7 +23,7 @@ func TestGetKlines(t *testing.T) {
 	var logs []string
 	binance := new(Binance)
 
-	result := binance.GetKline("btc/usdt", "2h", 500)
+	result := binance.GetKline("eth/usdt", "2h", 500)
 	// log.Printf("Result:%v", result)
 
 	var lastDiff float64
