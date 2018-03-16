@@ -1,0 +1,107 @@
+<script src="../bower_components/highcharts/highstock.js"></script>
+<script src="../bower_components/highcharts/modules/exporting.js"></script>
+<link rel="import" href="../bower_components/polymer/polymer-element.html">
+<link rel="import" href="../bower_components/iron-ajax/iron-ajax.html">
+
+<dom-module id="profit-chart">
+    <template>
+        <div id="idProfit" style="height:400px">加载中...</div>
+        <iron-ajax
+            url="/task/profit"
+            method="post"
+            content-type="application/json"
+            handle-as="json"
+            on-response="onProfit"
+            last-response={{response}}
+            debounce-duration="60000" id="idGetProfit">
+        </iron-ajax>
+    </template>
+    <script>
+        class ProfitChart extends Polymer.Element {
+            static get is() { return 'profit-chart'; }
+            static get properties() {
+                return {
+                    response: Object,
+                }
+            }
+            ready(){
+                super.ready()
+                this.getProfit()
+            }
+
+            getProfit(){
+                this.$.idGetProfit.generateRequest()
+            }
+
+            onProfit(){
+                let times, profits
+                if(this.response.result){
+                    profits = this.response.data.profits
+                    times = this.response.data.times
+                }
+
+                var chart = Highcharts.chart(this.$.idProfit, {
+                    title: {
+                        text: '单日收益走势图'
+                    },
+                    xAxis:{
+                        categories: times,
+                        // minTickInterval: 2000,
+                        startOnTick: true,
+                    },
+                    yAxis: {
+                        title: {
+                            text: '价格'
+                        }
+                    },
+                    legend: {
+                        layout: 'vertical',
+                        align: 'right',
+                        verticalAlign: 'middle'
+                    },
+                    plotOptions: {
+                        series: {
+                            label: {
+                                connectorAllowed: false
+                            },
+                            // pointStart: 2010
+                        }
+                    },
+                    series: [{
+                        name: '收益(美金)',
+                        data: profits,
+                    // }, {
+                    //     name: '现货',
+                    //     data: spots,
+                    // }, {
+                    //     name: '销售',
+                    //     data: [11744, 17722, 16005, 19771, 20185, 24377, 32147, 39387]
+                    // }, {
+                    //     name: '项目开发',
+                    //     data: [null, null, 7988, 12169, 15112, 22452, 34400, 34227]
+                    // }, {
+                    //     name: '其他',
+                    //     data: [12908, 5948, 8105, 11248, 8989, 11816, 18274, 18111]
+                    }],
+                    responsive: {
+                        rules: [{
+                            condition: {
+                                maxWidth: 500
+                            },
+                            chartOptions: {
+                                legend: {
+                                    layout: 'horizontal',
+                                    align: 'center',
+                                    verticalAlign: 'bottom'
+                                }
+                            }
+                        }]
+                    }
+                });
+            }
+        }
+
+        window.customElements.define(ProfitChart.is, ProfitChart);
+    </script>
+
+</dom-module>

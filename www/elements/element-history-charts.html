@@ -1,0 +1,219 @@
+<script src="../bower_components/highcharts/highstock.js"></script>
+<script src="../bower_components/highcharts/modules/exporting.js"></script>
+<link rel="import" href="../bower_components/polymer/polymer-element.html">
+<link rel="import" href="../bower_components/iron-ajax/iron-ajax.html">
+
+<dom-module id="history-chart">
+    <template>
+        <div id="charts" style="height:400px"></div>
+        <div id="volumns" style="height:200px"></div>
+        <div id="diffs" style="height:200px"></div>
+        <iron-ajax
+            url="/charts/diff/eth"
+            method="get"
+            content-type="application/json"
+            handle-as="json"
+            on-response="onChartsResponse"
+            last-response={{chartsResponse}}
+            debounce-duration="60000" id="getCharts">
+        </iron-ajax>
+    </template>
+    <script>
+        class HistoryChart extends Polymer.Element {
+            static get is() { return 'history-chart'; }
+            static get properties() {
+                return {
+                    chartsResponse: Object,
+                }
+            }
+            ready(){
+                super.ready()
+                this.$.getCharts.generateRequest()
+            }
+
+            onChartsResponse(){
+                let spots,futures,times,spotvolumns,futurevolumns
+                if(this.chartsResponse.result){
+                    spots = this.chartsResponse.data.spots
+                    futures = this.chartsResponse.data.futures
+                    spotvolumns = this.chartsResponse.data.spotvolumns
+                    futurevolumns = this.chartsResponse.data.futurevolumns
+                    diffs = this.chartsResponse.data.diffs
+                    times = this.chartsResponse.data.times
+                }
+
+                var chart = Highcharts.chart(this.$.charts, {
+                    title: {
+                        text: 'OKEX现货期货价格走势图'
+                    },
+                    subtitle: {
+                        text: '数据来源：www.okex.com'
+                    },
+                    xAxis:{
+                        categories: times,
+                        minTickInterval: 2000,
+                        startOnTick: true,
+                    },
+                    yAxis: {
+                        title: {
+                            text: '价格'
+                        }
+                    },
+                    legend: {
+                        layout: 'vertical',
+                        align: 'right',
+                        verticalAlign: 'middle'
+                    },
+                    plotOptions: {
+                        series: {
+                            label: {
+                                connectorAllowed: false
+                            },
+                            // pointStart: 2010
+                        }
+                    },
+                    series: [{
+                        name: '期货',
+                        data: futures,
+                    }, {
+                        name: '现货',
+                        data: spots,
+                    // }, {
+                    //     name: '销售',
+                    //     data: [11744, 17722, 16005, 19771, 20185, 24377, 32147, 39387]
+                    // }, {
+                    //     name: '项目开发',
+                    //     data: [null, null, 7988, 12169, 15112, 22452, 34400, 34227]
+                    // }, {
+                    //     name: '其他',
+                    //     data: [12908, 5948, 8105, 11248, 8989, 11816, 18274, 18111]
+                    }],
+                    responsive: {
+                        rules: [{
+                            condition: {
+                                maxWidth: 500
+                            },
+                            chartOptions: {
+                                legend: {
+                                    layout: 'horizontal',
+                                    align: 'center',
+                                    verticalAlign: 'bottom'
+                                }
+                            }
+                        }]
+                    }
+                });
+
+                var volumn = Highcharts.chart(this.$.volumns, {
+                    title: {
+                        text: '交易量走势图'
+                    },
+                    xAxis:{
+                        categories: times,
+                        minTickInterval: 2000,
+                        startOnTick: true,
+                    },
+                    yAxis: {
+                        title: {
+                            text: '交易量'
+                        }
+                    },
+                    legend: {
+                        layout: 'vertical',
+                        align: 'right',
+                        verticalAlign: 'middle'
+                    },
+                    plotOptions: {
+                        series: {
+                            label: {
+                                connectorAllowed: false
+                            },
+                            // pointStart: 2010
+                        }
+                    },
+                    series: [{
+                        name: '期货(美元计算)',
+                        data: futurevolumns,
+                    }, {
+                        name: '现货(美元计算)',
+                        data: spotvolumns,
+                    // }, {
+                    //     name: '销售',
+                    //     data: [11744, 17722, 16005, 19771, 20185, 24377, 32147, 39387]
+                    // }, {
+                    //     name: '项目开发',
+                    //     data: [null, null, 7988, 12169, 15112, 22452, 34400, 34227]
+                    // }, {
+                    //     name: '其他',
+                    //     data: [12908, 5948, 8105, 11248, 8989, 11816, 18274, 18111]
+                    }],
+                    responsive: {
+                        rules: [{
+                            condition: {
+                                maxWidth: 500
+                            },
+                            chartOptions: {
+                                legend: {
+                                    layout: 'horizontal',
+                                    align: 'center',
+                                    verticalAlign: 'bottom'
+                                }
+                            }
+                        }]
+                    }
+                });
+
+
+                var diffs = Highcharts.chart(this.$.diffs, {
+                    title: {
+                        text: 'OKEX价差走势图'
+                    },
+                    yAxis: {
+                        title: {
+                            text: '差价'
+                        }
+                    },
+                    legend: {
+                        layout: 'vertical',
+                        align: 'right',
+                        verticalAlign: 'middle'
+                    },
+                    plotOptions: {
+                        series: {
+                            label: {
+                                connectorAllowed: false
+                            },
+                            // pointStart: 2010
+                        }
+                    },
+                    xAxis:{
+                        categories: times,
+                        minTickInterval: 2000,
+                        startOnTick: true,
+                    },
+                    series: [{
+                        name: '价差',
+                        data: diffs,
+                    }],
+                    responsive: {
+                        rules: [{
+                            condition: {
+                                maxWidth: 500
+                            },
+                            chartOptions: {
+                                legend: {
+                                    layout: 'horizontal',
+                                    align: 'center',
+                                    verticalAlign: 'bottom'
+                                }
+                            }
+                        }]
+                    }
+                });
+            }
+        }
+
+        window.customElements.define(HistoryChart.is, HistoryChart);
+    </script>
+
+</dom-module>

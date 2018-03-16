@@ -1,0 +1,188 @@
+<!--
+@license
+Copyright (c) 2016 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+-->
+
+<link rel="import" href="../bower_components/polymer/polymer-element.html">
+<link rel="import" href="shared-styles.html">
+<link rel="import" href="../bower_components/polymer/polymer-element.html">
+<link rel="import" href="../bower_components/iron-form/iron-form.html">
+<link rel="import" href="../bower_components/paper-input/paper-input.html">
+<link rel="import" href="../bower_components/paper-button/paper-button.html">
+<link rel="import" href="../bower_components/paper-dialog/paper-dialog.html">
+
+<dom-module id="guest-history">
+  <template>
+    <style include="shared-styles">
+      :host {
+        display: block;
+        padding: 10px;
+      }
+
+      iron-form {
+        padding: 20px;
+        display: block;
+        min-width: 700px;
+      }
+
+      .ExchangeConfig{
+        display: block;
+        height:80px;
+      }
+
+      .exchange-name, paper-input, paper-button{
+        display:inline-block;
+        margin: 0px 30px;
+      }
+
+      paper-input {
+        min-width: 100px;
+      }
+
+      .exchange-name {
+        font-weight: bold;
+        color: black;
+        width: 100px;
+        margin: 10px;
+      }
+
+      paper-button {
+        width:80px
+      }
+    </style>
+
+<div class="card">
+        <h3>历史交易数据</h3>
+        <vaadin-grid aria-label="trade history" items="[[trades]]">
+            <vaadin-grid-column width="50px" flex-grow="0">
+              <template class="header">#</template>
+              <template>[[index]]</template>
+              <!-- If necessary, the footer could be set using <template class="footer"> -->
+              <template class="footer">#</template>
+            </vaadin-grid-column>
+      
+            <vaadin-grid-column>
+              <template class="header">
+                <span draggable="true">操作批次号</span>
+              </template>
+              <template>
+                <span draggable="true">
+                  [[item.batch]]
+                </span>
+              </template>
+              <template class="footer">操作批次号</template>
+            </vaadin-grid-column>
+      
+            <vaadin-grid-column width="150px">
+              <template class="header">时间</template>
+              <template>[[item.time]]</template>
+              <template class="footer">时间</template>
+            </vaadin-grid-column>
+      
+            <vaadin-grid-column width="30px">
+              <template class="header">操作</template>
+              <template>
+                <p style="white-space: normal">[[item.oper]]</p>
+              </template>
+              <template class="footer">操作</template>
+            </vaadin-grid-column>
+      
+            <vaadin-grid-column width="30px">
+                <template class="header">交易所</template>
+                <template>
+                  <p style="white-space: normal">[[item.exchange]]</p>
+                </template>
+                <template class="footer">交易所</template>
+              </vaadin-grid-column>
+              
+            <vaadin-grid-column width="30px">
+                <template class="header">币种</template>
+                <template>
+                  <p style="white-space: normal">[[item.coin]]</p>
+                </template>
+                <template class="footer">币种</template>
+            </vaadin-grid-column>
+  
+            <vaadin-grid-column>
+                <template class="header">价格</template>
+                <template>
+                  <p style="white-space: normal">[[item.price]]</p>
+                </template>
+                <template class="footer">价格</template>
+            </vaadin-grid-column>
+  
+            <vaadin-grid-column>
+                <template class="header">数量</template>
+                <template>
+                  <p style="white-space: normal">[[item.quantity]]</p>
+                </template>
+                <template class="footer">数量</template>
+            </vaadin-grid-column>
+  
+            <vaadin-grid-column width="50px">
+                <template class="header">订单号</template>
+                <template>
+                  <p style="white-space: normal">[[item.orderid]]</p>
+                </template>
+                <template class="footer">订单号</template>
+            </vaadin-grid-column>
+  
+          </vaadin-grid>
+      </div>
+      
+  </template>
+
+  <script>
+    class GuestHistory extends Polymer.Element {
+      static get is() { return 'guest-history'; }
+      static get properties(){
+        return {
+          exchanges: {
+            type: Array,
+            value: [],
+          },
+          response: String,
+          request: String,
+          dialogInfo: String,
+        }
+      }
+
+      ready(){
+        super.ready()
+        this.$.GetExchanges.generateRequest()
+      }
+
+      getExchangesResult() {
+        if(this.response.result){
+          for(var i=0;i<this.response.exchanges.length;i++){
+            this.push("exchanges", {name: this.response.exchanges[i]})
+          }
+        }
+      }
+
+      addKeyResult(){
+        console.log("Response:" + this.response)
+        if(this.response.result){
+          this.dialogInfo = "添加API成功"
+        }else{
+          this.dialogInfo = "添加API失败"
+        }
+
+        this.$.dialogResult.open()
+      }
+
+      AddExchangeKey(oEvent){
+        this.request = JSON.stringify(this.exchanges[oEvent.model.index])
+        this.$.AddKey.generateRequest()
+      }
+
+    }
+
+    window.customElements.define(GuestHistory.is, GuestHistory);
+  </script>
+</dom-module>

@@ -1,0 +1,128 @@
+<!--
+@license
+Copyright (c) 2016 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+-->
+<script src="/iris-ws.js"></script>
+<link rel="import" href="../bower_components/polymer/polymer-element.html">
+<dom-module id="shared-services">
+  <script>
+    const StatusDisconnected = 0
+    const StatusConnnected = 1
+
+    const CmdTypeSubscribe = "subscribe"
+    const CmdTypeUnsubscribe = "unsubscribe"
+    const CmdTypePublish = "publish"  
+
+    let singleton = false
+    let gWebsocket = null
+    let gWebsocketStatus = StatusDisconnected
+    let gWebsocketSeq = 0
+    let gChannelMap = new Map()
+    let gCommandCB = null
+
+    class SharedServices extends Polymer.Element {
+
+      static get is() { return 'shared-services'; }
+
+      ready() {
+        super.ready()
+        // this._websocket_connect()
+      }
+
+      attached(){
+        if(singleton) {
+          this.isActive = false;
+          this.remove();
+        } else {
+          singleton = true;
+          this.isActive = true;
+          // remainder of element initialization
+        }
+      }
+
+      detached(){
+        if(this.isActive) singleton = false;
+      }
+
+      SetTaskName(name){
+        Polymer.gTaskName = name
+      }
+
+      GetTaskName(){
+        return Polymer.gTaskName
+      }
+
+      _websocket_connect(){
+        if(gWebsocket != null){
+          return
+        }
+        let scheme = document.location.protocol == "https:" ? "wss" : "ws";
+        let port = document.location.port ? (":" + document.location.port) : "";
+        let wsURL = scheme + "://" + document.location.hostname + port+"/websocket"; 
+        gWebsocket = new Ws(wsURL)
+        gWebsocket.OnConnect(function () {
+          console.log("connected")
+          gWebsocketStatus = StatusConnnected
+        })
+        gWebsocket.OnDisconnect(function(){
+          console.log("disconnected")
+          gWebsocketStatus = StatusDisconnected
+        })
+
+        gWebsocket.OnMessage(function(msg){
+          console.log("message:" + msg)
+          var msg = JSON.parse(msg)
+          if(msg.cmd == CmdTypePublish){
+            console.log("Publish:" + msg.data)
+            var cb = gChannelMap.get(msg.topic)
+            if(cb != null){
+              cb(msg.data)
+            }
+          }
+        })
+      }
+
+      WebsocketSend(msg){
+        if(gWebsocketStatus == StatusConnnected){
+          gWebsocket.EmitMessage(msg)
+          return true
+        }
+
+        return false
+      }
+
+      WebsocketAddListener(topic, callback){
+        if(gChannelMap.get(topic) != null){
+          return false
+        }else{
+          gChannelMap.set(topic, callback)
+          return true
+        }
+      }
+
+      // 暂不考虑应答，都是成功
+      WebsocketSubscribe(topic, callback){
+        if(this.WebsocketAddListener(topic, callback)){
+          let msg = {seq:gWebsocketSeq++, cmd: CmdTypeSubscribe, data:{topic:topic}}
+          return this.WebsocketSend(JSON.stringify(msg)) 
+        }
+        return false
+      }
+
+      WebsocketUnsubscribe(topic, callback){
+        if(this.WebsocketRemoveListener(topic)){
+          let msg = {seq:gWebsocketSeq++, cmd: CmdTypeUnsubscribe, data:{topic:topic}}
+          return this.WebsocketSend(JSON.stringify(msg)) 
+        }
+        return false
+      }
+    }
+
+    window.customElements.define(SharedServices.is, SharedServices);
+  </script>
+</dom-module>

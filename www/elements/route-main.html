@@ -1,0 +1,86 @@
+<link rel="import" href="../bower_components/polymer/polymer-element.html">
+<link rel="import" href="../bower_components/app-route/app-location.html">
+<link rel="import" href="../bower_components/app-route/app-route.html">
+<link rel="import" href="../bower_components/iron-pages/iron-pages.html">
+
+<link rel="import" href="view-home.html">
+<link rel="lazy-import" href="view-guest.html">
+
+<dom-module id="route-main">
+    <template>
+        <app-location
+            route="{{route}}"
+            url-space-regex="^[[rootPath]]">
+        </app-location>
+
+        <app-route
+            route="{{route}}"
+            pattern="[[rootPath]]:view"
+            data="{{routeData}}"
+            tail="{{subroute}}">
+        </app-route>
+
+        <iron-pages
+            selected="[[view]]"
+            attr-for-selected="name"
+            role="main">
+            <view-home name="home"></view-home>
+            <view-guest name="guest"></view-guest>
+        </iron-pages>
+
+    </template>
+
+    <script>
+        class RouteMain extends Polymer.Element {
+            static get is() { return 'route-main'; }
+            static get properties() {
+                return {
+                    view: {
+                        type: String,
+                        reflectToAttribute: true,
+                        observer: '_pageChanged',
+                    },
+                    routeData: Object,
+                    subroute: String,
+                    // This shouldn't be neccessary, but the Analyzer isn't picking up
+                    // Polymer.Element#rootPath
+                    rootPath: String,
+                };
+            }
+
+            static get observers() {
+                return [
+                    '_routePageChanged(routeData.view)',
+                ];
+            }
+
+            _routePageChanged(view) {
+                // If no page was found in the route data, page will be an empty string.
+                // Default to 'view1' in that case.
+                this.view = view || 'home';
+                console.log("View:" + this.view)
+
+            }
+
+            _pageChanged(view) {
+                // Load page import on demand. Show 404 page if fails
+                var resolvedPageUrl = this.resolveUrl('view-' + view + '.html');
+                Polymer.importHref(
+                    resolvedPageUrl,
+                    null,
+                    this._showPage404.bind(this),
+                    true);
+            }
+
+            _showPage404() {
+                this.page = 'view404';
+            }
+
+            ready(){
+                super.ready()
+            }
+        }
+
+        window.customElements.define(RouteMain.is, RouteMain);
+    </script>    
+</dom-module>

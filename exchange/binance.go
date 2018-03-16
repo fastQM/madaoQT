@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	Websocket "github.com/gorilla/websocket"
+	"golang.org/x/net/proxy"
 )
 
 const EndPoint = "wss://stream.binance.com:9443/ws/"
@@ -53,8 +54,16 @@ func (h *Binance) marketRequest(path string, params map[string]string) (error, [
 	// request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	// request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36")
 
+	dialer, err := proxy.SOCKS5("tcp", "127.0.0.1:1080", nil, proxy.Direct)
+	if err != nil {
+		return err, nil
+	}
+	// setup a http client
+	httpTransport := &http.Transport{}
+	httpClient := &http.Client{Transport: httpTransport}
+	httpTransport.Dial = dialer.Dial
 	var resp *http.Response
-	resp, err = http.DefaultClient.Do(request)
+	resp, err = httpClient.Do(request)
 	if err != nil {
 		return err, nil
 	}

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	Websocket "github.com/gorilla/websocket"
+	"golang.org/x/net/proxy"
 )
 
 const NameOKEXSpot = "OkexSpot"
@@ -184,7 +185,13 @@ func (o *OKExAPI) Start() error {
 	// force to restart the command
 	o.depthValues = make(map[string]*sync.Map)
 
-	c, _, err := Websocket.DefaultDialer.Dial(url, nil)
+	proxy, err := proxy.SOCKS5("tcp", "127.0.0.1:1080", nil, proxy.Direct)
+	if err != nil {
+		return err
+	}
+
+	dialer := Websocket.Dialer{NetDial: proxy.Dial}
+	c, _, err := dialer.Dial(url, nil)
 	if err != nil {
 		logger.Errorf("Fail to dial:%v", err)
 		go o.triggerEvent(EventLostConnection)

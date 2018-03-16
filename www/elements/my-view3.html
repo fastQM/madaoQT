@@ -18,7 +18,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 <link rel="import" href="../bower_components/vaadin-grid/vaadin-grid.html">
 <link rel="import" href="shared-styles.html">
 <link rel="import" href="profit-chart.html">
-<link rel="import" href="global-services.html">
+<link rel="import" href="shared-services.html">
 
 <dom-module id="my-view3">
   <template>
@@ -427,9 +427,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
         this.config = JSON.stringify(config)
         this.$.ajaxStart.generateRequest()
-        this.$.globalServices.WebsocketSubscribe("okexdiff", function(message){
-          this.log = (message + "\n" + this.log)
-        }.bind(this))
+        // this.$.globalServices.WebsocketSubscribe("okexdiff", function(message){
+        //   this.log = (message + "\n" + this.log)
+        // }.bind(this))
       }
 
       onStop(){

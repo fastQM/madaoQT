@@ -1,0 +1,93 @@
+<link rel="import" href="../bower_components/polymer/polymer-element.html">
+<link rel="import" href="../bower_components/iron-ajax/iron-ajax.html">
+<link rel="import" href="../bower_components/vaadin-grid/vaadin-grid.html">
+<link rel="import" href="shared-styles.html">
+<link rel="import" href="shared-services.html">
+<link rel="import" href="element-profit-chart.html">
+
+<dom-module id="guest-position">
+  <template>
+    <style include="shared-styles">
+      :host {
+        display: block;
+
+        padding: 10px;
+      }
+    </style>
+
+    <div class="card">
+      <p>实盘信息</p>
+      <template is="dom-repeat" items="{{futureBalances}}">
+        <div>
+            名称[[item.name]] 余额[[item.balance]] 保证金[[item.bond]]
+        </div>
+      </template>
+      <template is="dom-repeat" items="{{spotBalance}}">
+        <div>
+            名称[[item.name]] 余额[[item.balance]]
+        </div>
+      </template>
+    </div>
+
+    <div class="card">
+        <profit-chart></profit-chart>
+    </div>
+
+
+    <iron-ajax
+      url="/task/balances"
+      method="get"
+      content-type="application/json"
+      handle-as="json"
+      on-response="OnBalanceResponse"
+      last-response={{balanceResponse}}
+      debounce-duration="60000" id="getBalances"></iron-ajax>
+
+    <iron-ajax
+      url="/task/trades"
+      method="get"
+      content-type="application/json"
+      handle-as="json"
+      on-response="onResponse"
+      last-response={{response}}
+      debounce-duration="60000" id="getTrades"></iron-ajax>
+  </template>
+
+  <script>
+    class GuestPosition extends Polymer.Element {
+      static get is() { return 'guest-position'; }
+      static get properties() {
+        return {
+          text: String,
+          response:String,
+          trades: Array,
+          balanceResponse: String,
+
+          futureBalances: Array,
+          spotBalance: Array,
+        }
+      }
+
+      ready(){
+        super.ready();
+        this.$.getTrades.generateRequest();
+        this.$.getBalances.generateRequest();
+      }
+
+      onResponse(){
+        if(this.response.result){
+          this.trades = this.response.data
+        }
+      }
+
+      OnBalanceResponse(){
+        if(this.balanceResponse.result){
+          this.futureBalances = this.balanceResponse.data.futures
+          this.spotBalance = this.balanceResponse.data.spots
+        }
+      }
+    }
+
+    window.customElements.define(GuestPosition.is, GuestPosition);
+  </script>
+</dom-module>

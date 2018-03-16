@@ -123,8 +123,12 @@ var constContractRatio = map[string]float64{
 	"eth": 10,
 }
 
-func (a *IAnalyzer) GetTaskName() string {
-	return "okexdiff"
+func (a *IAnalyzer) GetDescription() Task.Description {
+	return Task.Description{
+		Name:  "diff",
+		Title: "期货套利",
+		Desc:  "该策略主要捕捉期货与现货之间的价差",
+	}
 }
 
 func (a *IAnalyzer) GetDefaultConfig() interface{} {

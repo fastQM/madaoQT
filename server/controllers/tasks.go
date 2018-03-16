@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"sync"
 
@@ -46,8 +45,26 @@ func (t *TaskController) authen() (bool, iris.Map) {
 
 }
 
+// GetList 获取任务列表
+// Get route: /task/list
+func (t *TaskController) GetList() iris.Map {
+	var tasks []Task.Description
+	t.Tasks.Range(func(key, value interface{}) bool {
+		Logger.Infof("KEY:%s", key)
+		task := value.(Task.ITask)
+		tasks = append(tasks, task.GetDescription())
+		return true
+	})
+
+	return iris.Map{
+		"result": true,
+		"data":   tasks,
+	}
+
+}
+
 // Get route: /task
-func (t *TaskController) Get() iris.Map {
+func (t *TaskController) GetBy(name string) iris.Map {
 
 	// info := map[string]string{}
 	// err := t.Ctx.ReadJSON(&info)
@@ -59,26 +76,32 @@ func (t *TaskController) Get() iris.Map {
 
 	// Logger.Infof("Data:%v", info)
 
-	var tasksInfo []map[string]string
-	t.Tasks.Range(func(key, value interface{}) bool {
-		Logger.Infof("KEY:%s", key)
-		defaultConfig, _ := json.Marshal(value.(Task.ITask).GetDefaultConfig())
-		taskInfo := map[string]string{
-			"name":    key.(string),
-			"default": string(defaultConfig),
-		}
-		tasksInfo = append(tasksInfo, taskInfo)
-		return true
-	})
+	t.Ctx.ViewData("task", name)
+	t.Ctx.View("task.html")
 
-	// configBytes, _ := json.Marshal(tasksInfo)
+	return nil
+	// var tasksInfo []map[string]string
+	// t.Tasks.Range(func(key, value interface{}) bool {
+	// 	Logger.Infof("KEY:%s", key)
+	// 	defaultConfig, _ := json.Marshal(value.(Task.ITask).GetDefaultConfig())
+	// 	taskInfo := map[string]string{
+	// 		"name":    key.(string),
+	// 		"default": string(defaultConfig),
+	// 	}
+	// 	tasksInfo = append(tasksInfo, taskInfo)
+	// 	return true
+	// })
 
-	return iris.Map{
-		"result": true,
-		"tasks":  tasksInfo,
-	}
+	// // configBytes, _ := json.Marshal(tasksInfo)
+
+	// return iris.Map{
+	// 	"result": true,
+	// 	"tasks":  tasksInfo,
+	// }
 }
 
+// PostStart 启动任务
+// Post route: /task/start
 func (t *TaskController) PostStart() iris.Map {
 
 	var errMsg string

@@ -58,6 +58,14 @@ func SleepAsyncBySecond(sec int64) {
 	}
 }
 
+func SleepAsyncByMillisecond(millisecond int64) {
+
+	select {
+	case <-time.After(time.Duration(millisecond) * time.Millisecond):
+		return
+	}
+}
+
 func RevertArray(array ...interface{}) []interface{} {
 	var tmp interface{}
 	var length int

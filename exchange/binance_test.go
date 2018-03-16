@@ -18,6 +18,106 @@ func TestBinanceStreamTrade(t *testing.T) {
 const StopLoss = 0.03
 const TargetProfit = 0.05
 
+func TestPeriodArea(t *testing.T) {
+
+	binance := new(Binance)
+
+	kline := binance.GetKline("eth/usdt", "2h", 500)
+
+	length := len(kline)
+	array10 := kline[length-10 : length]
+	array20 := kline[length-20 : length]
+
+	avg10 := GetAverage(10, array10)
+	avg20 := GetAverage(20, array20)
+
+	var isOpenLong bool
+	if avg10 > avg20 {
+		isOpenLong = true
+	} else {
+		isOpenLong = false
+	}
+
+	var start int
+	found := false
+	if isOpenLong {
+
+		step := 0
+		for i := len(kline) - 1; i >= 0; i-- {
+			array10 := kline[i-10 : i]
+			array20 := kline[i-20 : i]
+
+			avg10 := GetAverage(10, array10)
+			avg20 := GetAverage(20, array20)
+
+			if step == 0 {
+				if avg10 < avg20 {
+					step = 1
+					continue
+				}
+			} else if step == 1 {
+				if avg10 > avg20 {
+					step = 2
+					continue
+				}
+			} else if step == 2 {
+				if avg10 < avg20 {
+					start = i
+					found = true
+					break
+				}
+			}
+		}
+
+	} else {
+		step := 0
+		for i := len(kline) - 1; i >= 0; i-- {
+			array10 := kline[i-10 : i]
+			array20 := kline[i-20 : i]
+
+			avg10 := GetAverage(10, array10)
+			avg20 := GetAverage(20, array20)
+
+			if step == 0 {
+				if avg10 > avg20 {
+					step = 1
+					continue
+				}
+			} else if step == 1 {
+				if avg10 < avg20 {
+					step = 2
+					continue
+				}
+			} else if step == 2 {
+				if avg10 > avg20 {
+					start = i
+					found = true
+					break
+				}
+			}
+		}
+	}
+
+	if found {
+		var high, low float64
+		log.Printf("Start is %v", time.Unix(int64(kline[start].OpenTime), 0))
+		for i := start; i < len(kline)-1; i++ {
+			if high == 0 {
+				high = kline[i].High
+			} else if high < kline[i].High {
+				high = kline[i].High
+			}
+
+			if low == 0 {
+				low = kline[i].Low
+			} else if low > kline[i].Low {
+				low = kline[i].Low
+			}
+		}
+
+	}
+
+}
 func TestGetKlines(t *testing.T) {
 
 	var logs []string

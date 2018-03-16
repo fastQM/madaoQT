@@ -20,6 +20,7 @@ import (
 
 	// task
 	OkexDiff "madaoQT/task/okexdiff"
+	Trend "madaoQT/task/trend"
 )
 
 type HttpServer struct {
@@ -45,10 +46,10 @@ func init() {
 func (h *HttpServer) setupRoutes() {
 
 	routers := map[string]string{
-		"/":       "index.html",
-		"/login":  "login.html",
-		"/profit": "profit.html",
-		"/test":   "test.html",
+		"/":      "index.html",
+		"/login": "login.html",
+		// "/profit": "profit.html",
+		"/test": "test.html",
 	}
 
 	for k, _ := range routers {
@@ -84,11 +85,13 @@ func (h *HttpServer) setupSessions() {
 
 func (h *HttpServer) setupControllers() {
 
-	mvc.New(h.app.Party("/helloworld")).Handle(new(Controllers.HelloWorldController))
-	mvc.New(h.app.Party("/charts")).Handle(new(Controllers.ChartsController))
-	mvc.New(h.app.Party("/user")).Handle(&Controllers.UserController{Sessions: h.sess})
-	mvc.New(h.app.Party("/task")).Handle(&Controllers.TaskController{Sessions: h.sess, Tasks: h.Tasks})
-	mvc.New(h.app.Party("/exchange")).Handle(&Controllers.ExchangeController{Sessions: h.sess, Exchanges: h.exchanges})
+	// prefix := "/api/v1/"
+	prefix := ""
+	mvc.New(h.app.Party(prefix + "helloworld")).Handle(new(Controllers.HelloWorldController))
+	mvc.New(h.app.Party(prefix + "charts")).Handle(new(Controllers.ChartsController))
+	mvc.New(h.app.Party(prefix + "user")).Handle(&Controllers.UserController{Sessions: h.sess})
+	mvc.New(h.app.Party(prefix + "task")).Handle(&Controllers.TaskController{Sessions: h.sess, Tasks: h.Tasks})
+	mvc.New(h.app.Party(prefix + "exchange")).Handle(&Controllers.ExchangeController{Sessions: h.sess, Exchanges: h.exchanges})
 
 }
 
@@ -167,6 +170,9 @@ func (h *HttpServer) setupTasks() {
 	}
 
 	okexdiff := new(OkexDiff.IAnalyzer)
-	h.Tasks.Store(okexdiff.GetTaskName(), okexdiff)
+	h.Tasks.Store(okexdiff.GetDescription().Name, okexdiff)
+
+	trend := new(Trend.TrendTask)
+	h.Tasks.Store(trend.GetDescription().Name, trend)
 
 }

@@ -1,0 +1,65 @@
+<link rel="import" href="../bower_components/polymer/polymer-element.html">
+<link rel="import" href="element-task-catalog.html">
+
+<dom-module id="view-home">
+    <template>
+      <style>
+        :host {
+            display: block;
+            margin: 10px auto;
+            text-align: center;
+        }
+
+        .banner{
+            display: block;
+            /* width: 300px;
+            height: 300px; */
+        }
+
+        .logo{
+            display: inline-block;
+            width: 100px;
+            height: 100px;
+            vertical-align:middle;
+        }
+        .title{
+            display: inline-block;
+            margin-left: 10px;
+            font-size:30px;
+            vertical-align: middle;
+        }
+
+        .footer{
+            margin-top: 100px;
+            text-align: center;
+        }
+      </style>
+
+      <div class="banner">
+          <div class="logo"><img class="logo" src="images/horse196-red.png" /></div>
+          <p class="title">马道数字货币程序化交易</p>
+      </div>
+
+      <task-catalog></task-catalog>
+      <div class="footer">
+          <a href="http://maodao.info">madao.info</a>
+      </div>
+    </template>
+
+    <script>
+        class ViewHome extends Polymer.Element {
+            static get is() { return 'view-home'; }
+            static get properties() {
+                return {
+
+                };
+            }
+
+            ready(){
+                super.ready()
+            }
+        }
+
+        window.customElements.define(ViewHome.is, ViewHome);
+    </script>    
+</dom-module>

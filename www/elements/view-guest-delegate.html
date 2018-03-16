@@ -1,0 +1,480 @@
+<!--
+@license
+Copyright (c) 2016 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+-->
+
+<link rel="import" href="../bower_components/polymer/polymer-element.html">
+<link rel="import" href="../bower_components/iron-form/iron-form.html">
+<link rel="import" href="../bower_components/paper-input/paper-input.html">
+<link rel="import" href="../bower_components/paper-checkbox/paper-checkbox.html">
+<link rel="import" href="../bower_components/paper-button/paper-button.html">
+<link rel="import" href="../bower_components/paper-dialog/paper-dialog.html">
+<link rel="import" href="../bower_components/polymer/lib/elements/dom-if.html">
+<link rel="import" href="../bower_components/vaadin-grid/vaadin-grid.html">
+<link rel="import" href="shared-styles.html">
+<link rel="import" href="profit-chart.html">
+<link rel="import" href="shared-services.html">
+
+<dom-module id="guest-delegate">
+  <template>
+    <style include="shared-styles">
+      :host {
+        display: block;
+        padding: 10px;
+      }
+
+      iron-form {
+        padding: 20px;
+        display: block;
+        min-width: 700px;
+      }
+
+      paper-input, paper-button{
+        display:inline-block;
+        margin: 0px 30px;
+        width: 120px;
+      }
+
+      .closeBtn{
+        font-size: 12px;
+        margin: 0px;
+        width:50px;
+        height:30px;
+      }
+
+      .coinName{
+        display:inline-block;
+        padding: 8px;
+        width: 60px;
+      }
+
+      .warning{
+        color: red;
+      }
+      .coinConfig{
+        display: block;
+        height:80px;
+      }
+
+    </style>
+
+    <div class="card">
+      <div class="">委托管理</div>
+      <iron-form>
+        <form>
+          <template is="dom-repeat" items="{{coins}}">
+            <div class="coinConfig">
+              <h3 class="coinName">[[item.name]]</h3>
+              <paper-input name="open" type="number" label="开仓差价百分比" value="{{item.open}}" required alwaysFloatLabel>
+                <div slot="suffix">%</div>
+              </paper-input>
+              <paper-input name="close" type="number" label="平仓差价百分比" value="{{item.close}}" required alwaysFloatLabel>
+                <div slot="suffix">%</div>
+              </paper-input>
+              <paper-input name="amount" type="number" label="开仓金额" value="{{item.amount}}" required alwaysFloatLabel>
+                <div slot="prefix">$</div>
+              </paper-input>
+              <paper-checkbox checked="{{item.checked}}">执行</paper-checkbox>
+            </div>
+          </template>
+          <div>
+            <div class="limitConfig">
+              <h5 class="coinName">全局设置</h5>
+              <paper-input name="limitopen" type="number" label="开仓允许价差" value="{{limitopen}}" required alwaysFloatLabel>
+                <div slot="suffix">%</div>
+              </paper-input>
+              <paper-input name="unitamount" type="number" label="单次开仓金额" value="{{unitamount}}" required alwaysFloatLabel>
+                <div slot="prefix">$</div>
+              </paper-input>
+              <paper-input name="stepvalue" type="number" label="阶梯差价" value="{{stepvalue}}" required alwaysFloatLabel>
+                  <div slot="suffix">%</div>
+                </paper-input>
+              <paper-checkbox checked="{{autoadjust}}">自动调整差价</paper-checkbox>
+              <!-- <paper-input name="limitclose" type="number" label="强制平仓波动" value="{{limitclose}}" required alwaysFloatLabel>
+                <div slot="suffix">%</div>
+              </paper-input> -->
+              <paper-button raised="true" on-click="dialogConfirm" id="launchBtn">启动</paper-button>
+              </div>
+          </div>
+        </form>
+      </iron-form>
+    </div>
+    <paper-dialog id="startConfirmDialog">
+      <h2>确认配置</h2>
+      <template is="dom-repeat" items="[[coins]]">
+        <dom-if if="{{item.checked}}">
+          <template>
+            <p>货币 {{item.name}}  开仓差价百分比{{item.open}}%  平仓差价百分比{{item.close}}%</p>
+          </template>
+        </dom-if>
+      </template>
+      <p>开仓允许价差{{limitopen}}%  单次开仓金额{{unitamount}}%</p>
+      <div class="buttons">
+        <paper-button dialog-dismiss autofocus>取消</paper-button>
+        <paper-button dialog-confirm on-click="onStart">确定</paper-button>
+      </div>
+    </paper-dialog>
+    <paper-dialog id="stopConfirmDialog">
+      <h2>提示</h2>
+      <p>确认退出当前任务?</p>
+      <div class="buttons">
+        <paper-button dialog-dismiss autofocus>取消</paper-button>
+        <paper-button dialog-confirm on-click="onStop">确定</paper-button>
+      </div>
+    </paper-dialog>
+
+    <div class="card">
+      <div>
+        <h3>失败记录</h3>
+        <span class="warning">所有输入框中的数据都会被更新，请小心修改</span>
+        <vaadin-grid aria-label="failed history" items="{{failedRecord}}">
+          <vaadin-grid-column width="30px" flex-grow="0">
+            <template class="header">#</template>
+            <template>[[index]]</template>
+            <!-- If necessary, the footer could be set using <template class="footer"> -->
+            <template class="footer">#</template>
+          </vaadin-grid-column>
+    
+          <vaadin-grid-column width="70px">
+            <template class="header">
+              <span draggable="true">交易批次号</span>
+            </template>
+            <template>
+              <span draggable="true">
+                [[item.batch]]
+              </span>
+            </template>
+          </vaadin-grid-column>
+
+          <vaadin-grid-column width="40px">
+            <template class="header">
+              <span draggable="true">币种</span>
+            </template>
+            <template>
+              <span draggable="true">
+                [[item.pair]]
+              </span>
+            </template>
+          </vaadin-grid-column>
+
+          <vaadin-grid-column width="150px">
+            <template class="header">
+              <span draggable="true">开仓时间</span>
+            </template>
+            <template>
+              <span draggable="true">
+                [[item.time]]
+              </span>
+            </template>
+          </vaadin-grid-column>
+
+          <vaadin-grid-column width="30px">
+            <template class="header">
+              <span draggable="true">现货</span>
+            </template>
+            <template>
+              <span draggable="true">
+                [[item.spottype]]
+              </span>
+            </template>
+          </vaadin-grid-column>
+
+          <vaadin-grid-column width="60px">
+            <template class="header">
+              <span draggable="true">现货开仓价</span>
+            </template>
+            <template>
+              <input value="{{item.spotopen::input}}">
+            </template>
+          </vaadin-grid-column>
+
+          <vaadin-grid-column width="60px">
+            <template class="header">
+              <span draggable="true">现货开仓量</span>
+            </template>
+            <template>
+              <input value="{{item.spotamount::input}}">
+            </template>
+          </vaadin-grid-column>
+
+          <vaadin-grid-column width="60px">
+            <template class="header">
+              <span draggable="true">现货平仓价</span>
+            </template>
+            <template>
+              <input value="{{item.spotclose::input}}">
+            </template>
+          </vaadin-grid-column>
+
+          <vaadin-grid-column width="30px">
+            <template class="header">
+              <span draggable="true">期货</span>
+            </template>
+            <template>
+              <span draggable="true">
+                [[item.futuretype]]
+              </span>
+            </template>
+          </vaadin-grid-column>
+
+          <vaadin-grid-column width="60px">
+            <template class="header">
+              <span draggable="true">期货开仓价</span>
+            </template>
+            <template>
+              <input value="{{item.futureopen::input}}">
+            </template>
+          </vaadin-grid-column>
+
+          <vaadin-grid-column width="60px">
+            <template class="header">
+              <span draggable="true">期货开仓量</span>
+            </template>
+            <template>
+              <input value="{{item.futureamount::input}}">
+            </template>
+          </vaadin-grid-column>
+
+          <vaadin-grid-column width="60px">
+            <template class="header">
+              <span draggable="true">期货平仓价</span>
+            </template>
+            <template>
+                <input value="{{item.futureclose::input}}">
+              </template>
+          </vaadin-grid-column>
+
+          <vaadin-grid-column>
+            <template class="header">
+              <span draggable="true">操作</span>
+            </template>
+            <template>
+              <paper-button class="closeBtn" on-click="FixPosition">平仓</paper-button>
+            </template>
+          </vaadin-grid-column>
+
+        </vaadin-grid>
+      </div>
+    </div>
+
+    <global-services id="globalServices"></global-services>
+    <iron-ajax
+      url="/task/start"
+      body="{{config}}"
+      method="post"
+      content-type="application/json"
+      handle-as="json"
+      on-response="onStarted"
+      last-response={{response}}
+      debounce-duration="300" id="ajaxStart"></iron-ajax>
+    <iron-ajax
+      url="/task/stop"
+      method="get"
+      content-type="application/json"
+      handle-as="json"
+      on-response="onStopped"
+      last-response={{response}}
+      debounce-duration="300" id="ajaxStop"></iron-ajax>
+    <iron-ajax
+      url="/task/status"
+      method="get"
+      content-type="application/json"
+      handle-as="json"
+      on-response="onStatus"
+      last-response={{response}}
+      debounce-duration="300" id="ajaxStatus"></iron-ajax>
+    <iron-ajax
+      url="/task/failed"
+      method="get"
+      content-type="application/json"
+      handle-as="json"
+      on-response="onFailedRecord"
+      last-response={{response}}
+      debounce-duration="300" id="ajaxFailedRecord"></iron-ajax>
+    <iron-ajax
+      url="/task/fix"
+      body="{{updatePosition}}"
+      method="post"
+      content-type="application/json"
+      handle-as="json"
+      on-response="onFixResult"
+      last-response={{response}}
+      debounce-duration="300" id="ajaxFix"></iron-ajax>
+  </template>
+
+  <script>
+    var StatusType ={
+      StatusNone: 0,
+      StatusProcessing: 1,
+      StatusOrdering: 2,
+      StatusError: 3,
+    }
+
+
+    class GuestDelegate extends Polymer.Element {
+      static get is() { return 'guest-delegate'; }
+      static get properties(){
+        return {
+          coins:{
+            type: Array,
+            value: []
+          },
+          failedRecord:{
+            type:Array,
+            value: []
+          },
+          response: String,
+          path: String,
+          config: String,
+          updatePosition: String,
+          limitopen: {
+            type: Number,
+            value: 0.3,
+          },
+          unitamount:{
+            type: Number,
+            value: 100,
+          },
+          autoadjust:{
+            type: Boolean,
+            value: false,
+          },
+          limitclose: {
+            type: Number,
+            value: 30,
+          },
+          stepvalue: {
+            type: Number,
+            value: 0.8,
+          },
+          log: {
+            type: String,
+            value: "",
+          },
+          started: {
+            type: Boolean,
+            value: false,
+          }
+        };       
+      }
+
+      ready(){
+        super.ready()
+
+        this.coins = [
+          // all value will divide 100
+          {name: "eth", open:1.8, close:0.5, amount: 2500, checked:true},
+          {name: "btc", open:3, close:0.5, amount: 50, checked:false},
+          {name: "ltc", open:3, close:1.5, amount: 50, checked:false},
+        ]
+
+        this.$.ajaxFailedRecord.generateRequest()
+
+      }
+
+      isZero(value){
+        if(value == 0){
+          return true
+        }
+        return false
+      }
+
+      dialogConfirm(){
+        
+        if(this.started == false){
+          this.started = true
+          this.$.startConfirmDialog.open()
+        }else{
+          this.started = false
+          this.$.stopConfirmDialog.open()
+        }
+
+
+      }
+
+      onStart(){
+
+        this.$.launchBtn.innerHTML = "停止"
+        this.$.launchBtn.style.backgroundColor = "red"
+
+        var config = {}
+        config.limitopen = parseFloat(this.limitopen)/100,
+        config.limitclose = parseFloat(this.limitclose)/100,
+        config.unitamount = parseInt(this.unitamount),
+        config.autoadjust = this.autoadjust,
+        config.stepvalue = parseFloat(this.stepvalue),
+        config.area = {}
+        for(var i=0;i<this.coins.length;i++){
+          if(this.coins[i].checked){
+
+            config.area[this.coins[i].name] = {
+              open: parseFloat(this.coins[i].open),
+              close: parseFloat(this.coins[i].close),
+              amount: parseFloat(this.coins[i].amount),
+            }
+            
+          }
+        }
+
+        this.config = JSON.stringify(config)
+        this.$.ajaxStart.generateRequest()
+        // this.$.globalServices.WebsocketSubscribe("okexdiff", function(message){
+        //   this.log = (message + "\n" + this.log)
+        // }.bind(this))
+      }
+
+      onStop(){
+
+        this.$.ajaxStop.generateRequest()
+        // this.$.globalServices.WebsocketUnsubscribe("okexdiff", function(message){
+        //   this.log += (message + "\n")
+        // }.bind(this))
+      }
+
+      onStarted(){
+        console.log("Started:" + JSON.stringify(this.response))
+      }
+
+      onStopped(){
+        this.$.launchBtn.innerHTML = "启动"
+        this.$.launchBtn.style.backgroundColor = "green"
+        console.log("Stopped:" + JSON.stringify(this.response))
+      }
+
+      onFailedRecord(){
+        if(this.response.result){
+          this.failedRecord = this.response.data
+        }
+      }
+
+      FixPosition(event){
+        var position = {};
+        position.batch = event.model.get("item.batch");
+        position.spotopen = parseFloat(event.model.get("item.spotopen"));
+        position.spotclose = parseFloat(event.model.get("item.spotclose"));
+        position.spotamount = parseFloat(event.model.get("item.spotamount"));
+
+        position.futureopen = parseFloat(event.model.get("item.futureopen"));
+        position.futureclose = parseFloat(event.model.get("item.futureclose"));
+        position.futureamount = parseFloat(event.model.get("item.futureamount"));
+
+        this.updatePosition = JSON.stringify(position)
+        console.log("Updated position:" + this.updatePosition)
+
+        this.$.ajaxFix.generateRequest()
+
+      }
+
+      onFixResult(){
+        console.log("Reulst：" + JSON.stringify(this.response))
+      }
+    }
+
+    window.customElements.define(GuestDelegate.is, GuestDelegate);
+  </script>
+</dom-module>

@@ -28,7 +28,7 @@ func (p *RSA) LoadPrivateKey(key []byte) {
 func (p *RSA) RsaEncrypt(origData []byte) ([]byte, error) {
 	block, _ := pem.Decode(publicKey)
 	if block == nil {
-		return nil, errors.New("public key error")
+		return nil, errors.New("Fail to decode public key")
 	}
 	pubInterface, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
@@ -41,7 +41,8 @@ func (p *RSA) RsaEncrypt(origData []byte) ([]byte, error) {
 func (p *RSA) RsaDecrypt(ciphertext []byte) ([]byte, error) {
 	block, _ := pem.Decode(p.privateKey)
 	if block == nil {
-		return nil, errors.New("private key error!")
+		return nil, errors.New("Fail to decode private key")
+
 	}
 	priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
