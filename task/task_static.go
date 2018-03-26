@@ -11,7 +11,6 @@ type StatusType int
 const (
 	StatusNone StatusType = iota
 	StatusProcessing
-	StatusOrdering
 	StatusError
 )
 
@@ -43,9 +42,18 @@ type TradeRecord struct {
 }
 
 type ITask interface {
-	GetDescription() Description
-	// GetTaskName() string
+
+	// Task Management
+
+	// GetDefaultConfig() get the default configuration of the task
 	GetDefaultConfig() interface{}
+	GetDescription() Description
+	Start(configJSON string) error
+	Close()
+	GetStatus() StatusType
+
+	// Fundation Management
+
 	// GetBalances() []Balance
 	GetBalances() map[string]interface{}
 	GetTrades() []Mongo.TradesRecord
@@ -53,7 +61,4 @@ type ITask interface {
 	GetPositions() []map[string]interface{}
 	GetFailedPositions() []map[string]interface{}
 	FixFailedPosition(updateJSON string) error
-	Start(api string, secret string, configJSON string) error
-	Close()
-	GetStatus() int
 }

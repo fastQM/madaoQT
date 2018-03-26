@@ -17,7 +17,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 <link rel="import" href="../bower_components/polymer/lib/elements/dom-if.html">
 <link rel="import" href="../bower_components/vaadin-grid/vaadin-grid.html">
 <link rel="import" href="shared-styles.html">
-<link rel="import" href="profit-chart.html">
+<link rel="import" href="element-profit-chart.html">
 <link rel="import" href="shared-services.html">
 
 <dom-module id="guest-delegate">
@@ -264,7 +264,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
     <global-services id="globalServices"></global-services>
     <iron-ajax
-      url="/task/start"
+      url="/api/v1/task/start/{{taskName}}"
       body="{{config}}"
       method="post"
       content-type="application/json"
@@ -273,7 +273,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       last-response={{response}}
       debounce-duration="300" id="ajaxStart"></iron-ajax>
     <iron-ajax
-      url="/task/stop"
+      url="/api/v1/task/stop"
       method="get"
       content-type="application/json"
       handle-as="json"
@@ -281,7 +281,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       last-response={{response}}
       debounce-duration="300" id="ajaxStop"></iron-ajax>
     <iron-ajax
-      url="/task/status"
+      url="/api/v1/task/status"
       method="get"
       content-type="application/json"
       handle-as="json"
@@ -289,7 +289,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       last-response={{response}}
       debounce-duration="300" id="ajaxStatus"></iron-ajax>
     <iron-ajax
-      url="/task/failed"
+      url="/api/v1/task/failed"
       method="get"
       content-type="application/json"
       handle-as="json"
@@ -297,7 +297,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       last-response={{response}}
       debounce-duration="300" id="ajaxFailedRecord"></iron-ajax>
     <iron-ajax
-      url="/task/fix"
+      url="/api/v1/task/fix"
       body="{{updatePosition}}"
       method="post"
       content-type="application/json"
@@ -359,12 +359,16 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           started: {
             type: Boolean,
             value: false,
-          }
+          },
+          taskName: String,
         };       
       }
 
       ready(){
         super.ready()
+
+        this.taskName = window.sessionStorage.getItem("task")
+        console.log("task:"+this.taskName)
 
         this.coins = [
           // all value will divide 100

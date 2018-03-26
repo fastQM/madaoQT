@@ -16,6 +16,7 @@ import (
 	"golang.org/x/net/proxy"
 )
 
+const NameOKEX = "Okex"
 const NameOKEXSpot = "OkexSpot"
 const NameOKEXFuture = "OkexFuture"
 
@@ -72,6 +73,7 @@ type OKExAPI struct {
 	conn      *Websocket.Conn
 	apiKey    string
 	secretKey string
+	proxy     string
 
 	tickerList   []TickerListItem
 	ticker       int64
@@ -144,6 +146,7 @@ func (o *OKExAPI) SetConfigure(config Config) {
 	o.apiKey = config.API
 	o.secretKey = config.Secret
 	o.exchangeType = config.Custom["exchangeType"].(ExchangeType)
+	o.proxy = config.Proxy
 
 	if o.exchangeType == ExchangeTypeFuture {
 		period := config.Custom["period"]
@@ -185,12 +188,22 @@ func (o *OKExAPI) Start() error {
 	// force to restart the command
 	o.depthValues = make(map[string]*sync.Map)
 
-	proxy, err := proxy.SOCKS5("tcp", "127.0.0.1:1080", nil, proxy.Direct)
-	if err != nil {
-		return err
+	dialer := Websocket.DefaultDialer
+
+	if o.proxy != "" {
+		logger.Infof("使用代理:%s", o.proxy)
+		values := strings.Split(o.proxy, ":")
+		if values[0] == "SOCKS5" {
+			proxy, err := proxy.SOCKS5("tcp", values[1]+":"+values[2], nil, proxy.Direct)
+			if err != nil {
+				return err
+			}
+
+			dialer = &Websocket.Dialer{NetDial: proxy.Dial}
+		}
+
 	}
 
-	dialer := Websocket.Dialer{NetDial: proxy.Dial}
 	c, _, err := dialer.Dial(url, nil)
 	if err != nil {
 		logger.Errorf("Fail to dial:%v", err)

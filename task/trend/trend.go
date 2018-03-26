@@ -18,6 +18,8 @@ import (
 
 const trendTaskExplaination = "该策略适用于可能在短期内(1-3天)出现大幅波动(10%-30%)的市场"
 
+// 1. 只做和大趋势相同的方向，即上升通道不做空，下降通道不做多
+
 // TrendTask 策略适用于在短期内(1-3天)出现大幅波动(10%-30%)的市场
 type TrendTask struct {
 	config TrendConfig
@@ -33,10 +35,13 @@ type TrendTask struct {
 	positions     map[uint]*TrendPosition
 	positionIndex uint
 
+	counters map[string]int
+
 	errorCounter int
 }
 
 type TrendConfig struct {
+	IsUpTrend       bool
 	UnitAmount      float64
 	LimitCloseRatio float64
 	LimitOpenRatio  float64
@@ -64,7 +69,7 @@ var constContractRatio = map[string]float64{
 }
 
 var globalMaxAmount = map[string]float64{
-	"eth": 3000,
+	"eth": 200,
 }
 
 var Logger *golog.Logger
@@ -96,7 +101,24 @@ func (p *TrendTask) GetTrades() []Mongo.TradesRecord {
 	return nil
 }
 func (p *TrendTask) GetPositions() []map[string]interface{} {
-	return nil
+	var positions []MongoTrend.FundInfo
+
+	err1, closedPositions := p.fundManager.GetClosedPositions()
+	if err1 != nil {
+		Logger.Errorf("GetPositions:Fail to get closed positions %v", err1)
+		return nil
+	}
+	positions = append(positions, closedPositions...)
+
+	err2, openPositions := p.fundManager.GetOpenPositions()
+	if err2 != nil {
+		Logger.Errorf("GetPositions:Fail to get open positions %v", err2)
+		return nil
+	}
+
+	positions = append(positions, openPositions...)
+
+	return positions
 }
 func (p *TrendTask) GetFailedPositions() []map[string]interface{} {
 	return nil
@@ -107,18 +129,32 @@ func (p *TrendTask) FixFailedPosition(updateJSON string) error {
 func (p *TrendTask) Close() {
 	return
 }
-func (p *TrendTask) GetStatus() int {
-	return int(p.status)
+func (p *TrendTask) GetStatus() Task.StatusType {
+	return p.status
 }
 
-func (p *TrendTask) Start(api string, secret string, configJSON string) error {
+func (p *TrendTask) Start(configJSON string) error {
 
 	Logger.Infof("%s", trendTaskExplaination)
 
 	p.config = TrendConfig{
-		UnitAmount:      250,
+		IsUpTrend:       false,
+		UnitAmount:      50,
 		LimitCloseRatio: 0.03,
 		LimitOpenRatio:  0.003,
+	}
+
+	p.fundStatus = FundStatusInit
+	p.counters = make(map[string]int)
+
+	mongo := new(Mongo.ExchangeDB)
+	if mongo.Connect() != nil {
+		return errors.New(Task.TaskErrorMsg[Task.TaskLostMongodb])
+	}
+
+	err, record := mongo.FindOne(Exchange.NameOKEXSpot)
+	if err != nil {
+		return errors.New(Task.TaskErrorMsg[Task.TaskAPINotFound])
 	}
 
 	p.status = Task.StatusProcessing
@@ -135,16 +171,20 @@ func (p *TrendTask) Start(api string, secret string, configJSON string) error {
 	p.loadPosition()
 
 	p.binance = new(Exchange.Binance)
+	p.binance.SetConfigure(Exchange.Config{
+		Proxy: "SOCKS5:127.0.0.1:1080",
+	})
 
 	Logger.Info("启动OKEx合约监视程序")
 	futureExchange := new(Exchange.OKExAPI)
 	futureExchange.SetConfigure(Exchange.Config{
-		API:    api,
-		Secret: secret,
+		API:    record.API,
+		Secret: record.Secret,
 		Custom: map[string]interface{}{
 			"exchangeType": Exchange.ExchangeTypeFuture,
 			"period":       "this_week",
 		},
+		Proxy: "SOCKS5:127.0.0.1:1080",
 	})
 
 	if err := futureExchange.Start(); err != nil {
@@ -174,11 +214,6 @@ func (p *TrendTask) Start(api string, secret string, configJSON string) error {
 					return
 				}
 
-				if p.status == Task.StatusOrdering {
-					Logger.Debug("交易中...")
-					continue
-				}
-
 				p.database.Refresh()
 				p.Watch()
 			}
@@ -192,7 +227,7 @@ func (p *TrendTask) loadPosition() {
 	var records []MongoTrend.FundInfo
 	var err error
 
-	if err, records = p.fundManager.CheckPosition(); err != nil {
+	if err, records = p.fundManager.GetOpenPositions(); err != nil {
 		Logger.Errorf("Fail to load positions:%v", err)
 		return
 	}
@@ -254,8 +289,9 @@ func (p *TrendTask) Watch() {
 
 	length := len(kline)
 	current := kline[length-1]
-	Logger.Infof("最新[High]%.2f [Open]%.2f [Close]%.2f [Low]%.2f [Volumn]%.2f", current.High, current.Open, current.Close, current.Low, current.Volumn)
-
+	Logger.Infof("最新最新 [High]%.2f [Open]%.2f [Close]%.2f [Low]%.2f [Volumn]%.2f", current.High, current.Open, current.Close, current.Low, current.Volumn)
+	Logger.Infof("时间:%d", int(current.OpenTime))
+	Logger.Infof("now:%d", time.Now().Unix())
 	// 是否需要减仓
 	if p.CheckClosePosition(kline) {
 		return
@@ -268,20 +304,90 @@ func (p *TrendTask) Watch() {
 		return
 	}
 
-	p.checkInitPosition(kline, amount)
-	p.checkBreakPosition()
+	if amount != 0 {
+		if p.fundStatus == FundStatusInit {
+			// 初始建仓
+			if p.checkInitPosition(kline, amount) {
+				return
+			}
+		}
+
+		// 突破建仓
+		p.checkBreakPosition(kline, amount)
+	}
+
 }
 
 func (p *TrendTask) changeFundStatus(status int) {
 	p.fundStatus = status
 }
 
-func (p *TrendTask) checkBreakPosition() {
+func (p *TrendTask) checkBreakPosition(kline []Exchange.KlineValue, amount float64) {
+	err, high, low := p.getLastPeriodArea(kline)
+	if err != nil {
+		Logger.Errorf("Error in getLastPeriodArea():%s", err.Error())
+		return
+	}
 
+	Logger.Infof("前一个周期波动区间 High: %.2f Low: %.2f", high, low)
+
+	length := len(kline)
+	current := kline[length-1]
+
+	if p.config.IsUpTrend && current.Close > high {
+
+		if p.fundStatus == FundStatusInit {
+			p.fundStatus = FundStatusBreak
+		}
+
+		err2, _, askSpotPlacePrice, _, _ := Task.CalcDepthPrice(true, constContractRatio, p.future, pair, p.config.UnitAmount)
+		if err2 != nil {
+			Logger.Infof("深度无效")
+			return
+		}
+
+		Logger.Infof("突破前期高点,做多价格:%.2f", askSpotPlacePrice)
+		batch := Utils.GetRandomHexString(12)
+		timestamp := int64(current.OpenTime)
+		p.openPosition(timestamp, Exchange.TradeConfig{
+			Batch:  batch,
+			Pair:   pair,
+			Type:   Exchange.TradeTypeOpenLong,
+			Price:  askSpotPlacePrice,
+			Amount: amount / constContractRatio["eth"],
+			Limit:  p.config.LimitOpenRatio,
+		})
+		return
+
+	} else if (!p.config.IsUpTrend) && current.Close < low {
+
+		if p.fundStatus == FundStatusInit {
+			p.fundStatus = FundStatusBreak
+		}
+
+		err2, _, _, _, bidSpotPlacePrice := Task.CalcDepthPrice(true, constContractRatio, p.future, pair, p.config.UnitAmount)
+		if err2 != nil {
+			Logger.Infof("深度无效")
+			return
+		}
+
+		Logger.Infof("突破前期低点加仓，做空价格:%.2f", bidSpotPlacePrice)
+		batch := Utils.GetRandomHexString(12)
+		timestamp := int64(current.OpenTime)
+		p.openPosition(timestamp, Exchange.TradeConfig{
+			Batch:  batch,
+			Pair:   pair,
+			Type:   Exchange.TradeTypeOpenShort,
+			Price:  bidSpotPlacePrice,
+			Amount: amount / constContractRatio["eth"],
+			Limit:  p.config.LimitOpenRatio,
+		})
+		return
+	}
 }
 
 // 判断是否建立初始仓位
-func (p *TrendTask) checkInitPosition(kline []Exchange.KlineValue, amount float64) {
+func (p *TrendTask) checkInitPosition(kline []Exchange.KlineValue, amount float64) bool {
 
 	var lastDiff float64
 	length := len(kline)
@@ -315,13 +421,13 @@ func (p *TrendTask) checkInitPosition(kline []Exchange.KlineValue, amount float6
 	Logger.Infof("[Time]%s [Last]%.2f [Avg5]%.2f [Avg10]%.2f [Avg20]%.2f [Diff]%.2f", time, lastDiff, avg5, avg10, avg20, avg10-avg20)
 	// Logger.Infof("Current Middle:%v", (current.High+current.Low)/2)
 	// 10日均线从高于20日均线变成低于20日均线
-	if lastDiff > 0 && avg10-avg20 < 0 {
+	if (!p.config.IsUpTrend) && lastDiff > 0 && avg10-avg20 < 0 {
 		// 需要保证5日均线低于10日均线，并且当日均线中间值低于五日均线
 		if avg5 < avg10 && (current.High+current.Low)/2 < avg5 {
 			err2, _, _, _, bidSpotPlacePrice := Task.CalcDepthPrice(true, constContractRatio, p.future, pair, p.config.UnitAmount)
 			if err2 != nil {
 				Logger.Infof("深度无效")
-				return
+				return false
 			}
 
 			// 价格低于均线
@@ -336,15 +442,16 @@ func (p *TrendTask) checkInitPosition(kline []Exchange.KlineValue, amount float6
 					Amount: amount / constContractRatio["eth"],
 					Limit:  p.config.LimitOpenRatio,
 				})
+				return true
 			}
 
 		}
-	} else if lastDiff < 0 && avg10-avg20 > 0 {
+	} else if p.config.IsUpTrend && lastDiff < 0 && avg10-avg20 > 0 {
 		if avg5 > avg10 && (current.High+current.Low)/2 > avg5 {
 			err2, _, askSpotPlacePrice, _, _ := Task.CalcDepthPrice(true, constContractRatio, p.future, pair, p.config.UnitAmount)
 			if err2 != nil {
 				Logger.Infof("深度无效")
-				return
+				return false
 			}
 
 			if askSpotPlacePrice > avg5 {
@@ -358,9 +465,12 @@ func (p *TrendTask) checkInitPosition(kline []Exchange.KlineValue, amount float6
 					Amount: amount / constContractRatio["eth"],
 					Limit:  p.config.LimitOpenRatio,
 				})
+				return true
 			}
 		}
 	}
+
+	return false
 }
 
 func (p *TrendTask) openPosition(timestamp int64, tradeConfig Exchange.TradeConfig) {
@@ -647,6 +757,7 @@ func (p *TrendTask) getLastPeriodArea(kline []Exchange.KlineValue) (err error, h
 	if found {
 		high = 0
 		low = 0
+		// Logger.Infof("区间起点:%v", time.Unix(int64(kline[start].OpenTime), 0))
 		for i := start; i < len(kline)-1; i++ {
 			if high == 0 {
 				high = kline[i].High

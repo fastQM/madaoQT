@@ -15,12 +15,15 @@ func TestBinanceStreamTrade(t *testing.T) {
 
 }
 
-const StopLoss = 0.03
+const StopLoss = 0.1
 const TargetProfit = 0.05
 
 func TestPeriodArea(t *testing.T) {
 
 	binance := new(Binance)
+	binance.SetConfigure(Config{
+		Proxy: "SOCKS5:127.0.0.1:1080",
+	})
 
 	kline := binance.GetKline("eth/usdt", "2h", 500)
 
@@ -122,8 +125,12 @@ func TestGetKlines(t *testing.T) {
 
 	var logs []string
 	binance := new(Binance)
+	binance.SetConfigure(Config{
+		Proxy: "SOCKS5:127.0.0.1:1080",
+	})
 
-	result := binance.GetKline("eth/usdt", "2h", 500)
+	isIncrease := false
+	result := binance.GetKline("eth/usdt", "1h", 500)
 	// log.Printf("Result:%v", result)
 
 	var lastDiff float64
@@ -142,8 +149,8 @@ func TestGetKlines(t *testing.T) {
 
 		log.Printf("Time:%s Avg5:%v Avg10:%v Avg20:%v Diff:%v", time.Unix(int64(result[i].OpenTime), 0), avg5, avg10, avg20, avg10-avg20)
 		if lastDiff != 0 {
-			if lastDiff > 0 && avg10-avg20 < 0 {
-				if avg5 < avg10 && result[i].Open < avg5 {
+			if lastDiff > 0 && avg10-avg20 < 0 && (!isIncrease) {
+				if avg5 < avg10 {
 					msg := fmt.Sprintf("卖出点:%s 卖出价格:%v", time.Unix(int64(result[i].OpenTime), 0), result[i].Open)
 					logs = append(logs, msg)
 					log.Printf("%s", msg)
@@ -157,8 +164,8 @@ func TestGetKlines(t *testing.T) {
 						}
 					}
 				}
-			} else if lastDiff < 0 && avg10-avg20 > 0 {
-				if avg5 > avg10 && result[i].Open > avg5 {
+			} else if lastDiff < 0 && avg10-avg20 > 0 && isIncrease {
+				if avg5 > avg10 {
 					msg := fmt.Sprintf("买入点:%v 买入价格:%v", time.Unix(int64(result[i].OpenTime), 0), result[i].Open)
 					logs = append(logs, msg)
 					log.Printf("%s", msg)
@@ -256,4 +263,54 @@ func CheckTestClose(tradeType TradeType, openPrice float64, lossLimit float64, v
 	}
 
 	return false
+}
+
+func TestCheckBottomSupport(t *testing.T) {
+
+	var logs []string
+	binance := new(Binance)
+	binance.SetConfigure(Config{
+		Proxy: "SOCKS5:127.0.0.1:1080",
+	})
+
+	result := binance.GetKline("eth/usdt", "2h", 500)
+
+	logs = CheckBottomSupport("eth", result)
+
+	for _, msg := range logs {
+		log.Printf("Log:%s", msg)
+	}
+}
+
+func TestKlineRatio(t *testing.T) {
+
+	// var logs []string
+
+	binance := new(Binance)
+	binance.SetConfigure(Config{
+		Proxy: "SOCKS5:127.0.0.1:1080",
+	})
+
+	result := binance.GetKline("eth/usdt", "1d", 500)
+
+	var lastRatio float64
+
+	pre10 := result[0:10]
+	preAvg10 := GetAverage(10, pre10)
+
+	for i := 10; i <= len(result)-1; i++ {
+		array10 := result[i-9 : i+1]
+		avg10 := GetAverage(10, array10)
+
+		ratio := (avg10 - preAvg10) / 1
+		log.Printf("[%s] Ratio:%.2f", time.Unix(int64(result[i].OpenTime), 0).String(), ratio)
+		lastRatio = ratio
+
+		// 发生逆转，重新选择起点
+		if ratio > 0 && lastRatio < 0 {
+
+		} else if ratio < 0 && lastRatio > 0 {
+
+		}
+	}
 }

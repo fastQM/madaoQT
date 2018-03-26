@@ -1,8 +1,9 @@
 package controllers
 
 import (
-	"github.com/kataras/golog"
 	Global "madaoQT/config"
+
+	"github.com/kataras/golog"
 )
 
 type errorCode int
@@ -13,6 +14,7 @@ const (
 	errorCodeInvalidParameters
 	errorCodeAPINotSet
 	errorCodeMongoDisconnect
+	errorCodeTaskNotRunning
 )
 
 var errorMessage = map[errorCode]string{
@@ -21,6 +23,7 @@ var errorMessage = map[errorCode]string{
 	errorCodeInvalidParameters: "Invalid parameters",
 	errorCodeAPINotSet:         "API isn`t set",
 	errorCodeMongoDisconnect:   "mongodb is not connected",
+	errorCodeTaskNotRunning:    "Task is not running",
 }
 
 var Logger *golog.Logger

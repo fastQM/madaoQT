@@ -377,8 +377,8 @@ func (a *IAnalyzer) GetTrades() []Mongo.TradesRecord {
 // }
 
 // GetStatus get the status of the task
-func (a *IAnalyzer) GetStatus() int {
-	return int(a.status)
+func (a *IAnalyzer) GetStatus() Task.StatusType {
+	return a.status
 }
 
 func (a *IAnalyzer) adjustDuration(hasTrade bool) {
@@ -403,7 +403,7 @@ func (a *IAnalyzer) adjustDuration(hasTrade bool) {
 	}
 }
 
-func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
+func (a *IAnalyzer) Start(configJSON string) error {
 
 	if a.status != Task.StatusNone {
 		return errors.New(Task.TaskErrorMsg[Task.TaskErrorStatus])
@@ -425,6 +425,16 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 
 	Logger.Infof("Config:%v", a.config)
 
+	mongo := new(Mongo.ExchangeDB)
+	if mongo.Connect() != nil {
+		return errors.New(Task.TaskErrorMsg[Task.TaskLostMongodb])
+	}
+
+	err, record := mongo.FindOne(Exchange.NameOKEX)
+	if err != nil {
+		return errors.New(Task.TaskErrorMsg[Task.TaskAPINotFound])
+	}
+
 	a.ops = make(map[uint]*OperationItem)
 	a.diffList = list.New()
 	a.checkPeriodSec = CheckingPeriod
@@ -436,11 +446,11 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 		},
 	}
 
-	a.cron = Cron.New()
-	a.cron.AddFunc("@daily", a.RecordBalances)
-	a.cron.Start()
+	// a.cron = Cron.New()
+	// a.cron.AddFunc("@daily", a.RecordBalances)
+	// a.cron.Start()
 
-	err := a.tradeDB.Connect()
+	err = a.tradeDB.Connect()
 	if err != nil {
 		Logger.Errorf("tradeDB error:%v", err)
 		return errors.New(Task.TaskErrorMsg[Task.TaskLostMongodb])
@@ -462,12 +472,13 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 
 	futureExchange := new(Exchange.OKExAPI)
 	futureExchange.SetConfigure(Exchange.Config{
-		API:    api,
-		Secret: secret,
+		API:    record.API,
+		Secret: record.Secret,
 		Custom: map[string]interface{}{
 			"exchangeType": Exchange.ExchangeTypeFuture,
 			"period":       "this_week",
 		},
+		Proxy: "SOCKS5:127.0.0.1:1080",
 	})
 
 	if err := futureExchange.Start(); err != nil {
@@ -477,8 +488,9 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 
 	Logger.Info("启动OKEx现货监视程序")
 	spotExchange := Exchange.NewOKExSpotApi(&Exchange.Config{
-		API:    api,
-		Secret: secret,
+		API:    record.API,
+		Secret: record.Secret,
+		Proxy:  "SOCKS5:127.0.0.1:1080",
 	})
 
 	if err := spotExchange.Start(); err != nil {
@@ -531,11 +543,6 @@ func (a *IAnalyzer) Start(api string, secret string, configJSON string) error {
 				if a.status == Task.StatusError || a.status == Task.StatusNone {
 					Logger.Debug("状态异常或退出")
 					return
-				}
-
-				if a.status == Task.StatusOrdering {
-					Logger.Debug("交易中...")
-					continue
 				}
 
 				a.Watch()

@@ -7,7 +7,6 @@ import (
 	"github.com/kataras/iris"
 	"github.com/kataras/iris/sessions"
 
-	Mongo "madaoQT/mongo"
 	Task "madaoQT/task"
 )
 
@@ -23,7 +22,8 @@ type TaskController struct {
 	Tasks    *sync.Map          `iris:"persistence"`
 }
 
-// GET /task/tasks
+// 管理员接口
+
 const DEBUG = true
 
 func (t *TaskController) authen() (bool, iris.Map) {
@@ -102,16 +102,23 @@ func (t *TaskController) GetBy(name string) iris.Map {
 
 // PostStart 启动任务
 // Post route: /task/start
-func (t *TaskController) PostStart() iris.Map {
+func (t *TaskController) PostStartBy(name string) iris.Map {
 
 	var errMsg string
-	var mongo *Mongo.ExchangeDB
 
 	if ok, result := t.authen(); !ok {
 		return result
 	}
 
-	if task, ok := t.Tasks.Load("okexdiff"); ok {
+	Logger.Infof("Task %s", name)
+	if name == "" {
+		return iris.Map{
+			"result": false,
+			"error":  errorCodeInvalidParameters,
+		}
+	}
+
+	if task, ok := t.Tasks.Load(name); ok {
 		body, err := ioutil.ReadAll(t.Ctx.Request().Body)
 		if err != nil {
 			Logger.Debugf("fail to read:%v", err)
@@ -121,28 +128,8 @@ func (t *TaskController) PostStart() iris.Map {
 			}
 		}
 
-		mongo = new(Mongo.ExchangeDB)
-		if err = mongo.Connect(); err != nil {
-			return iris.Map{
-				"result": false,
-				"error":  errorCodeMongoDisconnect,
-			}
-		}
-
-		err, record := mongo.FindOne("OkexSpot")
-		if err != nil {
-			return iris.Map{
-				"result": false,
-				"error":  err.Error(),
-			}
-		} else if record == nil {
-			return iris.Map{
-				"result": false,
-				"error":  errorCodeAPINotSet,
-			}
-		}
-
-		err = task.(Task.ITask).Start(record.API, record.Secret, string(body))
+		err = task.(Task.ITask).Start(string(body))
+		Logger.Errorf("Error:%v", err)
 		if err != nil {
 			errMsg = err.Error()
 			goto _ERROR
@@ -160,9 +147,17 @@ _ERROR:
 	}
 }
 
-func (t *TaskController) GetStatus() iris.Map {
+func (t *TaskController) GetStatusBy(name string) iris.Map {
 
-	if task, ok := t.Tasks.Load("okexdiff"); ok {
+	Logger.Infof("Task %s", name)
+	if name == "" {
+		return iris.Map{
+			"result": false,
+			"error":  errorCodeInvalidParameters,
+		}
+	}
+
+	if task, ok := t.Tasks.Load(name); ok {
 		result := task.(Task.ITask).GetStatus()
 		return iris.Map{
 			"result": true,
@@ -175,9 +170,17 @@ func (t *TaskController) GetStatus() iris.Map {
 	}
 }
 
-func (t *TaskController) GetBalances() iris.Map {
+func (t *TaskController) GetBalancesBy(name string) iris.Map {
 
-	if task, ok := t.Tasks.Load("okexdiff"); ok {
+	Logger.Infof("Task %s", name)
+	if name == "" {
+		return iris.Map{
+			"result": false,
+			"error":  errorCodeInvalidParameters,
+		}
+	}
+
+	if task, ok := t.Tasks.Load(name); ok {
 		result := task.(Task.ITask).GetBalances()
 		return iris.Map{
 			"result": true,
@@ -206,9 +209,25 @@ func (t *TaskController) GetTrades() iris.Map {
 	}
 }
 
-func (t *TaskController) GetPositions() iris.Map {
+func (t *TaskController) GetPositionsBy(name string) iris.Map {
 
-	if task, ok := t.Tasks.Load("okexdiff"); ok {
+	Logger.Infof("GetPositionsBy %s", name)
+	if name == "" {
+		return iris.Map{
+			"result": false,
+			"error":  errorMessage[errorCodeInvalidParameters],
+		}
+	}
+
+	if task, ok := t.Tasks.Load(name); ok {
+
+		if task.(Task.ITask).GetStatus() != Task.StatusProcessing {
+			return iris.Map{
+				"result": false,
+				"error":  errorMessage[errorCodeTaskNotRunning],
+			}
+		}
+
 		result := task.(Task.ITask).GetPositions()
 		if result != nil {
 			Logger.Debugf("GetPositions:%v", result)

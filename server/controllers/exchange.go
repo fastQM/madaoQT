@@ -15,8 +15,7 @@ type ExchangeController struct {
 	// Models
 	// Database
 	// Global properties
-	Sessions  *sessions.Sessions   `iris:"persistence"`
-	Exchanges []Exchange.IExchange `iris:"persistence"`
+	Sessions *sessions.Sessions `iris:"persistence"`
 }
 
 type ExchangeInfo struct {
@@ -44,12 +43,12 @@ func (e *ExchangeController) authen() (bool, iris.Map) {
 
 }
 
-// POST: /exchange/list
+// Get: /exchange/list
 func (e *ExchangeController) GetList() iris.Map {
 	var exchangeList []string
 
-	for _, exchange := range e.Exchanges {
-		exchangeList = append(exchangeList, exchange.GetExchangeName())
+	for _, exchange := range Exchange.ExchangeNameList {
+		exchangeList = append(exchangeList, exchange)
 	}
 
 	return iris.Map{

@@ -21,6 +21,18 @@ func init() {
 	logger.SetPrefix("[EXCH]")
 }
 
+type ExchangeIndex int8
+
+const (
+	ExchangeOkex ExchangeIndex = iota
+	ExchangeBinance
+)
+
+var ExchangeNameList = map[ExchangeIndex]string{
+	ExchangeOkex:    NameOKEXSpot,
+	ExchangeBinance: NameBinance,
+}
+
 // ExchangeType the type of the exchange, spot or the future exchange
 type ExchangeType int8
 
@@ -126,6 +138,8 @@ type Config struct {
 	Ticker ITicker
 	// custom configuration of the exchange
 	Custom map[string]interface{}
+	// whether to use proxy, eg: "SOCKS5:127.0.0.1:1080"
+	Proxy string
 }
 
 type ITicker interface {
@@ -308,6 +322,7 @@ func ParsePair(pair string) []string {
 func GetPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 
 	length := len(kline)
+
 	array10 := kline[length-10 : length]
 	array20 := kline[length-20 : length]
 
@@ -327,6 +342,13 @@ func GetPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 
 		step := 0
 		for i := len(kline) - 1; i >= 0; i-- {
+
+			if i-20 < 0 {
+				start = i
+				found = true
+				break
+			}
+
 			array10 := kline[i-10 : i]
 			array20 := kline[i-20 : i]
 
@@ -355,6 +377,13 @@ func GetPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 	} else {
 		step := 0
 		for i := len(kline) - 1; i >= 0; i-- {
+
+			if i-20 < 0 {
+				start = i
+				found = true
+				break
+			}
+
 			array10 := kline[i-10 : i]
 			array20 := kline[i-20 : i]
 

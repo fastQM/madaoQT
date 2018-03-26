@@ -44,6 +44,7 @@ const (
 	TaskErrorStatus
 	TaskLostMongodb
 	TaskInvalidInput
+	TaskAPINotFound
 )
 
 var TaskErrorMsg = map[TaskErrorType]string{
@@ -56,6 +57,7 @@ var TaskErrorMsg = map[TaskErrorType]string{
 	TaskErrorStatus:       "Error status",
 	TaskLostMongodb:       "Lost the connection of Mongodb",
 	TaskInvalidInput:      "Invalid Input",
+	TaskAPINotFound:       "API or Key not found",
 }
 
 type TradeResult struct {

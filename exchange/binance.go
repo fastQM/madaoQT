@@ -13,20 +13,25 @@ import (
 
 const EndPoint = "wss://stream.binance.com:9443/ws/"
 const BinanceURL = "https://api.binance.com"
-const BinanceExchange = "Binance"
+const NameBinance = "Binance"
 
 type Binance struct {
 	websocket *Websocket.Conn
 	event     chan EventType
+	config    Config
 }
 
 func (p *Binance) GetExchangeName() string {
-	return BinanceExchange
+	return NameBinance
 }
 
 // SetConfigure()
 func (p *Binance) SetConfigure(config Config) {
+	p.config = config
 
+	if p.config.Proxy != "" {
+		logger.Infof("使用代理:%s", p.config.Proxy)
+	}
 }
 
 // WatchEvent() return a channel which notified the application of the event triggered by exchange
@@ -38,7 +43,7 @@ func (h *Binance) Start() error {
 	return nil
 }
 
-func (h *Binance) marketRequest(path string, params map[string]string) (error, []byte) {
+func (p *Binance) marketRequest(path string, params map[string]string) (error, []byte) {
 	var req http.Request
 	req.ParseForm()
 	for k, v := range params {
@@ -51,17 +56,23 @@ func (h *Binance) marketRequest(path string, params map[string]string) (error, [
 		return err, nil
 	}
 
-	// request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	// request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36")
-
-	dialer, err := proxy.SOCKS5("tcp", "127.0.0.1:1080", nil, proxy.Direct)
-	if err != nil {
-		return err, nil
-	}
 	// setup a http client
 	httpTransport := &http.Transport{}
 	httpClient := &http.Client{Transport: httpTransport}
-	httpTransport.Dial = dialer.Dial
+
+	if p.config.Proxy != "" {
+		values := strings.Split(p.config.Proxy, ":")
+		if values[0] == "SOCKS5" {
+			dialer, err := proxy.SOCKS5("tcp", values[1]+":"+values[2], nil, proxy.Direct)
+			if err != nil {
+				return err, nil
+			}
+
+			httpTransport.Dial = dialer.Dial
+		}
+
+	}
+
 	var resp *http.Response
 	resp, err = httpClient.Do(request)
 	if err != nil {

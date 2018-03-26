@@ -2,72 +2,111 @@ package exchange
 
 import (
 	"encoding/json"
-	"log"
+	"io/ioutil"
+	"net/http"
+	"strconv"
 	"strings"
 	"time"
-
-	Utils "madaoQT/utils"
 )
+
+const PoloniexURL = "https://poloniex.com/public?"
 
 type PoloniexAPI struct {
 	tickerList []TickerListItem
 }
 
+type PoloniexKlineValue struct {
+	Date   float64 `json:"date"`
+	Open   float64 `json:"open"`
+	Close  float64 `json:"close"`
+	High   float64 `json:"high"`
+	Low    float64 `json:"low"`
+	Volumn float64 `json:"volumn"`
+}
+
 func (p *PoloniexAPI) Init() {
 
-	go func() {
-		for {
-			select {
-			case <-time.After(5 * time.Second):
-				p.ticker()
-			}
-		}
-	}()
 }
 
-func (p *PoloniexAPI) ticker() {
-	data, err := Utils.HttpGet("https://poloniex.com/public?command=returnTicker", nil)
+func (p *PoloniexAPI) marketRequest(params map[string]string) (error, []byte) {
+
+	var req http.Request
+	req.ParseForm()
+	for k, v := range params {
+		req.Form.Add(k, v)
+	}
+	bodystr := strings.TrimSpace(req.Form.Encode())
+	logger.Debugf("Params:%v", bodystr)
+	request, err := http.NewRequest("GET", PoloniexURL+bodystr, nil)
 	if err != nil {
-		log.Printf("Fail to get ticker")
-		return
+		return err, nil
 	}
 
-	var records map[string]interface{}
-	if err = json.Unmarshal(data, &records); err != nil {
-		log.Println("Fail to Unmarshal:", err)
-		return
+	// request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36")
+
+	var resp *http.Response
+	resp, err = http.DefaultClient.Do(request)
+	if err != nil {
+		return err, nil
 	}
 
-	// log.Printf("Recv:%v", records)
-
-	if p.tickerList != nil {
-		for i, ticker := range p.tickerList {
-			for k, v := range records {
-				if ticker.Symbol == k {
-					// log.Printf("COMP:%v|%v", k, v)
-					p.tickerList[i].Value = v
-					break
-				}
-			}
-		}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err, nil
 	}
 
-}
+	return nil, body
 
-func (p *PoloniexAPI) AddTicker(coinA string, coinB string, tag string) {
-	pair := (strings.ToUpper(coinA) + "_" + strings.ToUpper(coinB))
-
-	// log.Printf("Pair:%v", pair)
-	ticker := TickerListItem{
-		Pair:   tag,
-		Symbol: pair,
-	}
-
-	p.tickerList = append(p.tickerList, ticker)
 }
 
 func (p *PoloniexAPI) GetExchangeName() string {
 	return "Poloniex"
+}
+
+func (p *PoloniexAPI) GetKline(pair string, start time.Time, end *time.Time, periodBySec int) []KlineValue {
+	coins := ParsePair(pair)
+	symbol := strings.ToUpper(coins[1] + "_" + coins[0])
+
+	endDate := "9999999999"
+	if end != nil {
+		endDate = strconv.Itoa(int(end.Unix()))
+	}
+
+	if err, response := p.marketRequest(map[string]string{
+		"command":      "returnChartData",
+		"currencyPair": symbol,
+		"start":        strconv.Itoa(int(start.Unix())),
+		"end":          endDate,
+		"period":       strconv.Itoa(periodBySec),
+	}); err != nil {
+		logger.Errorf("无效数据:%v", err)
+		return nil
+	} else {
+		var values []PoloniexKlineValue
+		if response != nil {
+			if err = json.Unmarshal(response, &values); err != nil {
+				logger.Errorf("Fail to Unmarshal:%v", err)
+				return nil
+			}
+
+			kline := make([]KlineValue, len(values))
+			for i, value := range values {
+				// kline[i].OpenTime = time.Unix((int64)(value[0].(float64)/1000), 0).Format(Global.TimeFormat)
+				kline[i].OpenTime = value.Date
+				kline[i].Open = value.Open
+				kline[i].High = value.High
+				kline[i].Low = value.Low
+				kline[i].Close = value.Close
+				kline[i].Volumn = value.Volumn
+			}
+
+			return kline
+		}
+
+		return nil
+	}
 }
 
 func (p *PoloniexAPI) GetTickerValue(tag string) map[string]interface{} {

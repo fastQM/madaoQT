@@ -58,9 +58,19 @@ func (p *FundManager) ClosePosition(batch string, futureClose float64, result st
 	return nil
 }
 
-func (p *FundManager) CheckPosition() (err error, records []MongoTrend.FundInfo) {
+func (p *FundManager) GetOpenPositions() (err error, records []MongoTrend.FundInfo) {
 	if err, records = p.funds.Find(map[string]interface{}{
 		"status": MongoTrend.FundStatusOpen,
+	}); err != nil {
+		return err, nil
+	}
+
+	return nil, records
+}
+
+func (p *FundManager) GetClosedPositions() (err error, records []MongoTrend.FundInfo) {
+	if err, records = p.funds.Find(map[string]interface{}{
+		"status": MongoTrend.FundStatusClose,
 	}); err != nil {
 		return err, nil
 	}

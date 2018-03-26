@@ -13,7 +13,6 @@ import (
 	"github.com/kataras/iris/sessions"
 
 	Global "madaoQT/config"
-	Exchange "madaoQT/exchange"
 	Controllers "madaoQT/server/controllers"
 	Websocket "madaoQT/server/websocket"
 	Utils "madaoQT/utils"
@@ -24,10 +23,9 @@ import (
 )
 
 type HttpServer struct {
-	app       *iris.Application
-	ws        *Websocket.WebsocketServer
-	sess      *sessions.Sessions
-	exchanges []Exchange.IExchange
+	app  *iris.Application
+	ws   *Websocket.WebsocketServer
+	sess *sessions.Sessions
 
 	Tasks *sync.Map
 }
@@ -85,13 +83,13 @@ func (h *HttpServer) setupSessions() {
 
 func (h *HttpServer) setupControllers() {
 
-	// prefix := "/api/v1/"
-	prefix := ""
+	prefix := "/api/v1/"
+	// prefix := ""
 	mvc.New(h.app.Party(prefix + "helloworld")).Handle(new(Controllers.HelloWorldController))
 	mvc.New(h.app.Party(prefix + "charts")).Handle(new(Controllers.ChartsController))
 	mvc.New(h.app.Party(prefix + "user")).Handle(&Controllers.UserController{Sessions: h.sess})
 	mvc.New(h.app.Party(prefix + "task")).Handle(&Controllers.TaskController{Sessions: h.sess, Tasks: h.Tasks})
-	mvc.New(h.app.Party(prefix + "exchange")).Handle(&Controllers.ExchangeController{Sessions: h.sess, Exchanges: h.exchanges})
+	mvc.New(h.app.Party(prefix + "exchange")).Handle(&Controllers.ExchangeController{Sessions: h.sess})
 
 }
 
@@ -125,7 +123,6 @@ func (h *HttpServer) SetupHttpServer() {
 	h.app.RegisterView(views)
 
 	// task
-	h.setupExchanges()
 	h.setupTasks()
 
 	// http
@@ -134,33 +131,6 @@ func (h *HttpServer) SetupHttpServer() {
 	h.setupControllers()
 
 	h.app.Run(iris.Addr(":8080"))
-}
-
-func (h *HttpServer) setupExchanges() {
-	okexspot := Exchange.NewOKExSpotApi(&Exchange.Config{
-		Ticker: Exchange.ITicker(h.ws),
-	})
-
-	okexfuture := Exchange.NewOKExFutureApi(nil)
-
-	h.exchanges = append(h.exchanges, okexspot)
-	h.exchanges = append(h.exchanges, okexfuture)
-
-	okexspot.Start()
-
-	go func() {
-		for {
-			select {
-			case event := <-okexspot.WatchEvent():
-				if event == Exchange.EventConnected {
-					okexspot.StartTicker("ltc/usdt")
-
-				} else if event == Exchange.EventLostConnection {
-					okexspot.Start()
-				}
-			}
-		}
-	}()
 }
 
 func (h *HttpServer) setupTasks() {
