@@ -30,7 +30,6 @@ type TrendTask struct {
 	status      Task.StatusType
 	database    *MongoTrend.TrendMongo
 	fundManager *FundManager
-	fundStatus  int
 
 	positions     map[uint]*TrendPosition
 	positionIndex uint
@@ -41,7 +40,6 @@ type TrendTask struct {
 }
 
 type TrendConfig struct {
-	IsUpTrend       bool
 	UnitAmount      float64
 	LimitCloseRatio float64
 	LimitOpenRatio  float64
@@ -56,12 +54,6 @@ type TrendPosition struct {
 const pair = "eth/usdt"
 const globalPeriod = "2h"
 
-const (
-	FundStatusInit = 0
-	FundStatusBreak
-	FundStatusFull
-)
-
 var constContractRatio = map[string]float64{
 	"btc": 100,
 	"ltc": 10,
@@ -69,7 +61,7 @@ var constContractRatio = map[string]float64{
 }
 
 var globalMaxAmount = map[string]float64{
-	"eth": 200,
+	"eth": 2000,
 }
 
 var Logger *golog.Logger
@@ -138,9 +130,8 @@ func (p *TrendTask) Start(configJSON string) error {
 	Logger.Infof("%s", trendTaskExplaination)
 
 	p.config = TrendConfig{
-		IsUpTrend:       false,
-		UnitAmount:      50,
-		LimitCloseRatio: 0.03,
+		UnitAmount:      500,
+		LimitCloseRatio: 0.06,
 		LimitOpenRatio:  0.003,
 	}
 
@@ -260,17 +251,8 @@ func (p *TrendTask) checkFunds(coin string) float64 {
 		usedAmount += position.Amount
 	}
 
-	var ratio float64
-	if p.fundStatus == FundStatusInit {
-		ratio = 0.3
-	} else if p.fundStatus == FundStatusBreak {
-		ratio = 0.7
-	}
-
-	funds := globalMaxAmount[coin] * ratio
-
 	Logger.Infof("开仓单位：%v 已开仓：%v 开仓总量:%v", p.config.UnitAmount, usedAmount, funds)
-	if (usedAmount + p.config.UnitAmount) > funds {
+	if (usedAmount + p.config.UnitAmount) > globalMaxAmount[coin] {
 		return 0
 	}
 
@@ -304,22 +286,8 @@ func (p *TrendTask) Watch() {
 		return
 	}
 
-	if amount != 0 {
-		if p.fundStatus == FundStatusInit {
-			// 初始建仓
-			if p.checkInitPosition(kline, amount) {
-				return
-			}
-		}
+	p.checkBreakPosition(kline, amount)
 
-		// 突破建仓
-		p.checkBreakPosition(kline, amount)
-	}
-
-}
-
-func (p *TrendTask) changeFundStatus(status int) {
-	p.fundStatus = status
 }
 
 func (p *TrendTask) checkBreakPosition(kline []Exchange.KlineValue, amount float64) {
@@ -334,11 +302,15 @@ func (p *TrendTask) checkBreakPosition(kline []Exchange.KlineValue, amount float
 	length := len(kline)
 	current := kline[length-1]
 
-	if p.config.IsUpTrend && current.Close > high {
+	array5 := kline[length-5 : length]
+	array10 = kline[length-10 : length]
+	array20 = kline[length-20 : length]
 
-		if p.fundStatus == FundStatusInit {
-			p.fundStatus = FundStatusBreak
-		}
+	avg5 := Exchange.GetAverage(5, array5)
+	avg10 = Exchange.GetAverage(10, array10)
+	avg20 = Exchange.GetAverage(20, array20)
+
+	if (current.Close > high) && (avg10 > avg20) && (avg5 > avg10) {
 
 		err2, _, askSpotPlacePrice, _, _ := Task.CalcDepthPrice(true, constContractRatio, p.future, pair, p.config.UnitAmount)
 		if err2 != nil {
@@ -359,12 +331,7 @@ func (p *TrendTask) checkBreakPosition(kline []Exchange.KlineValue, amount float
 		})
 		return
 
-	} else if (!p.config.IsUpTrend) && current.Close < low {
-
-		if p.fundStatus == FundStatusInit {
-			p.fundStatus = FundStatusBreak
-		}
-
+	} else if (current.Close < low) && (avg10 < avg20) && (avg5 < avg10) {
 		err2, _, _, _, bidSpotPlacePrice := Task.CalcDepthPrice(true, constContractRatio, p.future, pair, p.config.UnitAmount)
 		if err2 != nil {
 			Logger.Infof("深度无效")
@@ -372,6 +339,7 @@ func (p *TrendTask) checkBreakPosition(kline []Exchange.KlineValue, amount float
 		}
 
 		Logger.Infof("突破前期低点加仓，做空价格:%.2f", bidSpotPlacePrice)
+
 		batch := Utils.GetRandomHexString(12)
 		timestamp := int64(current.OpenTime)
 		p.openPosition(timestamp, Exchange.TradeConfig{
@@ -386,92 +354,92 @@ func (p *TrendTask) checkBreakPosition(kline []Exchange.KlineValue, amount float
 	}
 }
 
-// 判断是否建立初始仓位
-func (p *TrendTask) checkInitPosition(kline []Exchange.KlineValue, amount float64) bool {
+// // 判断是否建立初始仓位
+// func (p *TrendTask) checkInitPosition(kline []Exchange.KlineValue, amount float64) bool {
 
-	var lastDiff float64
-	length := len(kline)
-	current := kline[length-1]
+// 	var lastDiff float64
+// 	length := len(kline)
+// 	current := kline[length-1]
 
-	// 之前的数据判断均线
-	array10 := kline[length-11 : length-1]
-	array20 := kline[length-21 : length-1]
-	// array10 := result[length-12 : length-2]
-	// array20 := result[length-22 : length-2]
+// 	// 之前的数据判断均线
+// 	array10 := kline[length-11 : length-1]
+// 	array20 := kline[length-21 : length-1]
+// 	// array10 := result[length-12 : length-2]
+// 	// array20 := result[length-22 : length-2]
 
-	// avg5 := GetAverage(5, array5)
-	avg10 := Exchange.GetAverage(10, array10)
-	avg20 := Exchange.GetAverage(20, array20)
+// 	// avg5 := GetAverage(5, array5)
+// 	avg10 := Exchange.GetAverage(10, array10)
+// 	avg20 := Exchange.GetAverage(20, array20)
 
-	lastDiff = avg10 - avg20
+// 	lastDiff = avg10 - avg20
 
-	array5 := kline[length-5 : length]
-	array10 = kline[length-10 : length]
-	array20 = kline[length-20 : length]
+// 	array5 := kline[length-5 : length]
+// 	array10 = kline[length-10 : length]
+// 	array20 = kline[length-20 : length]
 
-	avg5 := Exchange.GetAverage(5, array5)
-	avg10 = Exchange.GetAverage(10, array10)
-	avg20 = Exchange.GetAverage(20, array20)
+// 	avg5 := Exchange.GetAverage(5, array5)
+// 	avg10 = Exchange.GetAverage(10, array10)
+// 	avg20 = Exchange.GetAverage(20, array20)
 
-	// 1. 三条均线要保持平行，一旦顺序乱则清仓
-	// 2. 开仓后，价格柱破10日均线清仓;虽然可能只是下探均线，但是说明市场强势减弱，后续可以更轻松的建仓
-	// 3. 开多时，开仓价格应该高于十日均线；开空时，开仓价格需要低于十日均线
-	timestamp := int64(current.OpenTime)
-	time := time.Unix(int64(timestamp), 0).Format(Global.TimeFormat)
-	Logger.Infof("[Time]%s [Last]%.2f [Avg5]%.2f [Avg10]%.2f [Avg20]%.2f [Diff]%.2f", time, lastDiff, avg5, avg10, avg20, avg10-avg20)
-	// Logger.Infof("Current Middle:%v", (current.High+current.Low)/2)
-	// 10日均线从高于20日均线变成低于20日均线
-	if (!p.config.IsUpTrend) && lastDiff > 0 && avg10-avg20 < 0 {
-		// 需要保证5日均线低于10日均线，并且当日均线中间值低于五日均线
-		if avg5 < avg10 && (current.High+current.Low)/2 < avg5 {
-			err2, _, _, _, bidSpotPlacePrice := Task.CalcDepthPrice(true, constContractRatio, p.future, pair, p.config.UnitAmount)
-			if err2 != nil {
-				Logger.Infof("深度无效")
-				return false
-			}
+// 	// 1. 三条均线要保持平行，一旦顺序乱则清仓
+// 	// 2. 开仓后，价格柱破10日均线清仓;虽然可能只是下探均线，但是说明市场强势减弱，后续可以更轻松的建仓
+// 	// 3. 开多时，开仓价格应该高于十日均线；开空时，开仓价格需要低于十日均线
+// 	timestamp := int64(current.OpenTime)
+// 	time := time.Unix(int64(timestamp), 0).Format(Global.TimeFormat)
+// 	Logger.Infof("[Time]%s [Last]%.2f [Avg5]%.2f [Avg10]%.2f [Avg20]%.2f [Diff]%.2f", time, lastDiff, avg5, avg10, avg20, avg10-avg20)
+// 	// Logger.Infof("Current Middle:%v", (current.High+current.Low)/2)
+// 	// 10日均线从高于20日均线变成低于20日均线
+// 	if (!p.config.IsUpTrend) && lastDiff > 0 && avg10-avg20 < 0 {
+// 		// 需要保证5日均线低于10日均线，并且当日均线中间值低于五日均线
+// 		if avg5 < avg10 && (current.High+current.Low)/2 < avg5 {
+// 			err2, _, _, _, bidSpotPlacePrice := Task.CalcDepthPrice(true, constContractRatio, p.future, pair, p.config.UnitAmount)
+// 			if err2 != nil {
+// 				Logger.Infof("深度无效")
+// 				return false
+// 			}
 
-			// 价格低于均线
-			if bidSpotPlacePrice < avg5 {
-				Logger.Infof("执行做空，做空价格:%.2f", bidSpotPlacePrice)
-				batch := Utils.GetRandomHexString(12)
-				p.openPosition(timestamp, Exchange.TradeConfig{
-					Batch:  batch,
-					Pair:   pair,
-					Type:   Exchange.TradeTypeOpenShort,
-					Price:  bidSpotPlacePrice,
-					Amount: amount / constContractRatio["eth"],
-					Limit:  p.config.LimitOpenRatio,
-				})
-				return true
-			}
+// 			// 价格低于均线
+// 			if bidSpotPlacePrice < avg5 {
+// 				Logger.Infof("执行做空，做空价格:%.2f", bidSpotPlacePrice)
+// 				batch := Utils.GetRandomHexString(12)
+// 				p.openPosition(timestamp, Exchange.TradeConfig{
+// 					Batch:  batch,
+// 					Pair:   pair,
+// 					Type:   Exchange.TradeTypeOpenShort,
+// 					Price:  bidSpotPlacePrice,
+// 					Amount: amount / constContractRatio["eth"],
+// 					Limit:  p.config.LimitOpenRatio,
+// 				})
+// 				return true
+// 			}
 
-		}
-	} else if p.config.IsUpTrend && lastDiff < 0 && avg10-avg20 > 0 {
-		if avg5 > avg10 && (current.High+current.Low)/2 > avg5 {
-			err2, _, askSpotPlacePrice, _, _ := Task.CalcDepthPrice(true, constContractRatio, p.future, pair, p.config.UnitAmount)
-			if err2 != nil {
-				Logger.Infof("深度无效")
-				return false
-			}
+// 		}
+// 	} else if p.config.IsUpTrend && lastDiff < 0 && avg10-avg20 > 0 {
+// 		if avg5 > avg10 && (current.High+current.Low)/2 > avg5 {
+// 			err2, _, askSpotPlacePrice, _, _ := Task.CalcDepthPrice(true, constContractRatio, p.future, pair, p.config.UnitAmount)
+// 			if err2 != nil {
+// 				Logger.Infof("深度无效")
+// 				return false
+// 			}
 
-			if askSpotPlacePrice > avg5 {
-				Logger.Infof("执行做多,做多价格:%.2f", askSpotPlacePrice)
-				batch := Utils.GetRandomHexString(12)
-				p.openPosition(timestamp, Exchange.TradeConfig{
-					Batch:  batch,
-					Pair:   pair,
-					Type:   Exchange.TradeTypeOpenLong,
-					Price:  askSpotPlacePrice,
-					Amount: amount / constContractRatio["eth"],
-					Limit:  p.config.LimitOpenRatio,
-				})
-				return true
-			}
-		}
-	}
+// 			if askSpotPlacePrice > avg5 {
+// 				Logger.Infof("执行做多,做多价格:%.2f", askSpotPlacePrice)
+// 				batch := Utils.GetRandomHexString(12)
+// 				p.openPosition(timestamp, Exchange.TradeConfig{
+// 					Batch:  batch,
+// 					Pair:   pair,
+// 					Type:   Exchange.TradeTypeOpenLong,
+// 					Price:  askSpotPlacePrice,
+// 					Amount: amount / constContractRatio["eth"],
+// 					Limit:  p.config.LimitOpenRatio,
+// 				})
+// 				return true
+// 			}
+// 		}
+// 	}
 
-	return false
-}
+// 	return false
+// }
 
 func (p *TrendTask) openPosition(timestamp int64, tradeConfig Exchange.TradeConfig) {
 
@@ -607,8 +575,8 @@ func (p *TrendTask) CheckClosePosition(values []Exchange.KlineValue) bool {
 
 			// if closePrice < avg10 {
 			// 价格柱三分之一突破十日均线平仓
-			if (closePrice < avg10) && (highPrice-avg10) < (avg10-closePrice) {
-				Logger.Debugf("突破十日线平仓")
+			if (closePrice < avg5) && (highPrice-avg5) < (avg5-closePrice) {
+				Logger.Debugf("突破五日线平仓")
 				placeClosePrice = bidSpotPlacePrice
 				closeFlag = true
 				goto __DONE
@@ -625,8 +593,8 @@ func (p *TrendTask) CheckClosePosition(values []Exchange.KlineValue) bool {
 
 			// if closePrice > avg10 {
 			// 当前价格高于十日均线并且突出长度大于当天价格柱的1/3
-			if (closePrice > avg10) && (closePrice-avg10) > (avg10-lowPrice) {
-				log.Printf("突破十日线平仓")
+			if (closePrice > avg5) && (closePrice-avg5) > (avg5-lowPrice) {
+				log.Printf("突破五日线平仓")
 				placeClosePrice = askSpotPlacePrice
 				closeFlag = true
 				goto __DONE
