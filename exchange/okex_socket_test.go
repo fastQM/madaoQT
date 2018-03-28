@@ -275,3 +275,19 @@ func _TestGetOrderStatus(t *testing.T) {
 	okex := new(OKExAPI)
 	log.Printf("Type:%d", okex.getStatus(1))
 }
+
+func TestGetFutureKline(t *testing.T) {
+	futureExchange := new(OKExAPI)
+	futureExchange.SetConfigure(Config{
+		Custom: map[string]interface{}{
+			"exchangeType": ExchangeTypeFuture,
+			"period":       "quarter",
+		},
+		Proxy: "SOCKS5:127.0.0.1:1080",
+	})
+
+	futureExchange.Start()
+	futureExchange.SubKlines("eth/usd", KlinePeriod5Min, 100)
+
+	select {}
+}

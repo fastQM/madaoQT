@@ -9,7 +9,7 @@ import (
 )
 
 const TrendDataBase = "TrendDB"
-const TrendFundsCollectionName = "TrendFunds"
+const TrendFundsCollectionName = "TrendFunds2"
 
 type TrendMongo struct {
 	session        *mgo.Session

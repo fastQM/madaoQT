@@ -1,7 +1,6 @@
 package exchange
 
 import (
-	"fmt"
 	"log"
 	"testing"
 	"time"
@@ -77,12 +76,6 @@ const Period1Day = 86400
 */
 
 func TestGetKline(t *testing.T) {
-	var logs []string
-
-	countProfit := 0
-	countLoss := 0
-	final := float64(1)
-	var profitSum, lossSum float64
 
 	// date1 := time.Date(2017, 1, 14, 0, 0, 0, 0, time.Local)
 	date2 := time.Date(2018, 3, 1, 0, 0, 0, 0, time.Local)
@@ -91,107 +84,32 @@ func TestGetKline(t *testing.T) {
 	// result := polo.GetKline("eth/usdt", date2, nil, Period15Min)
 	result := polo.GetKline("eth/usdt", date2, nil, Period5Min)
 
-	// isIncrease := true
-	var lastDiff float64
-	for i := 30; i <= len(result)-1; i++ {
+	StrategyTrendTest(result)
+}
 
-		high, low, err := GetPeriodArea(result[:i])
-		if err != nil {
-			log.Printf("Error:%s", err.Error())
-			continue
-		}
-
-		array5 := result[i-4 : i+1]
-		array10 := result[i-9 : i+1]
-		array20 := result[i-19 : i+1]
-
-		avg5 := GetAverage(5, array5)
-		avg10 := GetAverage(10, array10)
-		avg20 := GetAverage(20, array20)
-
-		// 1. 三条均线要保持平行，一旦顺序乱则清仓
-		// 2. 开仓后，价格柱破10日均线清仓;虽然可能只是下探均线，但是说明市场强势减弱，后续可以更轻松的建仓
-		// 3. 开多时，开仓价格应该高于十日均线；开空时，开仓价格需要低于十日均线
-
-		// log.Printf("Time:%s Avg5:%v Avg10:%v Avg20:%v Diff:%v", time.Unix(int64(result[i].OpenTime), 0), avg5, avg10, avg20, avg10-avg20)
-		if lastDiff != 0 {
-			// if lastDiff > 0 && avg10-avg20 < 0 && (!isIncrease) {
-			if avg10-avg20 < 0 && result[i].Close < low {
-				if avg5 < avg10 {
-					msg := fmt.Sprintf("卖出点:%s 卖出价格:%v", time.Unix(int64(result[i].OpenTime), 0), low)
-					logs = append(logs, msg)
-					log.Printf("%s", msg)
-
-					for j := i; j < len(result); j++ {
-						if closeFlag, closePrice := CheckTestClose(TradeTypeOpenShort, low, StopLoss, result[j-20:j+1]); closeFlag {
-							change := (low - closePrice) * 100 / low
-							msg = fmt.Sprintf("平仓日期:%v, 平仓价格:%v, 盈利：%v", time.Unix(int64(result[j].OpenTime), 0), closePrice, change)
-							log.Printf("%s", msg)
-							if change > 0 {
-								countProfit++
-								profitSum += change
-								// change *= 0.994
-							} else {
-								countLoss++
-								lossSum += change
-								// change *= 1.006
-							}
-							final *= (1.0 + change/100)
-							final *= 0.999
-							log.Printf("当前净值:%f", final)
-							i = j + 1
-							logs = append(logs, msg)
-							break
-						}
-					}
-				}
-				// } else if lastDiff < 0 && avg10-avg20 > 0 && isIncrease && result[i].Close > high {
-			} else if avg10-avg20 > 0 && result[i].Close > high {
-				if avg5 > avg10 {
-					msg := fmt.Sprintf("买入点:%v 买入价格:%v", time.Unix(int64(result[i].OpenTime), 0), high)
-					logs = append(logs, msg)
-					log.Printf("%s", msg)
-
-					for j := i; j < len(result); j++ {
-
-						if j+1 >= len(result) {
-							break
-						}
-
-						if closeFlag, closePrice := CheckTestClose(TradeTypeOpenLong, high, StopLoss, result[j-20:j+1]); closeFlag {
-							change := (closePrice - high) * 100 / high
-							msg = fmt.Sprintf("平仓日期:%v, 平仓价格:%v, 盈利：%v", time.Unix(int64(result[j].OpenTime), 0), closePrice, change)
-							logs = append(logs, msg)
-							log.Printf("%s", msg)
-
-							if change > 0 {
-								countProfit++
-								profitSum += change
-								// change *= 0.994
-							} else {
-								countLoss++
-								lossSum += change
-								// change *= 1.006
-							}
-							final *= (1.0 + change/100)
-							final *= 0.999
-							log.Printf("当前净值:%f", final)
-							i = j + 1
-							break
-						}
-					}
-				}
-			}
-		}
-
-		lastDiff = avg10 - avg20
-
+func TestMapArray(t *testing.T) {
+	array := []KlineValue{
+		KlineValue{
+			OpenTime: 1,
+			High:     100,
+		},
 	}
+	maps := make(map[string][]KlineValue)
 
-	for _, msg := range logs {
-		log.Printf("Log:%s", msg)
-	}
+	maps["test"] = array
 
-	log.Printf("盈利次数：%d 亏损次数 ：%d", countProfit, countLoss)
-	log.Printf("盈利求和：%f 亏损求和 ：%f 净值 ：%f", profitSum, lossSum, final)
+	log.Printf("1. Array:%v", maps["test"])
+
+	maps["test"][0].OpenTime = 3
+	maps["test"][0].High = 3
+
+	log.Printf("2. Array:%v", maps["test"])
+
+	maps["test"] = append(maps["test"], KlineValue{
+		OpenTime: 2,
+		High:     200,
+	})
+
+	log.Printf("3. Array:%v", maps["test"])
+
 }

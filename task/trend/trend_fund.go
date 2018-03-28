@@ -133,7 +133,7 @@ func (p *FundManager) CheckProfit(records []MongoTrend.FundInfo) float64 {
 			fee += (amount/record.FutureOpen + amount/record.FutureClose) * 0.0005
 		}
 
-		// log.Printf("[%v][%v]收益:%.8f 手续费:%.8f 净收益:%.8f", record.Batch, record.CloseTime, futureProfit, fee, (futureProfit - fee))
+		log.Printf("[%v][%v]收益:%.8f 手续费:%.8f 净收益:%.8f", record.Batch, record.CloseTime, futureProfit, fee, (futureProfit - fee))
 		total += (futureProfit - fee)
 	}
 

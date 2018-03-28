@@ -39,6 +39,7 @@ const ChannelFutureOrderInfo = "ok_futureusd_orderinfo"
 const ChannelSubTradesInfo = "ok_sub_futureusd_trades"
 const ChannelSubUserInfo = "ok_sub_futureusd_userinfo"
 const ChannelSubPositions = "ok_sub_futureusd_positions"
+const ChannelSubKlines = "ok_sub_futureusd_X_kline_Y_Z"
 
 // 现货行情API
 const ChannelCurrentChannelTicker = "ok_sub_spot_X_ticker"
@@ -76,6 +77,7 @@ type OKExAPI struct {
 	proxy     string
 
 	tickerList   []TickerListItem
+	klines       map[string][]KlineValue
 	ticker       int64
 	lastTicker   int64
 	errorCounter int
@@ -185,6 +187,7 @@ func (o *OKExAPI) Start() error {
 		return errors.New("Invalid exchange type")
 	}
 
+	o.klines = make(map[string][]KlineValue)
 	// force to restart the command
 	o.depthValues = make(map[string]*sync.Map)
 
@@ -212,6 +215,7 @@ func (o *OKExAPI) Start() error {
 	}
 
 	go func() {
+		logger.Errorf("开启协程...")
 		for {
 			_, message, err := c.ReadMessage()
 			if err != nil {
@@ -226,7 +230,8 @@ func (o *OKExAPI) Start() error {
 				filters := []string{
 					"depth",
 					"ticker",
-					"pong",
+					// "pong",
+					"userinfo",
 				}
 
 				var filtered = false
@@ -392,6 +397,35 @@ func (o *OKExAPI) StartTicker(pair string) {
 	o.command(data, nil)
 }
 
+func (o *OKExAPI) SubKlines(pair string, period int, number int) {
+	var coins []string
+	var channel string
+
+	var periodType string
+	if period == KlinePeriod5Min {
+		periodType = "5min"
+	}
+
+	if o.exchangeType == ExchangeTypeFuture {
+		coins = ParsePair(pair)
+
+		channel = strings.Replace(ChannelSubKlines, "X", coins[0], 1)
+		channel = strings.Replace(channel, "Y", o.period, 1)
+		channel = strings.Replace(channel, "Z", periodType, 1)
+
+	} else if o.exchangeType == ExchangeTypeSpot {
+		coins = ParsePair(pair)
+		channel = strings.Replace(ChannelCurrentChannelTicker, "X", coins[0]+"_"+coins[1], 1)
+	}
+
+	data := map[string]string{
+		"event":   "addChannel",
+		"channel": channel,
+	}
+
+	o.command(data, nil)
+}
+
 func (o *OKExAPI) ping() error {
 	data := map[string]string{
 		"event": "ping",
@@ -524,7 +558,7 @@ func (o *OKExAPI) GetDepthValue(coin string) [][]DepthPrice {
 				counter, _ := o.depthValues[channel].Load(KeyErrorCounter)
 				counter = counter.(int) + 1
 
-				if counter.(int) > 10 {
+				if counter.(int) > 30 {
 					logger.Error("Depth Reset Connection")
 					o.conn.Close()
 					go o.triggerEvent(EventLostConnection)
@@ -1095,7 +1129,7 @@ func (o *OKExAPI) getTradeTypeString(orderType TradeType) string {
 	return ""
 }
 
-func (p *OKExAPI) GetKline(pair string, period string, limit int) []KlineValue {
+func (p *OKExAPI) GetKline(pair string, period int, limit int) []KlineValue {
 	return nil
 }
 

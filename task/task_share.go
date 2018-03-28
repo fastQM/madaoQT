@@ -73,7 +73,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 	// var balance interface{} // 实际余额后台返回为准
 	// coin := Exchange.ParsePair(tradeConfig.Coin)[0]
 	channel := make(chan TradeResult)
-	stopTime := time.Now().Add(5 * time.Minute)
+	stopTime := time.Now().Add(10 * time.Second)
 
 	Logger.Debugf("Trade Params:%v", tradeConfig)
 
@@ -156,7 +156,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 			if trade != nil && trade.Error == nil {
 				// 300 seconds = 5 minutes
-				loop := 300
+				loop := 10
 
 				for {
 					Utils.SleepAsyncBySecond(1)
@@ -357,6 +357,9 @@ func CalcDepthPrice(isFuture bool, ratios map[string]float64, exchange Exchange.
 	var asks, bids []Exchange.DepthPrice
 	var quantity float64
 	var askFlag, bidFlag bool
+	if exchange == nil {
+		return errors.New("交易所接口无效"), 0, 0, 0, 0
+	}
 	depths := exchange.GetDepthValue(pair)
 	// Logger.Debugf("Future:%v 深度:%v", isFuture, depths)
 	if depths != nil {
@@ -366,7 +369,7 @@ func CalcDepthPrice(isFuture bool, ratios map[string]float64, exchange Exchange.
 		return errors.New("未获取深度信息"), 0, 0, 0, 0
 	}
 
-	amount *= 2
+	// amount *= 2
 
 	if isFuture {
 		quantity = amount / ratios[Exchange.ParsePair(pair)[0]]

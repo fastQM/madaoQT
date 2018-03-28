@@ -185,12 +185,20 @@ func (p *Binance) GetOrderInfo(filter OrderInfo) []OrderInfo {
 	return nil
 }
 
-func (p *Binance) GetKline(pair string, period string, limit int) []KlineValue {
+func (p *Binance) GetKline(pair string, period int, limit int) []KlineValue {
 	coins := ParsePair(pair)
 	symbol := strings.ToUpper(coins[0] + coins[1])
+
+	var interval string
+	if period == KlinePeriod5Min {
+		interval = "5m"
+	} else if period == KlinePeriod15Min {
+		interval = "15m"
+	}
+
 	if err, response := p.marketRequest("/api/v1/klines", map[string]string{
 		"symbol":   symbol,
-		"interval": period,
+		"interval": interval,
 		"limit":    strconv.Itoa(limit),
 	}); err != nil {
 		logger.Errorf("无效数据:%v", err)

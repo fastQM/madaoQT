@@ -246,8 +246,18 @@ type IExchange interface {
 	// GetOrderInfo() get the information with order filter
 	GetOrderInfo(filter OrderInfo) []OrderInfo
 
-	GetKline(pair string, period string, limit int) []KlineValue
+	GetKline(pair string, period int, limit int) []KlineValue
 }
+
+const KlinePeriod5Min = 5
+const KlinePeriod15Min = 15
+const KlinePeriod30Min = 30
+const KlinePeriod1Hour = 60
+const KlinePeriod2Hour = 120
+const KlinePeriod4Hour = 240
+const KlinePeriod6Hour = 6 * 60
+const KlinePeriod12Hour = 12 * 60
+const KlinePeriod1Day = 1 * 24 * 60
 
 // RevertTradeType the "close" operation of the original trading
 func RevertTradeType(tradeType TradeType) TradeType {
