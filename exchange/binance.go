@@ -1,7 +1,11 @@
 package exchange
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -55,6 +59,63 @@ func (p *Binance) marketRequest(path string, params map[string]string) (error, [
 	if err != nil {
 		return err, nil
 	}
+
+	// setup a http client
+	httpTransport := &http.Transport{}
+	httpClient := &http.Client{Transport: httpTransport}
+
+	if p.config.Proxy != "" {
+		values := strings.Split(p.config.Proxy, ":")
+		if values[0] == "SOCKS5" {
+			dialer, err := proxy.SOCKS5("tcp", values[1]+":"+values[2], nil, proxy.Direct)
+			if err != nil {
+				return err, nil
+			}
+
+			httpTransport.Dial = dialer.Dial
+		}
+
+	}
+
+	var resp *http.Response
+	resp, err = httpClient.Do(request)
+	if err != nil {
+		return err, nil
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err, nil
+	}
+	// log.Printf("Body:%v", string(body))
+	// var value map[string]interface{}
+	// if err = json.Unmarshal(body, &value); err != nil {
+	// 	return err, nil
+	// }
+
+	return nil, body
+
+}
+
+func (p *Binance) orderRequest(path string, params map[string]string) (error, []byte) {
+	var req http.Request
+	req.ParseForm()
+	for k, v := range params {
+		req.Form.Add(k, v)
+	}
+	bodystr := strings.TrimSpace(req.Form.Encode())
+	// logger.Debugf("Params:%v", bodystr)
+	h := hmac.New(sha256.New, []byte(p.config.Secret))
+	io.WriteString(h, bodystr)
+	signature := "&signture=" + fmt.Sprintf("%x", h.Sum(nil))
+	logger.Debugf("Path:%s", BinanceURL+path+"?"+bodystr+signature)
+	request, err := http.NewRequest("GET", BinanceURL+path+"?"+bodystr+signature, nil)
+	if err != nil {
+		return err, nil
+	}
+
+	request.Header.Add("X-MBX-APIKEY", p.config.API)
 
 	// setup a http client
 	httpTransport := &http.Transport{}

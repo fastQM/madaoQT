@@ -1,6 +1,9 @@
 package exchange
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"io"
 	"log"
 	"testing"
 	"time"
@@ -198,4 +201,10 @@ func TestKlineRatio(t *testing.T) {
 
 		}
 	}
+}
+
+func TestSha256(t *testing.T) {
+	h := hmac.New(sha256.New, []byte("NhqPtmdSJYdKjVHjA7PZj4Mge3R5YNiP1e3UZjInClVN65XAbvqqM6A7H5fATj0j"))
+	io.WriteString(h, "symbol=LTCBTC&side=BUY&type=LIMIT&timeInForce=GTC&quantity=1&price=0.1&recvWindow=5000&timestamp=1499827319559")
+	log.Printf("%x", h.Sum(nil))
 }

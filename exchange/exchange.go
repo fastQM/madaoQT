@@ -422,7 +422,6 @@ func GetPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 
 	if found {
 		var high, low float64
-		// log.Printf("Start is %f", kline[start].OpenTime)
 		for i := start; i < len(kline)-1; i++ {
 			if high == 0 {
 				high = kline[i].High

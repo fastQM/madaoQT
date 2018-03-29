@@ -215,7 +215,6 @@ func (o *OKExAPI) Start() error {
 	}
 
 	go func() {
-		logger.Errorf("开启协程...")
 		for {
 			_, message, err := c.ReadMessage()
 			if err != nil {
@@ -230,7 +229,7 @@ func (o *OKExAPI) Start() error {
 				filters := []string{
 					"depth",
 					"ticker",
-					// "pong",
+					"pong",
 					"userinfo",
 				}
 
@@ -316,6 +315,7 @@ func (o *OKExAPI) Start() error {
 
 					if tmp, ok := o.depthValues[channel].Load(KeyTicker); ok {
 						ticker := tmp.(int) + 1
+						// logger.Debugf("update ticker:%d", ticker)
 						o.depthValues[channel].Store(KeyTicker, ticker)
 					} else {
 						logger.Error("无法获取ticker")
@@ -554,13 +554,15 @@ func (o *OKExAPI) GetDepthValue(coin string) [][]DepthPrice {
 	if o.depthValues[channel] != nil {
 		if ticker, ok := o.depthValues[channel].Load(KeyTicker); ok {
 			lastTicker, _ := o.depthValues[channel].Load(KeyLastTicker)
+			// logger.Debugf("Ticker:%d LastTicker:%d", ticker, lastTicker)
 			if lastTicker.(int) == ticker.(int) {
 				counter, _ := o.depthValues[channel].Load(KeyErrorCounter)
 				counter = counter.(int) + 1
-
+				// logger.Debugf("Counter:%d", counter)
 				if counter.(int) > 30 {
 					logger.Error("Depth Reset Connection")
 					o.conn.Close()
+					o.depthValues[channel].Store(KeyErrorCounter, 0)
 					go o.triggerEvent(EventLostConnection)
 					return nil
 
@@ -570,6 +572,7 @@ func (o *OKExAPI) GetDepthValue(coin string) [][]DepthPrice {
 
 			} else {
 				o.depthValues[channel].Store(KeyLastTicker, ticker)
+				o.depthValues[channel].Store(KeyErrorCounter, 0)
 			}
 		}
 

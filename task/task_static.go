@@ -10,6 +10,7 @@ type StatusType int
 
 const (
 	StatusNone StatusType = iota
+	StatusInit
 	StatusProcessing
 	StatusError
 )
