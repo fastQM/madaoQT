@@ -4,12 +4,14 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	Websocket "github.com/gorilla/websocket"
 	"golang.org/x/net/proxy"
@@ -98,23 +100,28 @@ func (p *Binance) marketRequest(path string, params map[string]string) (error, [
 
 }
 
-func (p *Binance) orderRequest(path string, params map[string]string) (error, []byte) {
+func (p *Binance) orderRequest(method string, path string, params map[string]string) (error, []byte) {
+
+	// add the common parameters
+	params["timestamp"] = strconv.FormatInt(time.Now().Unix()*1000, 10)
+
 	var req http.Request
+
 	req.ParseForm()
 	for k, v := range params {
 		req.Form.Add(k, v)
 	}
 	bodystr := strings.TrimSpace(req.Form.Encode())
-	// logger.Debugf("Params:%v", bodystr)
+
 	h := hmac.New(sha256.New, []byte(p.config.Secret))
 	io.WriteString(h, bodystr)
-	signature := "&signture=" + fmt.Sprintf("%x", h.Sum(nil))
+	signature := "&signature=" + fmt.Sprintf("%x", h.Sum(nil))
 	logger.Debugf("Path:%s", BinanceURL+path+"?"+bodystr+signature)
-	request, err := http.NewRequest("GET", BinanceURL+path+"?"+bodystr+signature, nil)
+
+	request, err := http.NewRequest(method, BinanceURL+path+"?"+bodystr+signature, nil)
 	if err != nil {
 		return err, nil
 	}
-
 	request.Header.Add("X-MBX-APIKEY", p.config.API)
 
 	// setup a http client
@@ -145,12 +152,8 @@ func (p *Binance) orderRequest(path string, params map[string]string) (error, []
 	if err != nil {
 		return err, nil
 	}
-	// log.Printf("Body:%v", string(body))
-	// var value map[string]interface{}
-	// if err = json.Unmarshal(body, &value); err != nil {
-	// 	return err, nil
-	// }
 
+	logger.Debugf("RSP:%s", string(body))
 	return nil, body
 
 }
@@ -169,12 +172,16 @@ func (p *Binance) GetTicker(pair string) *TickerValue {
 	return nil
 }
 
+func (p *Binance) getSymbol(pair string) string {
+	coins := ParsePair(pair)
+	return strings.ToUpper(coins[0] + coins[1])
+}
+
 // GetDepthValue() get the depth of the assigned price area and quantity
 // GetDepthValue(pair string, price float64, limit float64, orderQuantity float64, tradeType TradeType) []DepthPrice
 func (p *Binance) GetDepthValue(pair string) [][]DepthPrice {
 	//ethusdt@depth20
-	coins := ParsePair(pair)
-	symbol := strings.ToUpper(coins[0] + coins[1])
+	symbol := p.getSymbol(pair)
 	if err, response := p.marketRequest("/api/v1/depth", map[string]string{
 		"symbol": symbol,
 		// "limit":  "100",
@@ -226,14 +233,70 @@ func (p *Binance) GetDepthValue(pair string) [][]DepthPrice {
 
 // GetBalance() get the balances of all the coins
 func (p *Binance) GetBalance() map[string]interface{} {
-	return map[string]interface{}{
-		"helo": "wolrd",
+
+	if err, response := p.orderRequest("GET", "/api/v3/account", map[string]string{}); err != nil {
+		logger.Errorf("无法获取余额:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("解析错误:%v", err)
+			return nil
+		}
+
+		// log.Printf("Val:%v", values)
+		balances := make(map[string]interface{})
+		assets := values["balances"].([]interface{})
+		for _, asset := range assets {
+			key := asset.(map[string]interface{})["asset"].(string)
+			value := asset.(map[string]interface{})["free"].(string)
+			balances[key], _ = strconv.ParseFloat(value, 64)
+		}
+
+		return balances
+
 	}
+
 }
 
 // Trade() trade as the configs
 func (p *Binance) Trade(configs TradeConfig) *TradeResult {
-	return nil
+	symbol := p.getSymbol(configs.Pair)
+
+	if err, response := p.orderRequest("POST", "/api/v3/order", map[string]string{
+		"symbol":           symbol,
+		"side":             BinanceTradeTypeMap[configs.Type],
+		"type":             "LIMIT",
+		"quantity":         strconv.FormatFloat(configs.Amount, 'f', 2, 64),
+		"price":            strconv.FormatFloat(configs.Price, 'f', 2, 64),
+		"timeInForce":      "IOC",
+		"newOrderRespType": "FULL",
+	}); err != nil {
+		logger.Errorf("下单失败:%v", err)
+		return &TradeResult{
+			Error: err,
+		}
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("解析错误:%v", err)
+			return &TradeResult{
+				Error: err,
+			}
+		}
+
+		if values["code"] != nil || values["msg"] != nil {
+			return &TradeResult{
+				Error: errors.New(values["msg"].(string)),
+			}
+		}
+
+		return &TradeResult{
+			Error:   nil,
+			OrderID: values["clientOrderId"].(string),
+		}
+
+	}
 }
 
 // CancelOrder() cancel the order as the order information
@@ -243,7 +306,31 @@ func (p *Binance) CancelOrder(order OrderInfo) *TradeResult {
 
 // GetOrderInfo() get the information with order filter
 func (p *Binance) GetOrderInfo(filter OrderInfo) []OrderInfo {
-	return nil
+	symbol := p.getSymbol(filter.Pair)
+	if err, response := p.orderRequest("GET", "/api/v3/order", map[string]string{
+		"symbol":            symbol,
+		"origClientOrderId": filter.OrderID,
+	}); err != nil {
+		logger.Errorf("无法获取订单信息:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("解析错误:%v", err)
+			return nil
+		}
+
+		info := make([]OrderInfo, 1)
+		info[0].Amount, _ = strconv.ParseFloat(values["origQty"].(string), 64)
+		info[0].Pair = symbol
+		info[0].DealAmount, _ = strconv.ParseFloat(values["executedQty"].(string), 64)
+		info[0].Status = p.getStatusType(values["status"].(string))
+		info[0].OrderID = filter.OrderID
+		info[0].AvgPrice, _ = strconv.ParseFloat(values["stopPrice"].(string), 64)
+
+		return info
+
+	}
 }
 
 func (p *Binance) GetKline(pair string, period int, limit int) []KlineValue {
@@ -291,4 +378,28 @@ func (p *Binance) GetKline(pair string, period int, limit int) []KlineValue {
 
 		return nil
 	}
+}
+
+var BinanceOrderStatusMap = map[OrderStatusType]string{
+	OrderStatusOpen:      "NEW",
+	OrderStatusPartDone:  "PARTIALLY_FILLED",
+	OrderStatusDone:      "FILLED",
+	OrderStatusCanceling: "PENDING_CANCEL",
+	OrderStatusCanceled:  "CANCELED",
+	OrderStatusRejected:  "REJECTED",
+	OrderStatusExpired:   "EXPIRED",
+}
+
+func (p *Binance) getStatusType(key string) OrderStatusType {
+	for k, v := range BinanceOrderStatusMap {
+		if v == key {
+			return k
+		}
+	}
+	return OrderStatusUnknown
+}
+
+var BinanceTradeTypeMap = map[TradeType]string{
+	TradeTypeBuy:  "BUY",
+	TradeTypeSell: "SELL",
 }

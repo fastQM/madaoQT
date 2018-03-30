@@ -26,7 +26,7 @@ type ExchangeDB struct {
 func (t *ExchangeDB) Connect() error {
 	session, err := mgo.Dial(MongoURL)
 	if err != nil {
-		fmt.Println("Connect to redis error", err)
+		fmt.Println("Connect to Mongo error", err)
 		return err
 	}
 	session.SetMode(mgo.Monotonic, true)

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	Global "madaoQT/config"
+	Mongo "madaoQT/mongo"
 
 	"github.com/kataras/golog"
 )
@@ -114,6 +115,8 @@ const (
 	OrderStatusCanceling
 	// OrderStatusCanceled the canceled status of an order
 	OrderStatusCanceled
+	OrderStatusRejected
+	OrderStatusExpired
 	// OrderStatusUnknown the error status
 	OrderStatusUnknown
 )
@@ -441,4 +444,18 @@ func GetPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 	}
 
 	return 0, 0, errors.New("Invalid Period")
+}
+
+func GetExchangeKey(exchange string) (error, *Mongo.ExchangeInfo) {
+	mongo := new(Mongo.ExchangeDB)
+	if mongo.Connect() != nil {
+		return errors.New("Mongo is not connected"), nil
+	}
+
+	err, record := mongo.FindOne(exchange)
+	if err != nil {
+		return errors.New("APIKEY not found"), nil
+	}
+
+	return nil, record
 }

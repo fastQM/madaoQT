@@ -208,3 +208,67 @@ func TestSha256(t *testing.T) {
 	io.WriteString(h, "symbol=LTCBTC&side=BUY&type=LIMIT&timeInForce=GTC&quantity=1&price=0.1&recvWindow=5000&timestamp=1499827319559")
 	log.Printf("%x", h.Sum(nil))
 }
+
+func TestGetBalance(t *testing.T) {
+	err, key := GetExchangeKey(NameBinance)
+	if err != nil {
+		log.Printf("Err:%v", err)
+		return
+	}
+
+	binance := new(Binance)
+	binance.SetConfigure(Config{
+		API:    key.API,
+		Secret: key.Secret,
+		Proxy:  "SOCKS5:127.0.0.1:1080",
+	})
+
+	log.Printf("BALANCES:%v", binance.GetBalance())
+}
+
+func TestTrade(t *testing.T) {
+	err, key := GetExchangeKey(NameBinance)
+	if err != nil {
+		log.Printf("Err:%v", err)
+		return
+	}
+
+	binance := new(Binance)
+	binance.SetConfigure(Config{
+		API:    key.API,
+		Secret: key.Secret,
+		Proxy:  "SOCKS5:127.0.0.1:1080",
+	})
+
+	result := binance.Trade(TradeConfig{
+		Pair:   "eth/usdt",
+		Type:   TradeTypeSell,
+		Amount: 0.05,
+		Price:  408,
+	})
+
+	log.Printf("result:%v", result)
+}
+
+func TestGetOrderInfo(t *testing.T) {
+	err, key := GetExchangeKey(NameBinance)
+	if err != nil {
+		log.Printf("Err:%v", err)
+		return
+	}
+
+	binance := new(Binance)
+	binance.SetConfigure(Config{
+		API:    key.API,
+		Secret: key.Secret,
+		Proxy:  "SOCKS5:127.0.0.1:1080",
+	})
+
+	result := binance.GetOrderInfo(OrderInfo{
+		Pair:    "eth/usdt",
+		OrderID: "A8LQi9x4zPQDiiJ2dbVlwp",
+	})
+
+	log.Printf("Reulst:%v", result)
+
+}
