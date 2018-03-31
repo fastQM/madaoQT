@@ -7,18 +7,14 @@ import (
 func TestEncryptDecrypt(t *testing.T) {
 
 	file := "test.mp4"
-	encrypt := FileEncrypt{
-		File:  file,
-		Key:   "hello, world",
-		Nonce: "cooldcool",
+	encrypt := AESCrypto{
+		FileName: file,
 	}
 
 	encrypt.Encrypt()
 
-	encrypt = FileEncrypt{
-		File:  file + "-encrypted",
-		Key:   "hello, world",
-		Nonce: "cooldcool",
+	encrypt = AESCrypto{
+		FileName: file + "-encrypted",
 	}
 
 	encrypt.Decrypt()

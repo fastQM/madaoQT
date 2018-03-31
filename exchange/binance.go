@@ -291,11 +291,42 @@ func (p *Binance) Trade(configs TradeConfig) *TradeResult {
 			}
 		}
 
-		return &TradeResult{
-			Error:   nil,
-			OrderID: values["clientOrderId"].(string),
-		}
+		if p.getStatusType(values["status"].(string)) != OrderStatusDone {
+			return &TradeResult{
+				Error: nil,
+				Info:  nil,
+			}
 
+		} else {
+
+			fills := values["fills"].([]interface{})
+
+			var avgPrice, totalCost float64
+
+			for _, fill := range fills {
+				price, _ := strconv.ParseFloat(fill.(map[string]interface{})["price"].(string), 64)
+				qty, _ := strconv.ParseFloat(fill.(map[string]interface{})["qty"].(string), 64)
+				totalCost += (price * qty)
+			}
+
+			executedQty, _ := strconv.ParseFloat(values["executedQty"].(string), 64)
+			avgPrice = totalCost / executedQty
+
+			info := &OrderInfo{
+				OrderID:    values["clientOrderId"].(string),
+				Pair:       symbol,
+				Price:      configs.Price,
+				Amount:     configs.Amount,
+				AvgPrice:   avgPrice,
+				DealAmount: executedQty,
+			}
+
+			return &TradeResult{
+				Error:   nil,
+				OrderID: values["clientOrderId"].(string),
+				Info:    info,
+			}
+		}
 	}
 }
 

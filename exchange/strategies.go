@@ -20,7 +20,7 @@ func StrategyTrendTest(result []KlineValue) {
 	var profitSum, lossSum float64
 
 	for i := 30; i <= len(result)-1; i++ {
-		log.Printf("Current:%s", time.Unix(int64(result[i].OpenTime), 0).String())
+		// log.Printf("Current:%s", time.Unix(int64(result[i].OpenTime), 0).String())
 		high, low, err := GetPeriodArea(result[:i])
 		if err != nil {
 			log.Printf("Error:%s", err.Error())
@@ -35,7 +35,7 @@ func StrategyTrendTest(result []KlineValue) {
 		avg10 := GetAverage(10, array10)
 		avg20 := GetAverage(20, array20)
 
-		log.Printf("High:%.2f Low:%.2f Close:%.2f", high, low, result[i].Close)
+		// log.Printf("High:%.2f Low:%.2f Close:%.2f", high, low, result[i].Close)
 
 		// 1. 三条均线要保持平行，一旦顺序乱则清仓
 		// 2. 开仓后，价格柱破10日均线清仓;虽然可能只是下探均线，但是说明市场强势减弱，后续可以更轻松的建仓
@@ -187,6 +187,13 @@ func checkTestClose(tradeType TradeType, openPrice float64, lossLimit float64, v
 				}
 				return true, closePrice
 			}
+
+			// if closePrice < avg10 {
+			// 	if debug {
+			// 		log.Printf("突破十日线平仓")
+			// 	}
+			// 	return true, closePrice
+			// }
 		} else {
 			if avg5 < avg10 && avg10 < avg20 {
 
@@ -205,6 +212,13 @@ func checkTestClose(tradeType TradeType, openPrice float64, lossLimit float64, v
 				}
 				return true, closePrice
 			}
+
+			// if closePrice > avg10 {
+			// 	if debug {
+			// 		log.Printf("突破十日线平仓")
+			// 	}
+			// 	return true, closePrice
+			// }
 		}
 	}
 

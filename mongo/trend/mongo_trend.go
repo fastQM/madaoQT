@@ -1,6 +1,7 @@
 package mongotrend
 
 import (
+	"errors"
 	"log"
 
 	Mongo "madaoQT/mongo"
@@ -9,23 +10,29 @@ import (
 )
 
 const TrendDataBase = "TrendDB"
-const TrendFundsCollectionName = "TrendFunds2"
 
 type TrendMongo struct {
-	session        *mgo.Session
-	FundCollection Funds
+	session            *mgo.Session
+	FundCollection     Funds
+	FundCollectionName string
 }
 
 func (p *TrendMongo) Connect() error {
+
+	if p.FundCollectionName == "" {
+		return errors.New("Please assign the collection name")
+	}
+
 	session, err := mgo.Dial(Mongo.MongoURL)
 	if err != nil {
 		log.Printf("Connect to Mongo error:%v", err)
 		return err
 	}
+
 	session.SetMode(mgo.Monotonic, true)
 	p.session = session
 
-	p.FundCollection.LoadCollection(p.AddCollection(TrendFundsCollectionName))
+	p.FundCollection.LoadCollection(p.AddCollection(p.FundCollectionName))
 
 	return nil
 }

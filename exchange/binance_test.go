@@ -11,7 +11,9 @@ import (
 
 func TestBinanceStreamTrade(t *testing.T) {
 	binance := new(Binance)
-
+	binance.SetConfigure(Config{
+		Proxy: "SOCKS5:127.0.0.1:1080",
+	})
 	result := binance.GetDepthValue("eth/usdt")
 	log.Printf("Result:%v", result)
 
@@ -242,9 +244,9 @@ func TestTrade(t *testing.T) {
 
 	result := binance.Trade(TradeConfig{
 		Pair:   "eth/usdt",
-		Type:   TradeTypeSell,
+		Type:   TradeTypeBuy,
 		Amount: 0.05,
-		Price:  408,
+		Price:  380,
 	})
 
 	log.Printf("result:%v", result)

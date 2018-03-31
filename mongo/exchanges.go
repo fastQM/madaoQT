@@ -11,9 +11,9 @@ import (
 type ExchangeInfo struct {
 	Name string
 	/* User password encrypted */
-	API string
+	API []byte
 	/* User password encrypted */
-	Secret string
+	Secret []byte
 	/* corresponding to the user in the users database */
 	User string
 }

@@ -20,22 +20,29 @@ import (
 const ModeEncrypt = 0
 const ModeDecrypt = 1
 
-type FileEncrypt struct {
-	File   string
-	Key    []byte
-	Nonce  []byte
-	Mode   int
-	aesgcm cipher.AEAD
-	_nonce []byte
+const AESTypeFile = 0
+const AESTypeBuffer = 1
+
+type AESCrypto struct {
+	Type     int
+	FileName string
+	Key      []byte
+	Nonce    []byte
+	Mode     int
+	aesgcm   cipher.AEAD
+	_nonce   []byte
 }
 
-func (f *FileEncrypt) init() error {
+func (f *AESCrypto) init() error {
 
 	var err error
-	if runtime.GOOS == "windows" {
-		f.File = filepath.ToSlash(f.File)
+
+	if f.Type == AESTypeFile {
+		if runtime.GOOS == "windows" {
+			f.FileName = filepath.ToSlash(f.FileName)
+		}
+		log.Printf("[%s]Filename:%s", runtime.GOOS, f.FileName)
 	}
-	log.Printf("[%s]Filename:%s", runtime.GOOS, f.File)
 
 	if len(f.Key) > 32 || len(f.Key) == 0 {
 
@@ -78,15 +85,15 @@ func (f *FileEncrypt) init() error {
 	return nil
 }
 
-func (f *FileEncrypt) Encrypt() error {
+func (f *AESCrypto) Encrypt() error {
 	return f.execute(ModeEncrypt)
 }
 
-func (f *FileEncrypt) Decrypt() error {
+func (f *AESCrypto) Decrypt() error {
 	return f.execute(ModeDecrypt)
 }
 
-func (f *FileEncrypt) execute(mode int) error {
+func (f *AESCrypto) execute(mode int) error {
 
 	if err := f.init(); err != nil {
 		log.Printf("Init:%v", err)
@@ -97,7 +104,7 @@ func (f *FileEncrypt) execute(mode int) error {
 	var prefix string
 	var bufferSize int
 
-	filepath, filename := path.Split(f.File)
+	filepath, filename := path.Split(f.FileName)
 	// log.Printf("apth:%s", filepath)
 	// log.Printf("name:%s", filename)
 
@@ -111,7 +118,7 @@ func (f *FileEncrypt) execute(mode int) error {
 		bufferSize = 4112
 	}
 
-	inFile, err := os.Open(f.File)
+	inFile, err := os.Open(f.FileName)
 	if err != nil {
 		return err
 	}
@@ -148,7 +155,46 @@ func (f *FileEncrypt) execute(mode int) error {
 	}
 }
 
-func (f *FileEncrypt) DecryptInMemory() (error, []byte) {
+func (f *AESCrypto) EncryptInMemory(plain []byte) (error, []byte) {
+
+	if err := f.init(); err != nil {
+		log.Printf("Init:%v", err)
+		return err, nil
+	}
+
+	var result []byte
+
+	PFunc := f.GCM_encrypt
+	bufferSize := 4112
+
+	if f.Type == AESTypeFile {
+
+		inFile, err := os.Open(f.FileName)
+		if err != nil {
+			return err, nil
+		}
+		defer inFile.Close()
+
+		inFileReader := bufio.NewReader(inFile)
+
+		tmp := make([]byte, bufferSize)
+		for {
+			length, err := inFileReader.Read(tmp)
+			if err == io.EOF && length == 0 {
+				return nil, result
+			}
+
+			plaintext := tmp[:length]
+			ciphertext := PFunc(plaintext)
+			result = append(result, ciphertext...)
+		}
+	} else {
+		return nil, PFunc(plain)
+	}
+
+}
+
+func (f *AESCrypto) DecryptInMemory(encrypted []byte) (error, []byte) {
 
 	if err := f.init(); err != nil {
 		log.Printf("Init:%v", err)
@@ -160,34 +206,40 @@ func (f *FileEncrypt) DecryptInMemory() (error, []byte) {
 	PFunc := f.GCM_decrypt
 	bufferSize := 4112
 
-	inFile, err := os.Open(f.File)
-	if err != nil {
-		return err, nil
-	}
-	defer inFile.Close()
+	if f.Type == AESTypeFile {
 
-	inFileReader := bufio.NewReader(inFile)
-
-	tmp := make([]byte, bufferSize)
-	for {
-		length, err := inFileReader.Read(tmp)
-		if err == io.EOF && length == 0 {
-			return nil, result
+		inFile, err := os.Open(f.FileName)
+		if err != nil {
+			return err, nil
 		}
+		defer inFile.Close()
 
-		plaintext := tmp[:length]
-		ciphertext := PFunc(plaintext)
-		result = append(result, ciphertext...)
+		inFileReader := bufio.NewReader(inFile)
+
+		tmp := make([]byte, bufferSize)
+		for {
+			length, err := inFileReader.Read(tmp)
+			if err == io.EOF && length == 0 {
+				return nil, result
+			}
+
+			plaintext := tmp[:length]
+			ciphertext := PFunc(plaintext)
+			result = append(result, ciphertext...)
+		}
+	} else {
+		return nil, PFunc(encrypted)
 	}
+
 }
 
-func (f *FileEncrypt) GCM_encrypt(plaintext []byte) []byte {
+func (f *AESCrypto) GCM_encrypt(plaintext []byte) []byte {
 	ciphertext := f.aesgcm.Seal(nil, f._nonce, plaintext, nil)
 	// log.Printf("cipher:%x", ciphertext)
 	return ciphertext
 }
 
-func (f *FileEncrypt) GCM_decrypt(ciphertext []byte) []byte {
+func (f *AESCrypto) GCM_decrypt(ciphertext []byte) []byte {
 
 	plaintext, err := f.aesgcm.Open(nil, f._nonce, ciphertext, nil)
 	if err != nil {

@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	Global "madaoQT/config"
-	Mongo "madaoQT/mongo"
 
 	"github.com/kataras/golog"
 )
@@ -203,6 +202,7 @@ type OrderInfo struct {
 type TradeResult struct {
 	Error   error
 	OrderID string
+	Info    *OrderInfo
 }
 
 // DepthTypeBids in which the prices should be from high to low
@@ -444,18 +444,4 @@ func GetPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 	}
 
 	return 0, 0, errors.New("Invalid Period")
-}
-
-func GetExchangeKey(exchange string) (error, *Mongo.ExchangeInfo) {
-	mongo := new(Mongo.ExchangeDB)
-	if mongo.Connect() != nil {
-		return errors.New("Mongo is not connected"), nil
-	}
-
-	err, record := mongo.FindOne(exchange)
-	if err != nil {
-		return errors.New("APIKEY not found"), nil
-	}
-
-	return nil, record
 }

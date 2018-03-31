@@ -45,6 +45,7 @@ const (
 	TaskLostMongodb
 	TaskInvalidInput
 	TaskAPINotFound
+	TaskIOCReturn
 )
 
 var TaskErrorMsg = map[TaskErrorType]string{
@@ -287,6 +288,84 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 			// 	延时
 			Utils.SleepAsyncBySecond(1)
 			continue
+		}
+	}()
+
+	return channel
+
+}
+
+func ProcessTradeRoutineIOC(exchange Exchange.IExchange,
+	tradeConfig Exchange.TradeConfig,
+	dbTrades *Mongo.Trades) chan TradeResult {
+
+	channel := make(chan TradeResult)
+	Logger.Debugf("Trade Params:%v", tradeConfig)
+
+	go func() {
+		defer close(channel)
+
+		var dealAmount, avgPrice float64
+		var trade *Exchange.TradeResult
+		var errorCode TaskErrorType
+
+		var tradePrice, tradeAmount float64
+
+		for {
+
+			tradePrice = getPlacedPrice(tradeConfig.Type, tradeConfig.Price, tradeConfig.Limit)
+
+			trade = exchange.Trade(Exchange.TradeConfig{
+				Pair:   tradeConfig.Pair,
+				Type:   tradeConfig.Type,
+				Amount: tradeConfig.Amount - dealAmount,
+				Price:  tradePrice,
+			})
+
+			if dbTrades != nil {
+				if err := dbTrades.Insert(&Mongo.TradesRecord{
+					Batch:    tradeConfig.Batch,
+					Oper:     Exchange.TradeTypeString[tradeConfig.Type],
+					Exchange: exchange.GetExchangeName(),
+					Pair:     tradeConfig.Pair,
+					Quantity: tradeAmount,
+					Price:    tradePrice,
+					OrderID:  trade.OrderID,
+				}); err != nil {
+					Logger.Errorf("保存交易操作失败:%v", err)
+				}
+			}
+
+			if trade != nil && trade.Error == nil {
+
+				if trade.Info == nil {
+					channel <- TradeResult{
+						Error: TaskIOCReturn,
+					}
+					return
+				} else {
+					dealAmount = trade.Info.DealAmount
+					avgPrice = trade.Info.AvgPrice
+
+					if dbTrades != nil {
+						dbTrades.SetDone(trade.OrderID)
+					}
+					channel <- TradeResult{
+						Error:      TaskErrorSuccess,
+						DealAmount: dealAmount,
+						AvgPrice:   avgPrice,
+					}
+					return
+				}
+
+			} else {
+				Logger.Errorf("交易失败：%v", trade.Error)
+				errorCode = TaskUnableTrade
+				channel <- TradeResult{
+					Error: errorCode,
+				}
+				return
+			}
 		}
 	}()
 
