@@ -156,21 +156,22 @@ func TestGetKlines(t *testing.T) {
 	// log.Printf("Result:%v", result)
 	StrategyTrendTest(result)
 }
-func TestCheckBottomSupport(t *testing.T) {
-	var logs []string
-	binance := new(Binance)
-	binance.SetConfigure(Config{
-		Proxy: "SOCKS5:127.0.0.1:1080",
-	})
 
-	result := binance.GetKline("eth/usdt", KlinePeriod5Min, 500)
+// func TestCheckBottomSupport(t *testing.T) {
+// 	var logs []string
+// 	binance := new(Binance)
+// 	binance.SetConfigure(Config{
+// 		Proxy: "SOCKS5:127.0.0.1:1080",
+// 	})
 
-	logs = CheckBottomSupport("eth", result)
+// 	result := binance.GetKline("eth/usdt", KlinePeriod5Min, 500)
 
-	for _, msg := range logs {
-		log.Printf("Log:%s", msg)
-	}
-}
+// 	logs = CheckBottomSupport("eth", result)
+
+// 	for _, msg := range logs {
+// 		log.Printf("Log:%s", msg)
+// 	}
+// }
 
 func TestKlineRatio(t *testing.T) {
 

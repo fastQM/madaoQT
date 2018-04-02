@@ -332,6 +332,7 @@ func ParsePair(pair string) []string {
 	return strings.Split(pair, "/")
 }
 
+// 20日均线周期波段
 func GetPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 
 	length := len(kline)

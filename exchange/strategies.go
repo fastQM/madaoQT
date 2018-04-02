@@ -19,6 +19,9 @@ func StrategyTrendTest(result []KlineValue) {
 	final := float64(1)
 	var profitSum, lossSum float64
 
+	openLong := true
+	openShort := false
+
 	for i := 30; i <= len(result)-1; i++ {
 		// log.Printf("Current:%s", time.Unix(int64(result[i].OpenTime), 0).String())
 		high, low, err := GetPeriodArea(result[:i])
@@ -44,7 +47,7 @@ func StrategyTrendTest(result []KlineValue) {
 		// log.Printf("Time:%s Avg5:%v Avg10:%v Avg20:%v Diff:%v", time.Unix(int64(result[i].OpenTime), 0), avg5, avg10, avg20, avg10-avg20)
 
 		// if lastDiff > 0 && avg10-avg20 < 0 && (!isIncrease) {
-		if avg10-avg20 < 0 && result[i].Close < low {
+		if avg10-avg20 < 0 && result[i].Close < low && openShort {
 			if avg5 < avg10 {
 				msg := fmt.Sprintf("卖出点:%s 卖出价格:%v", time.Unix(int64(result[i].OpenTime), 0), low)
 				logs = append(logs, msg)
@@ -75,7 +78,7 @@ func StrategyTrendTest(result []KlineValue) {
 				}
 			}
 			// } else if lastDiff < 0 && avg10-avg20 > 0 && isIncrease && result[i].Close > high {
-		} else if avg10-avg20 > 0 && result[i].Close > high {
+		} else if avg10-avg20 > 0 && result[i].Close > high && openLong {
 			if avg5 > avg10 {
 				msg := fmt.Sprintf("买入点:%v 买入价格:%v", time.Unix(int64(result[i].OpenTime), 0), high)
 				logs = append(logs, msg)
