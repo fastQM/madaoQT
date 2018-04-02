@@ -267,8 +267,8 @@ func (p *Binance) Trade(configs TradeConfig) *TradeResult {
 		"symbol":           symbol,
 		"side":             BinanceTradeTypeMap[configs.Type],
 		"type":             "LIMIT",
-		"quantity":         strconv.FormatFloat(configs.Amount, 'f', 2, 64),
-		"price":            strconv.FormatFloat(configs.Price, 'f', 2, 64),
+		"quantity":         strconv.FormatFloat(configs.Amount, 'f', 4, 64),
+		"price":            strconv.FormatFloat(configs.Price, 'f', 4, 64),
 		"timeInForce":      "IOC",
 		"newOrderRespType": "FULL",
 	}); err != nil {
