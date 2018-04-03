@@ -244,19 +244,22 @@ func (p *Binance) GetBalance() map[string]interface{} {
 			return nil
 		}
 
-		// log.Printf("Val:%v", values)
-		balances := make(map[string]interface{})
-		assets := values["balances"].([]interface{})
-		for _, asset := range assets {
-			key := asset.(map[string]interface{})["asset"].(string)
-			value := asset.(map[string]interface{})["free"].(string)
-			balances[key], _ = strconv.ParseFloat(value, 64)
-		}
+		if values["code"] == nil {
+			// log.Printf("Val:%v", values)
+			balances := make(map[string]interface{})
+			assets := values["balances"].([]interface{})
+			for _, asset := range assets {
+				key := asset.(map[string]interface{})["asset"].(string)
+				value := asset.(map[string]interface{})["free"].(string)
+				balances[key], _ = strconv.ParseFloat(value, 64)
+			}
 
-		return balances
+			return balances
+		}
 
 	}
 
+	return nil
 }
 
 // Trade() trade as the configs

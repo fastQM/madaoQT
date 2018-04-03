@@ -1,7 +1,6 @@
 package mongotrend
 
 import (
-	"errors"
 	"log"
 
 	Mongo "madaoQT/mongo"
@@ -12,16 +11,16 @@ import (
 const TrendDataBase = "TrendDB"
 
 type TrendMongo struct {
-	session            *mgo.Session
-	FundCollection     Funds
+	session *mgo.Session
+
 	FundCollectionName string
+	FundCollection     Funds
+
+	BalanceCollectionName string
+	BalanceCollection     Balances
 }
 
 func (p *TrendMongo) Connect() error {
-
-	if p.FundCollectionName == "" {
-		return errors.New("Please assign the collection name")
-	}
 
 	session, err := mgo.Dial(Mongo.MongoURL)
 	if err != nil {
@@ -32,7 +31,17 @@ func (p *TrendMongo) Connect() error {
 	session.SetMode(mgo.Monotonic, true)
 	p.session = session
 
-	p.FundCollection.LoadCollection(p.AddCollection(p.FundCollectionName))
+	if p.FundCollectionName == "" {
+		log.Printf("FundCollectionName is not assgined, and the collection is not valid")
+	} else {
+		p.FundCollection.LoadCollection(p.AddCollection(p.FundCollectionName))
+	}
+
+	if p.BalanceCollectionName == "" {
+		log.Printf("BalanceCollectionName is not assgined, and the collection is not valid")
+	} else {
+		p.BalanceCollection.LoadCollection(p.AddCollection(p.BalanceCollectionName))
+	}
 
 	return nil
 }
