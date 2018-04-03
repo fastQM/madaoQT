@@ -9,6 +9,7 @@ func TestSave(t *testing.T) {
 
 	db := TrendMongo{
 		BalanceCollectionName: "balanceTest",
+		Sock5Proxy:            "SOCKS5:127.0.0.1:1080",
 	}
 	if err := db.Connect(); err != nil {
 		log.Printf("Invalid mongodatabase,%v", err)

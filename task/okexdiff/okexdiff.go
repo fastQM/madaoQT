@@ -418,6 +418,12 @@ func (a *IAnalyzer) Start(configJSON string) error {
 			log.Printf("Fail to get config:%v", err)
 			return errors.New(Task.TaskErrorMsg[Task.TaskInvalidConfig])
 		}
+		a.config = config		var config AnalyzerConfig
+		err := json.Unmarshal([]byte(configJSON), &config)
+		if err != nil {
+			log.Printf("Fail to get config:%v", err)
+			return errors.New(Task.TaskErrorMsg[Task.TaskInvalidConfig])
+		}
 		a.config = config
 	} else {
 		a.config = a.GetDefaultConfig().(AnalyzerConfig)

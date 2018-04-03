@@ -11,7 +11,9 @@ import (
 
 func TestFunds(t *testing.T) {
 
-	db := new(TrendMongo)
+	db := TrendMongo{
+		Sock5Proxy: "SOCKS5:127.0.0.1:1080",
+	}
 	db.Connect()
 
 	openTime, _ := time.Parse(Global.TimeFormat, "2018-03-06 08:00:00")

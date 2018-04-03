@@ -7,6 +7,7 @@ import (
 )
 
 const MongoURL = "mongodb://localhost"
+const MongoServer = "mongodb://34.218.78.117:28017"
 
 // const MongoURL = "mongodb://192.168.0.102"
 const Database = "madaoQT"

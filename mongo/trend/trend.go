@@ -1,10 +1,14 @@
 package mongotrend
 
 import (
+	"errors"
 	"log"
+	"net"
+	"strings"
 
 	Mongo "madaoQT/mongo"
 
+	"golang.org/x/net/proxy"
 	mgo "gopkg.in/mgo.v2"
 )
 
@@ -18,18 +22,49 @@ type TrendMongo struct {
 
 	BalanceCollectionName string
 	BalanceCollection     Balances
+
+	Sock5Proxy string
 }
 
 func (p *TrendMongo) Connect() error {
 
-	session, err := mgo.Dial(Mongo.MongoURL)
-	if err != nil {
-		log.Printf("Connect to Mongo error:%v", err)
-		return err
+	if p.Sock5Proxy == "" {
+		session, err := mgo.Dial(Mongo.MongoURL)
+		if err != nil {
+			log.Printf("Connect to Mongo error:%v", err)
+			return err
+		}
+		p.session = session
+	} else {
+
+		dialInfo, err := mgo.ParseURL(Mongo.MongoServer)
+		if err != nil {
+			return err
+		}
+
+		dialInfo.DialServer = func(addr *mgo.ServerAddr) (net.Conn, error) {
+			values := strings.Split(p.Sock5Proxy, ":")
+			if values[0] == "SOCKS5" {
+				dialer, err := proxy.SOCKS5("tcp", values[1]+":"+values[2], nil, proxy.Direct)
+				if err != nil {
+					return nil, err
+				}
+
+				log.Printf("Server:%v", addr)
+				return dialer.Dial("tcp", addr.String())
+			}
+
+			return nil, errors.New("Invalid protocal")
+		}
+
+		session, err := mgo.DialWithInfo(dialInfo)
+		if err != nil {
+			return err
+		}
+		p.session = session
 	}
 
-	session.SetMode(mgo.Monotonic, true)
-	p.session = session
+	p.session.SetMode(mgo.Monotonic, true)
 
 	if p.FundCollectionName == "" {
 		log.Printf("FundCollectionName is not assgined, and the collection is not valid")
