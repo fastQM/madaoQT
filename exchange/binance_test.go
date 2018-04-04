@@ -163,7 +163,7 @@ func TestGetKlines(t *testing.T) {
 
 	result := binance.GetKline("eth/usdt", KlinePeriod2Hour, 500)
 	// log.Printf("Result:%v", result)
-	StrategyTrendTest(result)
+	StrategyTrendTest(result, true, true)
 }
 
 func TestKlineRatio(t *testing.T) {
@@ -225,7 +225,7 @@ func TestGetBalance(t *testing.T) {
 		Proxy:  "SOCKS5:127.0.0.1:1080",
 	})
 
-	log.Printf("3. BALANCES:%v", binance.GetBalance())
+	log.Printf("BALANCES:%v", binance.GetBalance())
 }
 
 func TestTrade(t *testing.T) {

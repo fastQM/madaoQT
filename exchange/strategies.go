@@ -9,7 +9,7 @@ import (
 const StopLoss = 0.15
 const TargetProfit = 0.05
 
-func StrategyTrendTest(result []KlineValue) {
+func StrategyTrendTest(result []KlineValue, openLong bool, openShort bool) {
 
 	var logs []string
 	var changes []float64
@@ -18,9 +18,6 @@ func StrategyTrendTest(result []KlineValue) {
 	countLoss := 0
 	final := float64(1)
 	var profitSum, lossSum float64
-
-	openLong := true
-	openShort := false
 
 	for i := 30; i <= len(result)-1; i++ {
 		// log.Printf("Current:%s", time.Unix(int64(result[i].OpenTime), 0).String())

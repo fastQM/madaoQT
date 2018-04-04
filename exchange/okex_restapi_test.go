@@ -16,7 +16,7 @@ func TestGetOkexRestAPIKline(t *testing.T) {
 	if len(result) != 0 {
 		log.Printf("共有%d条", len(result))
 
-		StrategyTrendTest(result)
+		StrategyTrendTest(result, true, true)
 	}
 
 }

@@ -21,7 +21,7 @@ type TrendMongo struct {
 	FundCollection     Funds
 
 	BalanceCollectionName string
-	BalanceCollection     Balances
+	BalanceCollection     BalanceStruct
 
 	Server     string
 	Sock5Proxy string
