@@ -152,7 +152,7 @@ func TestGetKlines(t *testing.T) {
 		Proxy: "SOCKS5:127.0.0.1:1080",
 	})
 
-	result := binance.GetKline("eth/usdt", KlinePeriod5Min, 500)
+	result := binance.GetKline("eth/usdt", KlinePeriod2Hour, 500)
 	// log.Printf("Result:%v", result)
 	StrategyTrendTest(result)
 }
@@ -182,7 +182,7 @@ func TestKlineRatio(t *testing.T) {
 		Proxy: "SOCKS5:127.0.0.1:1080",
 	})
 
-	result := binance.GetKline("eth/usdt", KlinePeriod5Min, 500)
+	result := binance.GetKline("eth/usdt", KlinePeriod1Day, 500)
 
 	var lastRatio float64
 

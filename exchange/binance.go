@@ -372,10 +372,24 @@ func (p *Binance) GetKline(pair string, period int, limit int) []KlineValue {
 	symbol := strings.ToUpper(coins[0] + coins[1])
 
 	var interval string
-	if period == KlinePeriod5Min {
+	// if period == KlinePeriod5Min {
+	// 	interval = "5m"
+	// } else if period == KlinePeriod15Min {
+	// 	interval = "15m"
+	// } else if period == KlinePeriod1Day {
+	// 	interval = "1d"
+	// }
+	switch period {
+	case KlinePeriod5Min:
 		interval = "5m"
-	} else if period == KlinePeriod15Min {
+	case KlinePeriod15Min:
 		interval = "15m"
+	case KlinePeriod1Hour:
+		interval = "1h"
+	case KlinePeriod2Hour:
+		interval = "2h"
+	case KlinePeriod1Day:
+		interval = "1d"
 	}
 
 	if err, response := p.marketRequest("/api/v1/klines", map[string]string{

@@ -2,8 +2,11 @@ package mongo
 
 import (
 	"errors"
-	"fmt"
+	"log"
+	"net"
+	"strings"
 
+	"golang.org/x/net/proxy"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -21,19 +24,53 @@ type ExchangeInfo struct {
 type ExchangeDB struct {
 	session    *mgo.Session
 	collection *mgo.Collection
+
+	Server     string
+	Sock5Proxy string
 }
 
-func (t *ExchangeDB) Connect() error {
-	session, err := mgo.Dial(MongoURL)
-	if err != nil {
-		fmt.Println("Connect to Mongo error", err)
-		return err
-	}
-	session.SetMode(mgo.Monotonic, true)
-	c := session.DB(Database).C(ExchangeCollection)
+func (p *ExchangeDB) Connect() error {
 
-	t.session = session
-	t.collection = c
+	if p.Sock5Proxy == "" {
+		session, err := mgo.Dial(MongoURL)
+		if err != nil {
+			log.Printf("Connect to Mongo error:%v", err)
+			return err
+		}
+		p.session = session
+	} else {
+
+		dialInfo, err := mgo.ParseURL(p.Server)
+		if err != nil {
+			return err
+		}
+
+		dialInfo.DialServer = func(addr *mgo.ServerAddr) (net.Conn, error) {
+			values := strings.Split(p.Sock5Proxy, ":")
+			if values[0] == "SOCKS5" {
+				dialer, err := proxy.SOCKS5("tcp", values[1]+":"+values[2], nil, proxy.Direct)
+				if err != nil {
+					return nil, err
+				}
+
+				log.Printf("Server:%v", addr)
+				return dialer.Dial("tcp", addr.String())
+			}
+
+			return nil, errors.New("Invalid protocal")
+		}
+
+		session, err := mgo.DialWithInfo(dialInfo)
+		if err != nil {
+			return err
+		}
+		p.session = session
+	}
+
+	p.session.SetMode(mgo.Monotonic, true)
+	c := p.session.DB(Database).C(ExchangeCollection)
+
+	p.collection = c
 
 	return nil
 }

@@ -23,6 +23,7 @@ type TrendMongo struct {
 	BalanceCollectionName string
 	BalanceCollection     Balances
 
+	Server     string
 	Sock5Proxy string
 }
 
@@ -37,7 +38,7 @@ func (p *TrendMongo) Connect() error {
 		p.session = session
 	} else {
 
-		dialInfo, err := mgo.ParseURL(Mongo.MongoServer)
+		dialInfo, err := mgo.ParseURL(p.Server)
 		if err != nil {
 			return err
 		}

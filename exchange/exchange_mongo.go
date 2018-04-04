@@ -13,12 +13,17 @@ type ExchangeInfo struct {
 	Secret string
 }
 
-func GetExchangeKey(exchange string) (error, *ExchangeInfo) {
-	mongo := new(Mongo.ExchangeDB)
+func GetExchangeKey(mongo *Mongo.ExchangeDB, exchange string) (error, *ExchangeInfo) {
+
+	if mongo == nil {
+		return errors.New("Invalid mongo handler"), nil
+	}
 
 	if err := mongo.Connect(); err != nil {
 		return err, nil
 	}
+
+	defer mongo.Close()
 
 	err, record := mongo.FindOne(exchange)
 	if err != nil {
@@ -45,12 +50,17 @@ func GetExchangeKey(exchange string) (error, *ExchangeInfo) {
 	}
 }
 
-func AddExchangeKey(name string, api string, secret string) error {
-	mongo := new(Mongo.ExchangeDB)
+func AddExchangeKey(mongo *Mongo.ExchangeDB, name string, api string, secret string) error {
+
+	if mongo == nil {
+		return errors.New("Invalid mongo handler")
+	}
 
 	if err := mongo.Connect(); err != nil {
 		return err
 	}
+
+	defer mongo.Close()
 
 	crypto := Utils.AESCrypto{
 		Type: Utils.AESTypeBuffer,
