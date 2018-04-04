@@ -94,14 +94,19 @@ func (p *OkexRestAPI) GetKline(pair string, period int, limit int) []KlineValue 
 	coins := ParsePair(pair)
 	symbol := coins[0] + "_" + coins[1]
 
-	var periodType string
-	if period == KlinePeriod5Min {
-		periodType = "5min"
+	var interval string
+	switch period {
+	case KlinePeriod5Min:
+		interval = "5min"
+	case KlinePeriod2Hour:
+		interval = "2hour"
+	case KlinePeriod1Day:
+		interval = "1day"
 	}
 
 	params := map[string]string{
 		"symbol":        symbol,
-		"type":          periodType,
+		"type":          interval,
 		"contract_type": "quarter",
 	}
 

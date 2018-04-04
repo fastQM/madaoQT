@@ -14,6 +14,10 @@ type BalanceInfo struct {
 type Balance struct {
 	Time time.Time     `json:"time"`
 	Item []BalanceInfo `json:"item"`
+	// Start 资金起始节点
+	Start bool `json:"start"`
+	// Ration 资金使用率
+	Ratio float64 `json:"ratio"`
 }
 
 type Balances struct {

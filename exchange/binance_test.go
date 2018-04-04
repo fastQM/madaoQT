@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"io"
 	"log"
+	Mongo "madaoQT/mongo"
 	"testing"
 	"time"
 )
@@ -26,9 +27,17 @@ func TestGetUnixTime(t *testing.T) {
 		Proxy: "SOCKS5:127.0.0.1:1080",
 	})
 
+	counter := 5
 	for {
 		select {
 		case <-time.After(5 * time.Second):
+
+			if counter > 0 {
+				counter--
+			} else {
+				return
+			}
+
 			kline := binance.GetKline("eth/usdt", KlinePeriod5Min, 50)
 			length := len(kline)
 			if length != 0 {
@@ -157,22 +166,6 @@ func TestGetKlines(t *testing.T) {
 	StrategyTrendTest(result)
 }
 
-// func TestCheckBottomSupport(t *testing.T) {
-// 	var logs []string
-// 	binance := new(Binance)
-// 	binance.SetConfigure(Config{
-// 		Proxy: "SOCKS5:127.0.0.1:1080",
-// 	})
-
-// 	result := binance.GetKline("eth/usdt", KlinePeriod5Min, 500)
-
-// 	logs = CheckBottomSupport("eth", result)
-
-// 	for _, msg := range logs {
-// 		log.Printf("Log:%s", msg)
-// 	}
-// }
-
 func TestKlineRatio(t *testing.T) {
 
 	// var logs []string
@@ -212,8 +205,14 @@ func TestSha256(t *testing.T) {
 	log.Printf("%x", h.Sum(nil))
 }
 
+const MongoServer = "mongodb://34.218.78.117:28017"
+
 func TestGetBalance(t *testing.T) {
-	err, key := GetExchangeKey(NameBinance)
+	mongo := &Mongo.ExchangeDB{
+		Server:     MongoServer,
+		Sock5Proxy: "SOCKS5:127.0.0.1:1080",
+	}
+	err, key := GetExchangeKey(mongo, NameBinance, []byte(""), []byte(""))
 	if err != nil {
 		log.Printf("Err:%v", err)
 		return
@@ -226,11 +225,14 @@ func TestGetBalance(t *testing.T) {
 		Proxy:  "SOCKS5:127.0.0.1:1080",
 	})
 
-	log.Printf("BALANCES:%v", binance.GetBalance())
+	log.Printf("3. BALANCES:%v", binance.GetBalance())
 }
 
 func TestTrade(t *testing.T) {
-	err, key := GetExchangeKey(NameBinance)
+
+	mongo := new(Mongo.ExchangeDB)
+
+	err, key := GetExchangeKey(mongo, NameBinance, nil, nil)
 	if err != nil {
 		log.Printf("Err:%v", err)
 		return
@@ -254,7 +256,8 @@ func TestTrade(t *testing.T) {
 }
 
 func TestGetOrderInfo(t *testing.T) {
-	err, key := GetExchangeKey(NameBinance)
+	mongo := new(Mongo.ExchangeDB)
+	err, key := GetExchangeKey(mongo, NameBinance, nil, nil)
 	if err != nil {
 		log.Printf("Err:%v", err)
 		return

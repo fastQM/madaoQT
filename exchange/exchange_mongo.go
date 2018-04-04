@@ -13,7 +13,7 @@ type ExchangeInfo struct {
 	Secret string
 }
 
-func GetExchangeKey(mongo *Mongo.ExchangeDB, exchange string) (error, *ExchangeInfo) {
+func GetExchangeKey(mongo *Mongo.ExchangeDB, exchange string, key []byte, nonce []byte) (error, *ExchangeInfo) {
 
 	if mongo == nil {
 		return errors.New("Invalid mongo handler"), nil
@@ -31,7 +31,9 @@ func GetExchangeKey(mongo *Mongo.ExchangeDB, exchange string) (error, *ExchangeI
 	}
 
 	crypto := Utils.AESCrypto{
-		Type: Utils.AESTypeBuffer,
+		Type:  Utils.AESTypeBuffer,
+		Key:   key,
+		Nonce: nonce,
 	}
 
 	err, plainAPI := crypto.DecryptInMemory(record.API)
