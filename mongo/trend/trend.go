@@ -51,7 +51,6 @@ func (p *TrendMongo) Connect() error {
 					return nil, err
 				}
 
-				log.Printf("Server:%v", addr)
 				return dialer.Dial("tcp", addr.String())
 			}
 

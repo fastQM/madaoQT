@@ -98,6 +98,8 @@ func (p *OkexRestAPI) GetKline(pair string, period int, limit int) []KlineValue 
 	switch period {
 	case KlinePeriod5Min:
 		interval = "5min"
+	case KlinePeriod15Min:
+		interval = "15min"
 	case KlinePeriod2Hour:
 		interval = "2hour"
 	case KlinePeriod1Day:

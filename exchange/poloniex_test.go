@@ -77,12 +77,12 @@ const Period1Day = 86400
 
 func TestGetKline(t *testing.T) {
 
-	// date1 := time.Date(2017, 1, 1, 0, 0, 0, 0, time.Local)
-	date2 := time.Date(2018, 3, 1, 0, 0, 0, 0, time.Local)
+	// date1 := time.Date(2017, 8, 10, 0, 0, 0, 0, time.Local)
+	date2 := time.Date(2018, 4, 3, 16, 0, 0, 0, time.Local)
 
 	polo := new(PoloniexAPI)
 	// result := polo.GetKline("eth/usdt", date1, &date2, Period5Min)
-	result := polo.GetKline("eth/usdt", date2, nil, Period2H)
+	result := polo.GetKline("eth/usdt", date2, nil, Period15Min)
 
 	StrategyTrendTest(result, true, true)
 }

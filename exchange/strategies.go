@@ -55,7 +55,7 @@ func StrategyTrendTest(result []KlineValue, openLong bool, openShort bool) {
 						change := (low - closePrice) * 100 / low
 						changes = append(changes, change)
 						msg = fmt.Sprintf("平仓日期:%v, 平仓价格:%v, 盈利：%v", time.Unix(int64(result[j].OpenTime), 0), closePrice, change)
-						// log.Printf("%s", msg)
+						log.Printf("%s", msg)
 						if change > 0 {
 							countProfit++
 							profitSum += change
@@ -67,7 +67,7 @@ func StrategyTrendTest(result []KlineValue, openLong bool, openShort bool) {
 						}
 						final *= (1.0 + change/100)
 						final *= 0.999
-						// log.Printf("当前净值:%f", final)
+						log.Printf("当前净值:%f", final)
 						i = j + 1
 						logs = append(logs, msg)
 						break
@@ -92,7 +92,7 @@ func StrategyTrendTest(result []KlineValue, openLong bool, openShort bool) {
 						changes = append(changes, change)
 						msg = fmt.Sprintf("平仓日期:%v, 平仓价格:%v, 盈利：%v", time.Unix(int64(result[j].OpenTime), 0), closePrice, change)
 						logs = append(logs, msg)
-						// log.Printf("%s", msg)
+						log.Printf("%s", msg)
 
 						if change > 0 {
 							countProfit++
@@ -105,7 +105,7 @@ func StrategyTrendTest(result []KlineValue, openLong bool, openShort bool) {
 						}
 						final *= (1.0 + change/100)
 						final *= 0.999
-						// log.Printf("当前净值:%f", final)
+						log.Printf("当前净值:%f", final)
 						i = j + 1
 						break
 					}
