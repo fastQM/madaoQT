@@ -6,6 +6,7 @@ import (
 
 	"github.com/kataras/iris"
 
+	"madaoQT/exchange"
 	Mongo "madaoQT/mongo"
 	OkexDiff "madaoQT/task/okexdiff"
 )
@@ -113,8 +114,18 @@ func (c *ChartsController) GetProfit() iris.Map {
 	}
 }
 
-func (c *ChartsController) GetBalance() iris.Map {
+func (c *ChartsController) GetExamples() iris.Map {
+
+	var result []exchange.KlineValue
+
+	filename := "poloniex-15min"
+
+	result = exchange.LoadHistory(filename)
+
+	areas := exchange.StrategyTrendTest(result, true, true)
+
 	return iris.Map{
-		"result": false,
+		"result": true,
+		"data":   areas,
 	}
 }

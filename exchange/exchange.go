@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	Global "madaoQT/config"
 
@@ -429,6 +430,7 @@ func GetPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 
 	if found {
 		var high, low float64
+		log.Printf("起始点:%s", time.Unix(int64(kline[start].OpenTime), 0))
 		for i := start; i < len(kline)-1; i++ {
 			if high == 0 {
 				high = kline[i].High

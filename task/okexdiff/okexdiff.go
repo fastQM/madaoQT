@@ -418,12 +418,6 @@ func (a *IAnalyzer) Start(configJSON string) error {
 			log.Printf("Fail to get config:%v", err)
 			return errors.New(Task.TaskErrorMsg[Task.TaskInvalidConfig])
 		}
-		a.config = config		var config AnalyzerConfig
-		err := json.Unmarshal([]byte(configJSON), &config)
-		if err != nil {
-			log.Printf("Fail to get config:%v", err)
-			return errors.New(Task.TaskErrorMsg[Task.TaskInvalidConfig])
-		}
 		a.config = config
 	} else {
 		a.config = a.GetDefaultConfig().(AnalyzerConfig)
@@ -478,8 +472,8 @@ func (a *IAnalyzer) Start(configJSON string) error {
 
 	futureExchange := new(Exchange.OKExAPI)
 	futureExchange.SetConfigure(Exchange.Config{
-		API:    record.API,
-		Secret: record.Secret,
+		API:    string(record.API),
+		Secret: string(record.Secret),
 		Custom: map[string]interface{}{
 			"exchangeType": Exchange.ExchangeTypeFuture,
 			"period":       "this_week",
@@ -494,8 +488,8 @@ func (a *IAnalyzer) Start(configJSON string) error {
 
 	Logger.Info("启动OKEx现货监视程序")
 	spotExchange := Exchange.NewOKExSpotApi(&Exchange.Config{
-		API:    record.API,
-		Secret: record.Secret,
+		API:    string(record.API),
+		Secret: string(record.Secret),
 		Proxy:  "SOCKS5:127.0.0.1:1080",
 	})
 

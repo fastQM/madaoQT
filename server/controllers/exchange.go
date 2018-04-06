@@ -104,8 +104,8 @@ func (e *ExchangeController) PostAddkey() iris.Map {
 		// API:    string(encryptedAPI),
 		// Secret: string(encryptedSecret),
 		// User:   username.(string),
-		API:    info.API,
-		Secret: info.Secret,
+		API:    []byte(info.API),
+		Secret: []byte(info.Secret),
 	}); err != nil {
 		errMsg = "Fail to insert record into database"
 		goto _ERROR

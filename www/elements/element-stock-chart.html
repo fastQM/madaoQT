@@ -1,0 +1,134 @@
+<script src="../bower_components/highcharts/highstock.js"></script>
+<script src="../bower_components/highcharts/modules/exporting.js"></script>
+<link rel="import" href="../bower_components/polymer/polymer-element.html">
+<link rel="import" href="../bower_components/iron-ajax/iron-ajax.html">
+<link rel="import" href="../bower_components/paper-button/paper-button.html">
+
+<dom-module id="stock-chart">
+    <template>
+
+        <div id="idProfit" style="height:200px"></div>
+
+        <paper-button class="" on-click="drawDiagram">下一组</paper-button>
+        <iron-ajax
+            url="/api/v1/charts/examples"
+            method="get"
+            content-type="application/json"
+            handle-as="json"
+            on-response="onResult"
+            last-response={{response}}
+            debounce-duration="60000" id="idGetProfit">
+        </iron-ajax>
+    </template>
+    <script>
+        class StockChart extends Polymer.Element {
+            static get is() { return 'stock-chart'; }
+            static get properties() {
+                return {
+                    response: Object,
+                    records: {
+                        type: Array,
+                        value: [{"name":"1"}, {"name":"2"}, {"name":"3"}, {"name":"4"}]
+                    },
+                    index: Number,
+                }
+            }
+            ready(){
+                super.ready()
+                // this.getProfit()
+                this.$.idGetProfit.generateRequest()
+            }
+
+            onResult(){
+                if(this.response.result){
+                    this.records = this.response.data
+                    this.index = 0
+                    this.drawDiagram()
+                }
+            }
+
+            drawDiagram(){
+                var index = this.index;
+                this.index++;
+                var datas = [];
+                var i;
+                for(i=0;i<this.records[index].length;i++)
+                {
+                    datas[i] = []
+                    datas[i][0] = new Date(this.records[index][i].OpenTime*1000).toString()
+                    datas[i][1] = this.records[index][i].Open
+                    datas[i][2] = this.records[index][i].High
+                    datas[i][3] = this.records[index][i].Low
+                    datas[i][4] = this.records[index][i].Close
+                }
+
+                var chart = Highcharts.chart(this.$.idProfit, {
+                    title: {
+                        text: '单日收益走势图'
+                    },
+                    xAxis:{
+                        // categories: times,
+                        // minTickInterval: 2000,
+                        startOnTick: true,
+                    },
+                    yAxis: {
+                        title: {
+                            text: '价格'
+                        }
+                    },
+                    legend: {
+                        layout: 'vertical',
+                        align: 'right',
+                        verticalAlign: 'middle'
+                    },
+                    plotOptions: {
+                        series: {
+                            label: {
+                                connectorAllowed: false
+                            },
+                            // pointStart: 2010
+                        }
+                    },
+                    series: [{
+                        type: 'candlestick',
+                        name: '收益(美金)',
+                        color: 'green',
+                        lineColor: 'green',
+                        upColor: 'red',
+                        upLineColor: 'red',
+                        data: datas,
+                    // }, {
+                    //     name: '现货',
+                    //     data: spots,
+                    // }, {
+                    //     name: '销售',
+                    //     data: [11744, 17722, 16005, 19771, 20185, 24377, 32147, 39387]
+                    // }, {
+                    //     name: '项目开发',
+                    //     data: [null, null, 7988, 12169, 15112, 22452, 34400, 34227]
+                    // }, {
+                    //     name: '其他',
+                    //     data: [12908, 5948, 8105, 11248, 8989, 11816, 18274, 18111]
+                    }],
+                    responsive: {
+                        rules: [{
+                            condition: {
+                                maxWidth:200
+                            },
+                            chartOptions: {
+                                legend: {
+                                    layout: 'horizontal',
+                                    align: 'center',
+                                    verticalAlign: 'bottom'
+                                }
+                            }
+                        }]
+                    }
+                });
+            }
+        }
+
+        window.customElements.define(StockChart.is, StockChart);
+    </script>
+
+</dom-module>
