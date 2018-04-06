@@ -1,8 +1,11 @@
 package exchange
 
 import (
+	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"log"
+	"os"
 	"strings"
 
 	Global "madaoQT/config"
@@ -445,4 +448,52 @@ func GetPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 	}
 
 	return 0, 0, errors.New("Invalid Period")
+}
+
+const Path = "E:\\Backup\\stock\\"
+
+func SaveHistory(code string, klines []KlineValue) {
+
+	file, err := os.Create(Path + code + ".txt")
+	if err != nil {
+		log.Printf("Error1:%v", err)
+		return
+	}
+	defer file.Close()
+
+	for _, kline := range klines {
+		data, err := json.Marshal(kline)
+		if err != nil {
+			log.Printf("Error2:%v", err)
+			return
+		}
+		file.WriteString(string(data) + "\n")
+	}
+}
+
+func LoadHistory(code string) []KlineValue {
+	datas, err := ioutil.ReadFile(Path + code + ".txt")
+	if err != nil {
+		log.Printf("Error3:%v", err)
+		return nil
+	}
+
+	var klines []KlineValue
+	lines := strings.Split(string(datas), "\n")
+	for _, line := range lines {
+		if line != "" {
+			var kline KlineValue
+			// line = strings.Replace(line, "\n", "", 1)
+			// log.Printf("line:%s %x", line, line)
+			err := json.Unmarshal([]byte(line), &kline)
+			if err != nil {
+				log.Printf("Error4:%v", err)
+				return nil
+			}
+
+			klines = append(klines, kline)
+		}
+	}
+
+	return klines
 }
