@@ -3,6 +3,7 @@ package exchange
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -354,7 +355,7 @@ func GetPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 		isOpenLong = false
 	}
 
-	var start int
+	var start, end int
 	found := false
 	if isOpenLong {
 
@@ -376,6 +377,7 @@ func GetPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 			if step == 0 {
 				if avg10 < avg20 {
 					step = 1
+					end = i
 					continue
 				}
 			} else if step == 1 {
@@ -411,6 +413,7 @@ func GetPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 			if step == 0 {
 				if avg10 > avg20 {
 					step = 1
+					end = i
 					continue
 				}
 			} else if step == 1 {
@@ -430,7 +433,12 @@ func GetPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 
 	if found {
 		var high, low float64
-		log.Printf("起始点:%s", time.Unix(int64(kline[start].OpenTime), 0))
+
+		fmt.Sprintf("起始点:%s 结束点:%s 当前:%s",
+			time.Unix(int64(kline[start].OpenTime), 0),
+			time.Unix(int64(kline[end].OpenTime), 0),
+			time.Unix(int64(kline[len(kline)-1].OpenTime), 0))
+
 		for i := start; i < len(kline)-1; i++ {
 			if high == 0 {
 				high = kline[i].High

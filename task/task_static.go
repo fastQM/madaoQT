@@ -62,4 +62,5 @@ type ITask interface {
 	GetPositions() []map[string]interface{}
 	GetFailedPositions() []map[string]interface{}
 	FixFailedPosition(updateJSON string) error
+	ForceClosePositions()
 }
