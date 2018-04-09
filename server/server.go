@@ -142,7 +142,7 @@ func (h *HttpServer) setupTasks() {
 	okexdiff := new(OkexDiff.IAnalyzer)
 	h.Tasks.Store(okexdiff.GetDescription().Name, okexdiff)
 
-	trend := new(Trend.TrendTask)
+	trend := new(Trend.TrendOkex)
 	h.Tasks.Store(trend.GetDescription().Name, trend)
 
 }

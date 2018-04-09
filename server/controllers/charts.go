@@ -8,7 +8,10 @@ import (
 
 	"madaoQT/exchange"
 	Mongo "madaoQT/mongo"
+	MongoTrend "madaoQT/mongo/trend"
+	Task "madaoQT/task"
 	OkexDiff "madaoQT/task/okexdiff"
+	Trend "madaoQT/task/trend"
 )
 
 type ChartsController struct {
@@ -127,5 +130,79 @@ func (c *ChartsController) GetExamples() iris.Map {
 	return iris.Map{
 		"result": true,
 		"data":   areas,
+	}
+}
+
+func (c *ChartsController) GetProfitBy(name string) iris.Map {
+
+	var collection string
+	if name == "binance" {
+		collection = Task.TrendBalanceBinance
+	} else if name == "okex" {
+		collection = Task.TrendBalanceOKEX
+	} else {
+		return iris.Map{
+			"result": false,
+			"error":  errorMessage[errorCodeInvalidParameters],
+		}
+	}
+
+	db := &MongoTrend.TrendMongo{
+		BalanceCollectionName: collection,
+		Server:                Trend.MongoServer,
+		Sock5Proxy:            "SOCKS5:127.0.0.1:1080",
+	}
+	if err := db.Connect(); err != nil {
+		Logger.Errorf("Error3:%v", err)
+		return iris.Map{
+			"result": false,
+			"error":  errorMessage[errorCodeMongoDisconnect],
+		}
+	}
+
+	balanceManager := new(Trend.BalanceManager)
+	balanceManager.Init(&db.BalanceCollection)
+
+	date := time.Date(2018, 4, 1, 0, 0, 0, 0, time.Local)
+	today := time.Now()
+
+	type Item struct {
+		Coin    string
+		Balance float64
+	}
+
+	type Balance struct {
+		Time  time.Time
+		Coins []Item
+	}
+
+	var records []Balance
+
+	for {
+		err, last := balanceManager.GetDialyLast(date)
+		if err == nil {
+			item := Balance{
+				Time: date,
+			}
+
+			item.Coins = make([]Item, len((*last).Item))
+			for i, coin := range (*last).Item {
+				item.Coins[i].Coin = coin.Coin
+				item.Coins[i].Balance = coin.Balance
+			}
+
+			records = append(records, item)
+		}
+
+		if date.AddDate(0, 0, 1).After(today) {
+			break
+		} else {
+			date = date.AddDate(0, 0, 1)
+		}
+	}
+
+	return iris.Map{
+		"result": true,
+		"data":   records,
 	}
 }
