@@ -4,16 +4,39 @@
 <link rel="import" href="../bower_components/iron-ajax/iron-ajax.html">
 
 <dom-module id="profit-chart">
+    <style>
+        .charts{
+            display: block;
+            width: 800px;
+            margin: 20px auto;
+        }
+
+        .chart{
+            margin-top: 10px;
+        }
+    </style>
     <template>
-        <div id="idProfit" style="height:400px">加载中...</div>
+        <div class="charts">
+            <div class="chart" id="idProfitBinance" style="height:400px">加载中...</div>
+            <div class="chart" id="idProfitOkex" style="height:400px">加载中...</div>
+        </div>
         <iron-ajax
-            url="/task/profit"
-            method="post"
+            url="api/v1/charts/profit/binance"
+            method="get"
             content-type="application/json"
             handle-as="json"
-            on-response="onProfit"
-            last-response={{response}}
-            debounce-duration="60000" id="idGetProfit">
+            on-response="onProfitBinance"
+            last-response={{binanceDatas}}
+            debounce-duration="60000" id="idGetProfitBinance">
+        </iron-ajax>
+        <iron-ajax
+            url="api/v1/charts/profit/okex"
+            method="get"
+            content-type="application/json"
+            handle-as="json"
+            on-response="onProfitOkex"
+            last-response={{okexDatas}}
+            debounce-duration="60000" id="idGetProfitOkex">
         </iron-ajax>
     </template>
     <script>
@@ -30,19 +53,33 @@
             }
 
             getProfit(){
-                this.$.idGetProfit.generateRequest()
+                this.$.idGetProfitBinance.generateRequest()
+                this.$.idGetProfitOkex.generateRequest()
             }
 
-            onProfit(){
-                let times, profits
-                if(this.response.result){
-                    profits = this.response.data.profits
-                    times = this.response.data.times
+            onProfitBinance(){
+                let times = [], datas = []
+                if(this.binanceDatas.result){
+                    for(var i=0;i<this.binanceDatas.data.length;i++){
+                        if(i==0){
+                            for(var j=0;j<this.binanceDatas.data[i].Coins.length;j++){
+                                datas[j] = {}
+                                datas[j].data = []
+                                datas[j].name = this.binanceDatas.data[i].Coins[j].Coin
+                            }
+                        }
+
+                        times[i] = this.binanceDatas.data[i].Time
+                        for(var j=0;j<this.binanceDatas.data[i].Coins.length;j++){
+                            datas[j].data[i] = this.binanceDatas.data[i].Coins[j].Balance
+                        }
+
+                    }
                 }
 
-                var chart = Highcharts.chart(this.$.idProfit, {
+                var chart = Highcharts.chart(this.$.idProfitBinance, {
                     title: {
-                        text: '单日收益走势图'
+                        text: '币安日收益走势图'
                     },
                     xAxis:{
                         categories: times,
@@ -67,22 +104,73 @@
                             // pointStart: 2010
                         }
                     },
-                    series: [{
-                        name: '收益(美金)',
-                        data: profits,
-                    // }, {
-                    //     name: '现货',
-                    //     data: spots,
-                    // }, {
-                    //     name: '销售',
-                    //     data: [11744, 17722, 16005, 19771, 20185, 24377, 32147, 39387]
-                    // }, {
-                    //     name: '项目开发',
-                    //     data: [null, null, 7988, 12169, 15112, 22452, 34400, 34227]
-                    // }, {
-                    //     name: '其他',
-                    //     data: [12908, 5948, 8105, 11248, 8989, 11816, 18274, 18111]
-                    }],
+                    series: datas,
+                    responsive: {
+                        rules: [{
+                            condition: {
+                                maxWidth: 500
+                            },
+                            chartOptions: {
+                                legend: {
+                                    layout: 'horizontal',
+                                    align: 'center',
+                                    verticalAlign: 'bottom'
+                                }
+                            }
+                        }]
+                    }
+                });
+            }
+
+            onProfitOkex(){
+                let times = [], datas = []
+                let response = this.okexDatas
+                if(response.result){
+                    for(var i=0;i<response.data.length;i++){
+                        if(i==0){
+                            for(var j=0;j<response.data[i].Coins.length;j++){
+                                datas[j] = {}
+                                datas[j].data = []
+                                datas[j].name = response.data[i].Coins[j].Coin
+                            }
+                        }
+
+                        times[i] = response.data[i].Time
+                        for(var j=0;j<response.data[i].Coins.length;j++){
+                            datas[j].data[i] = response.data[i].Coins[j].Balance
+                        }
+
+                    }
+                }
+
+                var chart = Highcharts.chart(this.$.idProfitOkex, {
+                    title: {
+                        text: 'OKEX日收益走势图'
+                    },
+                    xAxis:{
+                        categories: times,
+                        // minTickInterval: 2000,
+                        startOnTick: true,
+                    },
+                    yAxis: {
+                        title: {
+                            text: '价格'
+                        }
+                    },
+                    legend: {
+                        layout: 'vertical',
+                        align: 'right',
+                        verticalAlign: 'middle'
+                    },
+                    plotOptions: {
+                        series: {
+                            label: {
+                                connectorAllowed: false
+                            },
+                            // pointStart: 2010
+                        }
+                    },
+                    series: datas,
                     responsive: {
                         rules: [{
                             condition: {

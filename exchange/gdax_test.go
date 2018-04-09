@@ -14,7 +14,7 @@ func TestGdaxGetKline(t *testing.T) {
 		Proxy: "SOCKS5:127.0.0.1:1080",
 	})
 
-	result := gdax.GetKline("eth/usdt", nil, nil, Period15Min, 0)
+	result := gdax.GetKline("btc/usdt", nil, nil, Period15Min, 0)
 	StrategyTrendTest(result, true, true)
 	// count := 13
 
