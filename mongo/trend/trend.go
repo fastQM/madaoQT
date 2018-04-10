@@ -30,7 +30,7 @@ type TrendMongo struct {
 func (p *TrendMongo) Connect() error {
 
 	if p.Sock5Proxy == "" {
-		session, err := mgo.Dial(Mongo.MongoURL)
+		session, err := mgo.Dial(p.Server)
 		if err != nil {
 			log.Printf("Connect to Mongo error:%v", err)
 			return err
