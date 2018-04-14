@@ -161,7 +161,7 @@ func TestGetKlines(t *testing.T) {
 		Proxy: "SOCKS5:127.0.0.1:1080",
 	})
 
-	result := binance.GetKline("btc/usdt", KlinePeriod2Hour, 500)
+	result := binance.GetKline("eth/usdt", KlinePeriod15Min, 500)
 	// log.Printf("Result:%v", result)
 	StrategyTrendTest(result, true, true)
 }
