@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"log"
+	"strings"
 	"time"
 
 	"github.com/kataras/iris"
@@ -133,13 +134,13 @@ func (c *ChartsController) GetExamples() iris.Map {
 	}
 }
 
-func (c *ChartsController) GetProfitBy(name string) iris.Map {
+func (c *ChartsController) GetProfitBy(name string, coin string) iris.Map {
 
 	var collection string
 	if name == "binance" {
-		collection = Task.TrendBalanceBinance
+		collection = Task.TrendBalanceBinance + "_" + strings.ToUpper(exchange.ParsePair(coin)[0])
 	} else if name == "okex" {
-		collection = Task.TrendBalanceOKEX
+		collection = Task.TrendBalanceOKEX + "_" + strings.ToUpper(exchange.ParsePair(coin)[0])
 	} else {
 		return iris.Map{
 			"result": false,

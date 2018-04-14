@@ -21,7 +21,7 @@
             <div class="chart" id="idProfitOkex" style="height:400px">加载中...</div>
         </div>
         <iron-ajax
-            url="api/v1/charts/profit/binance"
+            url="api/v1/charts/profit/binance/eth"
             method="get"
             content-type="application/json"
             handle-as="json"
@@ -30,7 +30,7 @@
             debounce-duration="60000" id="idGetProfitBinance">
         </iron-ajax>
         <iron-ajax
-            url="api/v1/charts/profit/okex"
+            url="api/v1/charts/profit/okex/eth"
             method="get"
             content-type="application/json"
             handle-as="json"

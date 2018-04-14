@@ -257,6 +257,7 @@ type IExchange interface {
 	GetKline(pair string, period int, limit int) []KlineValue
 }
 
+// 以分钟为单位
 const KlinePeriod5Min = 5
 const KlinePeriod15Min = 15
 const KlinePeriod30Min = 30
@@ -440,16 +441,20 @@ func GetPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 			time.Unix(int64(kline[len(kline)-1].OpenTime), 0))
 
 		for i := start; i < len(kline)-1; i++ {
+			// tmp := (kline[i].Close + kline[i].High) / 2
+			tmp := kline[i].High
 			if high == 0 {
-				high = kline[i].High
-			} else if high < kline[i].High {
-				high = kline[i].High
+				high = tmp
+			} else if high < tmp {
+				high = tmp
 			}
 
+			// tmp = (kline[i].Close + kline[i].Low) / 2
+			tmp = kline[i].Low
 			if low == 0 {
-				low = kline[i].Low
-			} else if low > kline[i].Low {
-				low = kline[i].Low
+				low = tmp
+			} else if low > tmp {
+				low = tmp
 			}
 		}
 
