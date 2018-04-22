@@ -1,6 +1,7 @@
 package exchange
 
 import (
+	"log"
 	"testing"
 )
 
@@ -31,4 +32,17 @@ func TestGdaxGetKline(t *testing.T) {
 	// 	}
 	// }
 
+}
+
+func TestGdaxGetTicker(t *testing.T) {
+
+	// date1 := time.Date(2018, 1, 10, 0, 0, 0, 0, time.Local)
+	// date2 := time.Date(2018, 4, 1, 0, 0, 0, 0, time.Local)
+
+	gdax := new(ExchangeGdax)
+	gdax.SetConfigure(Config{
+		Proxy: "SOCKS5:127.0.0.1:1080",
+	})
+
+	log.Printf("Ticker:%v", gdax.GetTicker("eth/usdt"))
 }

@@ -3,6 +3,7 @@ package exchange
 import (
 	"encoding/json"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -35,16 +36,28 @@ func (p *ExchangeGdax) SetConfigure(config Config) {
 }
 
 func (p *ExchangeGdax) marketRequest(path string, params map[string]string) (error, []byte) {
-	var req http.Request
-	req.ParseForm()
-	for k, v := range params {
-		req.Form.Add(k, v)
-	}
-	bodystr := strings.TrimSpace(req.Form.Encode())
-	logger.Debugf("Params:%v Path:%s", bodystr, GdaxURL+path+"?"+bodystr)
-	request, err := http.NewRequest("GET", GdaxURL+path+"?"+bodystr, nil)
-	if err != nil {
-		return err, nil
+
+	var request *http.Request
+	var err error
+
+	if params != nil {
+		var req http.Request
+		req.ParseForm()
+		for k, v := range params {
+			req.Form.Add(k, v)
+		}
+		bodystr := strings.TrimSpace(req.Form.Encode())
+		logger.Debugf("Params:%v Path:%s", bodystr, GdaxURL+path+"?"+bodystr)
+		request, err = http.NewRequest("GET", GdaxURL+path+"?"+bodystr, nil)
+		if err != nil {
+			return err, nil
+		}
+	} else {
+		request, err = http.NewRequest("GET", GdaxURL+path, nil)
+		if err != nil {
+			return err, nil
+		}
+
 	}
 
 	// setup a http client
@@ -75,7 +88,7 @@ func (p *ExchangeGdax) marketRequest(path string, params map[string]string) (err
 	if err != nil {
 		return err, nil
 	}
-	// log.Printf("Body:%v", string(body))
+	log.Printf("Body:%v", string(body))
 	// var value map[string]interface{}
 	// if err = json.Unmarshal(body, &value); err != nil {
 	// 	return err, nil
@@ -146,4 +159,38 @@ func (p *ExchangeGdax) GetKline(pair string, startUnixTime *time.Time, endUnixTi
 
 		return nil
 	}
+}
+
+func (p *ExchangeGdax) GetTicker(pair string) *TickerValue {
+
+	pair = strings.Replace(pair, "usdt", "usd", 1)
+	coins := ParsePair(pair)
+	symbol := strings.ToUpper(coins[0]) + "-" + strings.ToUpper(coins[1])
+
+	if err, response := p.marketRequest("/products/"+symbol+"/ticker", nil); err != nil {
+		logger.Errorf("无效数据:%v", err)
+		return nil
+	} else {
+
+		var values map[string]interface{}
+		if response != nil {
+			if err = json.Unmarshal(response, &values); err != nil {
+				logger.Errorf("Fail to Unmarshal:%v", err)
+				return nil
+			}
+
+			last, _ := strconv.ParseFloat(values["price"].(string), 64)
+			volume, _ := strconv.ParseFloat(values["volume"].(string), 64)
+			tickerValue := &TickerValue{
+				Last:   last,
+				Time:   values["time"].(string),
+				Volume: volume,
+			}
+
+			return tickerValue
+		}
+
+	}
+
+	return nil
 }
