@@ -441,16 +441,16 @@ func GetPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 			time.Unix(int64(kline[len(kline)-1].OpenTime), 0))
 
 		for i := start; i < len(kline)-1; i++ {
-			// tmp := (kline[i].Close + kline[i].High) / 2
-			tmp := kline[i].High
+			tmp := (kline[i].Close*0.8 + kline[i].High*0.2)
+			// tmp := kline[i].High
 			if high == 0 {
 				high = tmp
 			} else if high < tmp {
 				high = tmp
 			}
 
-			// tmp = (kline[i].Close + kline[i].Low) / 2
-			tmp = kline[i].Low
+			tmp = (kline[i].Close*0.8 + kline[i].Low*0.2)
+			// tmp = kline[i].Low
 			if low == 0 {
 				low = tmp
 			} else if low > tmp {

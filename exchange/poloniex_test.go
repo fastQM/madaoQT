@@ -78,7 +78,7 @@ const Period1Day = 86400
 func TestGetKline(t *testing.T) {
 
 	// date1 := time.Date(2017, 8, 10, 0, 0, 0, 0, time.Local)
-	date2 := time.Date(2018, 4, 1, 0, 0, 0, 0, time.Local)
+	date2 := time.Date(2016, 1, 1, 0, 0, 0, 0, time.Local)
 
 	polo := new(PoloniexAPI)
 	// result := polo.GetKline("eth/usdt", date1, &date2, Period5Min)
@@ -86,7 +86,7 @@ func TestGetKline(t *testing.T) {
 
 	filename := "poloniex-2hour"
 
-	if true {
+	if false {
 		result = polo.GetKline("eth/usdt", date2, nil, Period2H)
 		SaveHistory(filename, result)
 	} else {
