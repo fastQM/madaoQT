@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	Websocket "github.com/gorilla/websocket"
 	"golang.org/x/net/proxy"
@@ -23,7 +22,47 @@ type ExchangeGdax struct {
 }
 
 func (p *ExchangeGdax) GetExchangeName() string {
-	return NameGdax
+	return NameBitmex
+}
+
+// WatchEvent() return a channel which notified the application of the event triggered by exchange
+func (p *ExchangeGdax) WatchEvent() chan EventType {
+	return p.event
+}
+
+func (p *ExchangeGdax) Start() error {
+	return nil
+}
+
+// Close() close the connection to the exchange and other handles
+func (p *ExchangeGdax) Close() {
+
+}
+
+// StartTicker() send message to the exchange to start the ticker of the given pairs
+func (p *ExchangeGdax) StartTicker(pair string) {
+}
+
+// CancelOrder() cancel the order as the order information
+func (p *ExchangeGdax) CancelOrder(order OrderInfo) *TradeResult {
+	return nil
+}
+
+// GetOrderInfo() get the information with order filter
+func (p *ExchangeGdax) GetOrderInfo(filter OrderInfo) []OrderInfo {
+	return nil
+}
+
+func (p *ExchangeGdax) GetBalance() map[string]interface{} {
+	return nil
+}
+
+func (p *ExchangeGdax) GetDepthValue(pair string) [][]DepthPrice {
+	return nil
+}
+
+func (p *ExchangeGdax) Trade(configs TradeConfig) *TradeResult {
+	return nil
 }
 
 // SetConfigure()
@@ -98,7 +137,7 @@ func (p *ExchangeGdax) marketRequest(path string, params map[string]string) (err
 
 }
 
-func (p *ExchangeGdax) GetKline(pair string, startUnixTime *time.Time, endUnixTime *time.Time, interval int, limit int) []KlineValue {
+func (p *ExchangeGdax) GetKline(pair string, interval int, limit int) []KlineValue {
 
 	pair = strings.Replace(pair, "usdt", "usd", 1)
 	coins := ParsePair(pair)
@@ -111,16 +150,16 @@ func (p *ExchangeGdax) GetKline(pair string, startUnixTime *time.Time, endUnixTi
 	}
 
 	// 2014-11-06T10:34:47.123456Z
-	var start, end string
-	if startUnixTime != nil {
-		start = startUnixTime.UTC().Format(time.RFC3339)
-		params["start"] = start
-	}
+	// var start, end string
+	// if startUnixTime != nil {
+	// 	start = startUnixTime.UTC().Format(time.RFC3339)
+	// 	params["start"] = start
+	// }
 
-	if endUnixTime != nil {
-		end = endUnixTime.UTC().Format(time.RFC3339)
-		params["end"] = end
-	}
+	// if endUnixTime != nil {
+	// 	end = endUnixTime.UTC().Format(time.RFC3339)
+	// 	params["end"] = end
+	// }
 
 	if err, response := p.marketRequest("/products/"+symbol+"/candles", params); err != nil {
 		logger.Errorf("无效数据:%v", err)

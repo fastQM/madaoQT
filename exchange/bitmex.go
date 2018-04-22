@@ -66,6 +66,14 @@ func (p *ExchangeBitmex) GetOrderInfo(filter OrderInfo) []OrderInfo {
 	return nil
 }
 
+func (p *ExchangeBitmex) GetKline(pair string, period int, limit int) []KlineValue {
+	return nil
+}
+
+func (p *ExchangeBitmex) GetTicker(pair string) *TickerValue {
+	return nil
+}
+
 // SetConfigure()
 func (p *ExchangeBitmex) SetConfigure(config Config) {
 	p.config = config
@@ -219,7 +227,7 @@ func (p *ExchangeBitmex) GetBalance() map[string]interface{} {
 		if values["code"] == nil {
 			balance := values["amount"].(float64) / 1e8
 			return map[string]interface{}{
-				"XBt": balance,
+				"btc": balance,
 			}
 		}
 
