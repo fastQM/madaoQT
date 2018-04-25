@@ -88,7 +88,7 @@ func TestBitmexTrade(t *testing.T) {
 		Pair:   "XBTUSD",
 		Type:   TradeTypeBuy,
 		Amount: 50,
-		Price:  8880})
+		Price:  8880.72})
 
 	log.Printf("Result:%v", result)
 }

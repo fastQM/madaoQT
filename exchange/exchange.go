@@ -338,8 +338,115 @@ func ParsePair(pair string) []string {
 	return strings.Split(pair, "/")
 }
 
+func GetCurrentPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
+
+	length := len(kline)
+
+	array10 := kline[length-10 : length]
+	array20 := kline[length-20 : length]
+
+	avg10 := GetAverage(10, array10)
+	avg20 := GetAverage(20, array20)
+
+	var isOpenLong bool
+	if avg10 > avg20 {
+		isOpenLong = true
+	} else {
+		isOpenLong = false
+	}
+
+	var start, end int
+	found := false
+	if isOpenLong {
+
+		for i := len(kline) - 1; i >= 0; i-- {
+
+			if i-20 < 0 {
+				return 0, 0, errors.New("Invalid Period")
+			}
+
+			array10 := kline[i-10 : i]
+			array20 := kline[i-20 : i]
+
+			avg10 := GetAverage(10, array10)
+			avg20 := GetAverage(20, array20)
+
+			if avg10 < avg20 {
+				start = i
+				found = true
+				break
+			} else {
+				continue
+			}
+		}
+
+	} else {
+
+		for i := len(kline) - 1; i >= 0; i-- {
+
+			if i-20 < 0 {
+				return 0, 0, errors.New("Invalid Period")
+			}
+
+			array10 := kline[i-10 : i]
+			array20 := kline[i-20 : i]
+
+			avg10 := GetAverage(10, array10)
+			avg20 := GetAverage(20, array20)
+
+			if avg10 > avg20 {
+				start = i
+				found = true
+				break
+			} else {
+				continue
+			}
+
+		}
+	}
+
+	if found {
+		var high, low float64
+		end = length - 1
+
+		fmt.Sprintf("起始点:%s 结束点(当前):%s ",
+			time.Unix(int64(kline[start].OpenTime), 0),
+			time.Unix(int64(kline[end].OpenTime), 0))
+
+		// log.Printf("起始点:%v 结束点(当前):%v",
+		// 	kline[start].OpenTime,
+		// 	kline[end].OpenTime)
+
+		if len(kline[start:]) == 1 {
+			return kline[start].High, kline[start].Low, nil
+
+		} else {
+			for i := start; i < len(kline)-1; i++ {
+				tmp := kline[i].High
+				if high == 0 {
+					high = tmp
+				} else if high < tmp {
+					high = tmp
+				}
+
+				tmp = kline[i].Low
+				if low == 0 {
+					low = tmp
+				} else if low > tmp {
+					low = tmp
+				}
+			}
+
+			return high, low, nil
+		}
+
+	}
+
+	return 0, 0, errors.New("Invalid Period")
+}
+
 // 20日均线周期波段
-func GetPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
+func GetLastPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 
 	length := len(kline)
 

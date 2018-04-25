@@ -3,7 +3,6 @@ package exchange
 import (
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,7 +12,7 @@ import (
 )
 
 const NameGdax = "Gdax"
-const GdaxURL = "https://api.gdax.com/"
+const GdaxURL = "https://api.gdax.com"
 
 type ExchangeGdax struct {
 	websocket *Websocket.Conn
@@ -127,7 +126,7 @@ func (p *ExchangeGdax) marketRequest(path string, params map[string]string) (err
 	if err != nil {
 		return err, nil
 	}
-	log.Printf("Body:%v", string(body))
+	// log.Printf("Body:%v", string(body))
 	// var value map[string]interface{}
 	// if err = json.Unmarshal(body, &value); err != nil {
 	// 	return err, nil
