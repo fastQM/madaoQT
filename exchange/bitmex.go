@@ -90,7 +90,7 @@ func (p *ExchangeBitmex) orderRequest(method string, path string, params map[str
 		req.Form.Add(k, v)
 	}
 	bodystr := strings.TrimSpace(req.Form.Encode())
-	logger.Debugf("Params:%v Path:%s", bodystr, BitmexAPIRoot+path+"?"+bodystr)
+	logger.Debugf("Params:%v Path:%s", params, BitmexAPIRoot+path+"?"+bodystr)
 
 	var request *http.Request
 	var err error
@@ -146,7 +146,7 @@ func (p *ExchangeBitmex) orderRequest(method string, path string, params map[str
 	if err != nil {
 		return err, nil
 	}
-	log.Printf("Body:%v", string(body))
+	// log.Printf("Body:%v", string(body))
 	// var value map[string]interface{}
 	// if err = json.Unmarshal(body, &value); err != nil {
 	// 	return err, nil
@@ -154,7 +154,7 @@ func (p *ExchangeBitmex) orderRequest(method string, path string, params map[str
 
 	// log.Printf("Header:%v", resp.Header)
 	limit, _ := strconv.ParseInt(resp.Header["X-Ratelimit-Remaining"][0], 10, 64)
-	log.Printf("Access Limit:%d", limit)
+	logger.Infof("Access Limit:%d", limit)
 
 	return nil, body
 }
@@ -218,6 +218,7 @@ func (p *ExchangeBitmex) GetBalance() map[string]interface{} {
 		logger.Errorf("无法获取余额:%v", err)
 		return nil
 	} else {
+		// log.Printf("balance:%v", string(response))
 		var values map[string]interface{}
 		if err = json.Unmarshal(response, &values); err != nil {
 			logger.Errorf("解析错误:%v", err)
@@ -245,7 +246,7 @@ func (p *ExchangeBitmex) Trade(configs TradeConfig) *TradeResult {
 		"side":        BitmexTradeTypeMap[configs.Type],
 		"orderType":   "Limit",
 		"orderQty":    strconv.FormatFloat(configs.Amount, 'f', 4, 64),
-		"price":       strconv.FormatFloat(configs.Price, 'f', 2, 64),
+		"price":       strconv.FormatFloat(configs.Price, 'f', 0, 64),
 		"timeInForce": "ImmediateOrCancel",
 	}); err != nil {
 		logger.Errorf("下单失败:%v", err)
@@ -390,7 +391,7 @@ func (p *ExchangeBitmex) GetDepthValue(pair string) [][]DepthPrice {
 			}
 		}
 
-		list[DepthTypeAsks] = askList
+		list[DepthTypeAsks] = revertDepthArray(askList)
 		list[DepthTypeBids] = bidList
 
 		return list
@@ -401,7 +402,7 @@ func (p *ExchangeBitmex) GetDepthValue(pair string) [][]DepthPrice {
 
 func (p *ExchangeBitmex) sign(method string, path string, expire string, data string) string {
 	plain := method + path + expire + data
-	log.Printf("Plain:%s", plain)
+	// log.Printf("Plain:%s", plain)
 	h := hmac.New(sha256.New, []byte(p.config.Secret))
 	io.WriteString(h, plain)
 
