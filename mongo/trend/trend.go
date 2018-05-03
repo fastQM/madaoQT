@@ -17,11 +17,14 @@ const TrendDataBase = "TrendDB"
 type TrendMongo struct {
 	session *mgo.Session
 
-	FundCollectionName string
-	FundCollection     Funds
+	TradeCollectionName string
+	TradeCollection     Trades
 
 	BalanceCollectionName string
 	BalanceCollection     BalanceStruct
+
+	FundCollectionName string
+	FundCollection     Funds
 
 	Server     string
 	Sock5Proxy string
@@ -66,16 +69,22 @@ func (p *TrendMongo) Connect() error {
 
 	p.session.SetMode(mgo.Monotonic, true)
 
-	if p.FundCollectionName == "" {
-		log.Printf("FundCollectionName is not assgined, and the collection is not valid")
+	if p.TradeCollectionName == "" {
+		log.Printf("TradeCollectionName is not assgined, and the collection is not valid")
 	} else {
-		p.FundCollection.LoadCollection(p.AddCollection(p.FundCollectionName))
+		p.TradeCollection.LoadCollection(p.AddCollection(p.TradeCollectionName))
 	}
 
 	if p.BalanceCollectionName == "" {
 		log.Printf("BalanceCollectionName is not assgined, and the collection is not valid")
 	} else {
 		p.BalanceCollection.LoadCollection(p.AddCollection(p.BalanceCollectionName))
+	}
+
+	if p.FundCollectionName == "" {
+		log.Printf("FundCollectionName is not assgined, and the collection is not valid")
+	} else {
+		p.FundCollection.LoadCollection(p.AddCollection(p.FundCollectionName))
 	}
 
 	return nil
