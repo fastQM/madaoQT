@@ -227,7 +227,7 @@ func (p *FXCM) openTrade(configs TradeConfig) *TradeResult {
 
 	if err, response := p.marketRequest("POST", "/trading/open_trade", map[string]string{
 		"symbol":     configs.Pair,
-		"account_id": "96080958",
+		"account_id": p.config.Custom["account"].(string),
 		// "trade_id":   "32992577",
 		"is_buy": FxcmTradeTypeMap[configs.Type],
 		"amount": strconv.FormatFloat(configs.Amount, 'f', 2, 64),
