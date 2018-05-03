@@ -16,18 +16,18 @@ func TestSave(t *testing.T) {
 		return
 	}
 
-	eth := BalanceInfo{
+	eth := BalanceItemInfo{
 		Coin:    "eth",
 		Balance: 100,
 	}
 
-	usdt := BalanceInfo{
+	usdt := BalanceItemInfo{
 		Coin:    "usdt",
 		Balance: 1000,
 	}
 
-	var balances Balance
-	balances.Item = make([]BalanceInfo, 2)
+	var balances BalanceInfo
+	balances.Item = make([]BalanceItemInfo, 2)
 	balances.Item[0] = eth
 	balances.Item[1] = usdt
 	db.BalanceCollection.Insert(balances)

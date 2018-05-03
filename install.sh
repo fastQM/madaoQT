@@ -7,3 +7,4 @@ go get github.com/valyala/bytebufferpool
 go get github.com/robfig/cron
 go get golang.org/x/crypto/ssh/terminal
 go get golang.org/x/net/proxy
+go get github.com/googollee/go-socket.io
