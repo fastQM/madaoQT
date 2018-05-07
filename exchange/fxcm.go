@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	socketio "github.com/graarh/golang-socketio"
 	"github.com/graarh/golang-socketio/transport"
@@ -68,6 +69,8 @@ func (p *FXCM) GetDepthValue(pair string) [][]DepthPrice {
 
 func (p *FXCM) Start() error {
 
+	logger.Infof("启动socket")
+	p.event = make(chan EventType)
 	token := p.config.Custom["token"].(string)
 	socket, err := socketio.Dial(WssFXCMUrl+"/socket.io/?EIO=3&transport=websocket&access_token="+token,
 		transport.GetDefaultWebsocketTransport())
@@ -78,13 +81,25 @@ func (p *FXCM) Start() error {
 	socket.On(socketio.OnConnection, func(c *socketio.Channel, args interface{}) {
 		log.Printf("Socket Connected[%s]", c.Id())
 		p.socket = socket
+		go p.triggerEvent(EventConnected)
+	})
+
+	socket.On(socketio.OnDisconnection, func(c *socketio.Channel, args interface{}) {
+		log.Printf("Socket Disonnected:%v", args)
+		p.socket = nil
+		go p.triggerEvent(EventLostConnection)
 	})
 
 	socket.On(socketio.OnError, func(c *socketio.Channel) {
 		log.Printf("Error occurs")
+		go p.triggerEvent(EventLostConnection)
 	})
 
 	return nil
+}
+
+func (o *FXCM) triggerEvent(event EventType) {
+	o.event <- event
 }
 
 func (p *FXCM) marketRequest(method, path string, params map[string]string) (error, []byte) {
@@ -102,7 +117,7 @@ func (p *FXCM) marketRequest(method, path string, params map[string]string) (err
 		}
 
 	}
-	logger.Debugf("Params:%s auth[%s]", bodystr, "Bearer "+p.socket.Id()+p.config.Custom["token"].(string))
+	// logger.Debugf("Params:%s auth[%s]", bodystr, "Bearer "+p.socket.Id()+p.config.Custom["token"].(string))
 
 	var request *http.Request
 	var err error
@@ -151,7 +166,25 @@ func (p *FXCM) marketRequest(method, path string, params map[string]string) (err
 	if err != nil {
 		return err, nil
 	}
-	log.Printf("Body:%v", string(body))
+
+	keywords := []string{
+		"candles",
+		"pairs",
+	}
+
+	filtered := false
+
+	for _, keyword := range keywords {
+		if strings.Contains(string(body), keyword) {
+			filtered = true
+			break
+		}
+	}
+
+	if !filtered {
+		log.Printf("Body:%v", string(body))
+	}
+
 	// var value map[string]interface{}
 	// if err = json.Unmarshal(body, &value); err != nil {
 	// 	return err, nil
@@ -176,13 +209,18 @@ func (p *FXCM) GetBalance() map[string]interface{} {
 			return nil
 		}
 
-		if values["response"] != nil && values["response"].(map[string]interface{})["executed"].(bool) == true {
+		if values["response"] != nil && values["response"].(map[string]interface{})["executed"].(bool) != true {
 			logger.Errorf("无法获取余额:%v", err)
 			return nil
 		}
 
-		return map[string]interface{}{
-			"balance": values["balance"].(float64),
+		accounts := values["accounts"].([]interface{})
+		for _, account := range accounts {
+			if account.(map[string]interface{})["accountId"].(string) == p.config.Custom["account"].(string) {
+				return map[string]interface{}{
+					"balance": account.(map[string]interface{})["balance"].(float64),
+				}
+			}
 		}
 
 	}
@@ -195,7 +233,7 @@ func (p *FXCM) GetTicker(pair string) *TickerValue {
 	if err, response := p.marketRequest("POST", "/subscribe", map[string]string{
 		"pairs": pair,
 	}); err != nil {
-		logger.Errorf("无法获取当前价格:%v", err)
+		logger.Errorf("无法获取ticker值:%v", err)
 		return nil
 	} else {
 		var values map[string]interface{}
@@ -204,13 +242,24 @@ func (p *FXCM) GetTicker(pair string) *TickerValue {
 			return nil
 		}
 
-		log.Printf("values:%v", values)
-		if values["code"] == nil {
-			// log.Printf("Val:%v", values)
+		if values["response"] != nil && values["response"].(map[string]interface{})["executed"].(bool) != true {
+			logger.Errorf("无法获取ticker值:%v", err)
+			return nil
+		}
+
+		pairs := values["pairs"].([]interface{})
+		if pairs != nil && len(pairs) > 0 {
+			rates := pairs[len(pairs)-1].(map[string]interface{})["Rates"].([]interface{})
+			return &TickerValue{
+				High: rates[2].(float64),
+				Low:  rates[3].(float64),
+				Last: (rates[0].(float64) + rates[1].(float64)) / 2,
+				Time: time.Unix(int64(pairs[len(pairs)-1].(map[string]interface{})["Updated"].(float64)), 0).String(),
+			}
 		}
 
 		p.socket.On(pair, func(c *socketio.Channel, args interface{}) {
-			log.Printf("Values:%v", args)
+			log.Printf("[IGNORE]Values:%v", args)
 		})
 
 	}
@@ -249,7 +298,7 @@ func (p *FXCM) openTrade(configs TradeConfig) *TradeResult {
 			}
 		}
 
-		if values["response"] != nil && values["response"].(map[string]interface{})["executed"].(bool) == true {
+		if values["response"] != nil && values["response"].(map[string]interface{})["executed"].(bool) != true {
 			return &TradeResult{
 				Error: errors.New("Fail to executed"),
 			}
@@ -293,7 +342,7 @@ func (p *FXCM) closeTrade(configs TradeConfig) *TradeResult {
 			}
 		}
 
-		if values["response"] != nil && values["response"].(map[string]interface{})["executed"].(bool) == true {
+		if values["response"] != nil && values["response"].(map[string]interface{})["executed"].(bool) != true {
 			return &TradeResult{
 				Error: errors.New("Fail to executed"),
 			}
@@ -328,20 +377,41 @@ func (p *FXCM) Trade(configs TradeConfig) *TradeResult {
 	return nil
 }
 
-func (p *FXCM) GetOpenPositions() {
+func (p *FXCM) GetOpenPositions() []OrderInfo {
 	if err, response := p.marketRequest("GET", "/trading/get_model", map[string]string{
 		"models": "OpenPosition",
 	}); err != nil {
-		logger.Errorf("下单失败:%v", err)
-		return
+		logger.Errorf("获取仓位失败:%v", err)
+		return nil
 	} else {
 		var values map[string]interface{}
 		if err = json.Unmarshal(response, &values); err != nil {
 			logger.Errorf("解析错误:%v", err)
-			return
+			return nil
 		}
-		log.Printf("values:%v", values)
+
+		if values["response"] != nil && values["response"].(map[string]interface{})["executed"].(bool) != true {
+			logger.Error("获取仓位失败")
+			return nil
+		}
+
+		positions := values["open_positions"].([]interface{})
+
+		if positions != nil && len(positions) > 0 {
+			orders := make([]OrderInfo, len(positions))
+			for i, position := range positions {
+				orders[i].Pair = position.(map[string]interface{})["currency"].(string)
+				orders[i].AvgPrice = position.(map[string]interface{})["open"].(float64)
+				orders[i].DealAmount = position.(map[string]interface{})["amountK"].(float64)
+				orders[i].OrderID = position.(map[string]interface{})["tradeId"].(string)
+			}
+
+			return orders
+		}
+
 	}
+
+	return nil
 }
 
 func (p *FXCM) GetClosePositions() {
@@ -415,8 +485,17 @@ type FxcmKlineValue struct {
 2018/05/03 10:04:49 OfferID:4001 Pair:XAU/USD
 */
 
+var MapOfferID = map[string]string{
+	"EUR/USD": "1",
+	"US30":    "1013",
+	"USOil":   "2001",
+}
+
 func (p *FXCM) GetKline(pair string, period int, limit int) []KlineValue {
-	if err, response := p.marketRequest("GET", "/candles/1/D1", map[string]string{
+
+	log.Printf("OfferID:%s", MapOfferID[pair])
+
+	if err, response := p.marketRequest("GET", "/candles/"+MapOfferID[pair]+"/D1", map[string]string{
 		"num": strconv.Itoa(limit), // max:10000
 	}); err != nil {
 		logger.Errorf("下单失败:%v", err)
