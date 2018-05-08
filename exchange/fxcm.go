@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	Global "madaoQT/config"
+
 	socketio "github.com/graarh/golang-socketio"
 	"github.com/graarh/golang-socketio/transport"
 	"golang.org/x/net/proxy"
@@ -117,7 +119,7 @@ func (p *FXCM) marketRequest(method, path string, params map[string]string) (err
 		}
 
 	}
-	// logger.Debugf("Params:%s auth[%s]", bodystr, "Bearer "+p.socket.Id()+p.config.Custom["token"].(string))
+	logger.Debugf("Params:%s auth[%s]", bodystr, "Bearer "+p.socket.Id()+p.config.Custom["token"].(string))
 
 	var request *http.Request
 	var err error
@@ -254,7 +256,7 @@ func (p *FXCM) GetTicker(pair string) *TickerValue {
 				High: rates[2].(float64),
 				Low:  rates[3].(float64),
 				Last: (rates[0].(float64) + rates[1].(float64)) / 2,
-				Time: time.Unix(int64(pairs[len(pairs)-1].(map[string]interface{})["Updated"].(float64)), 0).String(),
+				Time: time.Unix(int64(pairs[len(pairs)-1].(map[string]interface{})["Updated"].(float64)/1000), 0).Format(Global.TimeFormat),
 			}
 		}
 
@@ -487,15 +489,35 @@ type FxcmKlineValue struct {
 
 var MapOfferID = map[string]string{
 	"EUR/USD": "1",
+	"USD/JPY": "2",
+	"GBP/USD": "3",
+	"USD/CHF": "4",
+	"USD/CAD": "7",
+	"GER30":   "1004",
+	"HKG33":   "1005",
 	"US30":    "1013",
 	"USOil":   "2001",
+	"XAU/USD": "4001",
 }
 
 func (p *FXCM) GetKline(pair string, period int, limit int) []KlineValue {
 
-	log.Printf("OfferID:%s", MapOfferID[pair])
+	// log.Printf("OfferID:%s", MapOfferID[pair])
+	var interval string
+	switch period {
+	case KlinePeriod5Min:
+		interval = "m5"
+	case KlinePeriod15Min:
+		interval = "m15"
+	case KlinePeriod1Hour:
+		interval = "H1"
+	case KlinePeriod2Hour:
+		interval = "H2"
+	case KlinePeriod1Day:
+		interval = "D1"
+	}
 
-	if err, response := p.marketRequest("GET", "/candles/"+MapOfferID[pair]+"/D1", map[string]string{
+	if err, response := p.marketRequest("GET", "/candles/"+MapOfferID[pair]+"/"+interval, map[string]string{
 		"num": strconv.Itoa(limit), // max:10000
 	}); err != nil {
 		logger.Errorf("下单失败:%v", err)
