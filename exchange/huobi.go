@@ -166,3 +166,7 @@ func (p *Huobi) CancelOrder(order OrderInfo) *TradeResult {
 func (p *Huobi) GetOrderInfo(filter OrderInfo) []OrderInfo {
 	return nil
 }
+
+func (p *Huobi) GetKline(pair string, period int, limit int) []KlineValue {
+	return nil
+}

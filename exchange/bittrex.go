@@ -167,3 +167,7 @@ func (p *Bittrex) CancelOrder(order OrderInfo) *TradeResult {
 func (p *Bittrex) GetOrderInfo(filter OrderInfo) []OrderInfo {
 	return nil
 }
+
+func (p *Bittrex) GetKline(pair string, period int, limit int) []KlineValue {
+	return nil
+}
