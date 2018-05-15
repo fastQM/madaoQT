@@ -152,3 +152,7 @@ func (p *Liqui) CancelOrder(order OrderInfo) *TradeResult {
 func (p *Liqui) GetOrderInfo(filter OrderInfo) []OrderInfo {
 	return nil
 }
+
+func (p *Liqui) GetKline(pair string, period int, limit int) []KlineValue {
+	return nil
+}

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	Global "madaoQT/config"
@@ -22,10 +23,26 @@ const ExchangeFXCM = "FXCM"
 const WssFXCMUrl = "wss://api.fxcm.com"
 const HttpFXCMUrl = "https://api.fxcm.com"
 
+var shareFxcm *FXCM
+var once sync.Once
+
 type FXCM struct {
 	config Config
 	event  chan EventType
 	socket *socketio.Client
+	mutex  sync.Mutex
+}
+
+func GetFxcmInstance(config Config) *FXCM {
+	once.Do(func() {
+		shareFxcm = &FXCM{}
+		shareFxcm.SetConfigure(config)
+		if err := shareFxcm.Start(); err != nil {
+			log.Printf("Fail to start fxcm instance:%v", err)
+			shareFxcm = nil
+		}
+	})
+	return shareFxcm
 }
 
 func (p *FXCM) GetExchangeName() string {
@@ -48,7 +65,9 @@ func (p *FXCM) WatchEvent() chan EventType {
 
 // Close() close the connection to the exchange and other handles
 func (p *FXCM) Close() {
-
+	// if p.socket != nil {
+	// 	p.socket.Close()
+	// }
 }
 
 // StartTicker() send message to the exchange to start the ticker of the given pairs
@@ -120,6 +139,9 @@ func (p *FXCM) marketRequest(method, path string, params map[string]string) (err
 
 	}
 	logger.Debugf("Params:%s auth[%s]", bodystr, "Bearer "+p.socket.Id()+p.config.Custom["token"].(string))
+
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
 
 	var request *http.Request
 	var err error
