@@ -87,7 +87,7 @@ func TestGetKline(t *testing.T) {
 	filename := "poloniex-2hour-20180425"
 
 	if true {
-		result = polo.GetKline("eth/usdt", date2, nil, Period15Min)
+		result = polo.GetKline("eth/usdt", date2, nil, Period2H)
 		SaveHistory(filename, result)
 	} else {
 		result = LoadHistory(filename)

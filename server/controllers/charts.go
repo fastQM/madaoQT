@@ -161,6 +161,8 @@ func (c *ChartsController) GetProfitBy(name string, coin string) iris.Map {
 		}
 	}
 
+	defer db.Disconnect()
+
 	balanceManager := new(Trend.BalanceManager)
 	balanceManager.Init(&db.BalanceCollection)
 

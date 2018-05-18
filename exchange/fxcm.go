@@ -509,17 +509,25 @@ type FxcmKlineValue struct {
 2018/05/03 10:04:49 OfferID:4001 Pair:XAU/USD
 */
 
+const (
+	FxcmPairEURUSD = "EUR/USD"
+)
+
 var MapOfferID = map[string]string{
-	"EUR/USD": "1",
-	"USD/JPY": "2",
-	"GBP/USD": "3",
-	"USD/CHF": "4",
-	"USD/CAD": "7",
-	"GER30":   "1004",
-	"HKG33":   "1005",
-	"US30":    "1013",
-	"USOil":   "2001",
-	"XAU/USD": "4001",
+	FxcmPairEURUSD: "1",
+	"USD/JPY":      "2",
+	"GBP/USD":      "3",
+	"USD/CHF":      "4",
+	"USD/CAD":      "7",
+	"GER30":        "1004",
+	"HKG33":        "1005",
+	"US30":         "1013",
+	"USOil":        "2001",
+	"XAU/USD":      "4001",
+}
+
+var MapDeposit = map[string]float64{
+	FxcmPairEURUSD: 3.5,
 }
 
 func (p *FXCM) GetKline(pair string, period int, limit int) []KlineValue {
