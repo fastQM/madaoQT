@@ -173,6 +173,7 @@ type TickerValue struct {
 }
 
 type KlineValue struct {
+	Time      string
 	OpenTime  float64
 	Open      float64
 	High      float64

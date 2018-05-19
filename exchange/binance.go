@@ -354,6 +354,11 @@ func (p *Binance) GetOrderInfo(filter OrderInfo) []OrderInfo {
 			return nil
 		}
 
+		if values["code"] != nil || values["msg"] != nil {
+			logger.Errorf("命令错误:%v", values["msg"])
+			return nil
+		}
+
 		info := make([]OrderInfo, 1)
 		info[0].Amount, _ = strconv.ParseFloat(values["origQty"].(string), 64)
 		info[0].Pair = symbol
