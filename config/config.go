@@ -11,7 +11,7 @@ const ProductionEnv = false
 const TimeFormat = "2006-01-02 15:04:05"
 
 // Version is the version of this software
-const Version = "0.9.1"
+const Version = "0.9.2"
 
 /*
 	dynamic configuration
