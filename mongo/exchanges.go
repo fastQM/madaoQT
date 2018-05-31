@@ -32,7 +32,7 @@ type ExchangeDB struct {
 func (p *ExchangeDB) Connect() error {
 
 	if p.Sock5Proxy == "" {
-		session, err := mgo.Dial(MongoURL)
+		session, err := mgo.Dial(p.Server)
 		if err != nil {
 			log.Printf("Connect to Mongo error:%v", err)
 			return err

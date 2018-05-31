@@ -343,14 +343,14 @@ func GetCurrentPeriodArea(kline []KlineValue) (high float64, low float64, err er
 
 	length := len(kline)
 
+	array5 := kline[length-5 : length]
 	array10 := kline[length-10 : length]
-	array20 := kline[length-20 : length]
 
+	avg5 := GetAverage(5, array5)
 	avg10 := GetAverage(10, array10)
-	avg20 := GetAverage(20, array20)
 
 	var isOpenLong bool
-	if avg10 > avg20 {
+	if avg5 > avg10 {
 		isOpenLong = true
 	} else {
 		isOpenLong = false
@@ -549,16 +549,18 @@ func GetLastPeriodArea(kline []KlineValue) (high float64, low float64, err error
 			time.Unix(int64(kline[len(kline)-1].OpenTime), 0))
 
 		for i := start; i < len(kline)-1; i++ {
-			tmp := (kline[i].Close*0.8 + kline[i].High*0.2)
-			// tmp := kline[i].High
+			// log.Printf("[%s]high:%v low:%v close:%v",
+			// 	time.Unix(int64(kline[i].OpenTime), 0), kline[i].High, kline[i].Low, kline[i].Close)
+			// tmp := (kline[i].Close*0.8 + kline[i].High*0.2)
+			tmp := kline[i].High
 			if high == 0 {
 				high = tmp
 			} else if high < tmp {
 				high = tmp
 			}
 
-			tmp = (kline[i].Close*0.8 + kline[i].Low*0.2)
-			// tmp = kline[i].Low
+			// tmp = (kline[i].Close*0.8 + kline[i].Low*0.2)
+			tmp = kline[i].Low
 			if low == 0 {
 				low = tmp
 			} else if low > tmp {

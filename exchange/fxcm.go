@@ -24,7 +24,8 @@ const WssFXCMUrl = "wss://api.fxcm.com"
 const HttpFXCMUrl = "https://api.fxcm.com"
 
 var shareFxcm *FXCM
-var once sync.Once
+
+// var once sync.Once
 
 type FXCM struct {
 	config Config
@@ -34,14 +35,14 @@ type FXCM struct {
 }
 
 func GetFxcmInstance(config Config) *FXCM {
-	once.Do(func() {
-		shareFxcm = &FXCM{}
-		shareFxcm.SetConfigure(config)
-		if err := shareFxcm.Start(); err != nil {
-			log.Printf("Fail to start fxcm instance:%v", err)
-			shareFxcm = nil
-		}
-	})
+
+	shareFxcm = &FXCM{}
+	shareFxcm.SetConfigure(config)
+	if err := shareFxcm.Start(); err != nil {
+		log.Printf("Fail to start fxcm instance:%v", err)
+		shareFxcm = nil
+	}
+
 	return shareFxcm
 }
 
@@ -65,9 +66,9 @@ func (p *FXCM) WatchEvent() chan EventType {
 
 // Close() close the connection to the exchange and other handles
 func (p *FXCM) Close() {
-	// if p.socket != nil {
-	// 	p.socket.Close()
-	// }
+	if p.socket != nil {
+		p.socket.Close()
+	}
 }
 
 // StartTicker() send message to the exchange to start the ticker of the given pairs
@@ -106,7 +107,7 @@ func (p *FXCM) Start() error {
 	})
 
 	socket.On(socketio.OnDisconnection, func(c *socketio.Channel, args interface{}) {
-		log.Printf("Socket Disonnected:%v", args)
+		log.Printf("Socket Disconnected:%v", args)
 		p.socket = nil
 		go p.triggerEvent(EventLostConnection)
 	})
@@ -550,7 +551,7 @@ func (p *FXCM) GetKline(pair string, period int, limit int) []KlineValue {
 	if err, response := p.marketRequest("GET", "/candles/"+MapOfferID[pair]+"/"+interval, map[string]string{
 		"num": strconv.Itoa(limit), // max:10000
 	}); err != nil {
-		logger.Errorf("下单失败:%v", err)
+		logger.Errorf("获取K线失败:%v", err)
 		return nil
 	} else {
 		var values map[string]interface{}

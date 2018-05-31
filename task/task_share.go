@@ -169,7 +169,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 					if info == nil || len(info) == 0 {
 						Logger.Error("未取得订单信息")
-						continue
+						goto __ERROR
 					}
 
 					// dbOrders.Insert(&Mongo.OrderInfo{
@@ -532,7 +532,7 @@ func CalcDepthPrice(isFuture bool, ratios map[string]float64, exchange Exchange.
 
 func Reconnect(exchange Exchange.IExchange) {
 	Logger.Debug("Reconnecting......")
-	// utils.SleepAsyncBySecond(60)
+	Utils.SleepAsyncBySecond(10)
 	if err := exchange.Start(); err != nil {
 		Logger.Errorf("Fail to start exchange %v with error:%v", exchange.GetExchangeName(), err)
 		return

@@ -3,6 +3,7 @@ package utils
 import (
 	"log"
 	"testing"
+	"time"
 )
 
 func TestRevert(t *testing.T) {
@@ -48,3 +49,13 @@ func TestGetRandomString(t *testing.T) {
 // 	}()
 
 // }
+
+func TestTimeFormat(t *testing.T) {
+	start, err := time.Parse("20060102 15:04:05", "20180530 21:34:07")
+	if err != nil {
+		log.Printf("Error:%v", err)
+		return
+	}
+
+	log.Printf("%v", start.String())
+}
