@@ -66,7 +66,7 @@ func SleepAsyncByMillisecond(millisecond int64) {
 	}
 }
 
-func RevertArray(array ...interface{}) []interface{} {
+func RevertArray(array []interface{}) []interface{} {
 	var tmp interface{}
 	var length int
 

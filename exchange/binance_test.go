@@ -158,12 +158,13 @@ func TestGetKlines(t *testing.T) {
 
 	binance := new(Binance)
 	binance.SetConfigure(Config{
-		Proxy: "SOCKS5:127.0.0.1:1080",
+	// Proxy: "SOCKS5:127.0.0.1:1080",
 	})
 
-	result := binance.GetKline("eth/usdt", KlinePeriod2Hour, 500)
-	// log.Printf("Result:%v", result)
-	StrategyTrendTest(result, true, true)
+	klines := binance.GetKline("eth/usdt", KlinePeriod2Hour, 700)
+
+	result := StrategyTrendArea(klines, true, true)
+	log.Printf("Result:%v", result)
 }
 
 func TestKlineRatio(t *testing.T) {
