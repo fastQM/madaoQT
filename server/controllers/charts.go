@@ -151,7 +151,7 @@ func (c *ChartsController) GetProfitBy(name string, coin string) iris.Map {
 	db := &MongoTrend.TrendMongo{
 		BalanceCollectionName: collection,
 		Server:                Trend.MongoServer,
-		Sock5Proxy:            "SOCKS5:127.0.0.1:1080",
+		// Sock5Proxy:            "SOCKS5:127.0.0.1:1080",
 	}
 	if err := db.Connect(); err != nil {
 		Logger.Errorf("Error3:%v", err)
