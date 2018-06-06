@@ -97,7 +97,7 @@ func (p *CTPDll) GetDepth(instrument string) map[string]interface{} {
 			return nil
 		}
 
-		logger.Infof("GetDepth:%v", values)
+		// logger.Infof("GetDepth:%v", values)
 		return values
 	}
 
@@ -174,12 +174,14 @@ func (p *CTPDll) GetBalance() map[string]interface{} {
 	return nil
 }
 
-func (p *CTPDll) MarketOpenPosition(instrument string, volume int, isBuy int) map[string]interface{} {
+func (p *CTPDll) MarketOpenPosition(instrument string, volume int, price int, isBuy int, isMarket int) map[string]interface{} {
 	buffer := make([]byte, 1024)
 	function := p.Dll.NewProc("MarketOpenPosition")
 	result, _, err := function.Call(uintptr(unsafe.Pointer(&[]byte(instrument)[0])),
 		uintptr(volume),
+		uintptr(price),
 		uintptr(isBuy),
+		uintptr(isMarket),
 		uintptr(unsafe.Pointer(&buffer[0])))
 	if err != nil {
 		// log.Printf("error:%v result:%v", err, result)
@@ -200,12 +202,14 @@ func (p *CTPDll) MarketOpenPosition(instrument string, volume int, isBuy int) ma
 	return nil
 }
 
-func (p *CTPDll) MarketClosePosition(instrument string, volume int, isBuy int) map[string]interface{} {
+func (p *CTPDll) MarketClosePosition(instrument string, volume int, price int, isBuy int, isMarket int) map[string]interface{} {
 	buffer := make([]byte, 1024)
 	function := p.Dll.NewProc("MarketClosePosition")
 	result, _, err := function.Call(uintptr(unsafe.Pointer(&[]byte(instrument)[0])),
 		uintptr(volume),
+		uintptr(price),
 		uintptr(isBuy),
+		uintptr(isMarket),
 		uintptr(unsafe.Pointer(&buffer[0])))
 	if err != nil {
 		// log.Printf("error:%v result:%v", err, result)
