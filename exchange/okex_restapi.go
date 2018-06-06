@@ -1,9 +1,13 @@
 package exchange
 
 import (
+	"crypto/md5"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -16,6 +20,9 @@ const OkexRest = "OkexRest"
 type OkexRestAPI struct {
 	event  chan EventType
 	config Config
+
+	apiKey    string
+	secretKey string
 }
 
 func (p *OkexRestAPI) GetExchangeName() string {
@@ -33,7 +40,10 @@ func (h *OkexRestAPI) Start() error {
 
 // SetConfigure()
 func (p *OkexRestAPI) SetConfigure(config Config) {
+
 	p.config = config
+	p.apiKey = config.API
+	p.secretKey = config.Secret
 
 	if p.config.Proxy != "" {
 		logger.Infof("使用代理:%s", p.config.Proxy)
@@ -87,6 +97,112 @@ func (p *OkexRestAPI) marketRequest(path string, params map[string]string) (erro
 	}
 
 	return nil, body
+}
+
+func (p *OkexRestAPI) tradeRequest(path string, params map[string]string) (error, []byte) {
+
+	var req http.Request
+	req.ParseForm()
+	for k, v := range params {
+		req.Form.Add(k, v)
+	}
+	bodystr := strings.TrimSpace(req.Form.Encode())
+	logger.Debugf("Params:%v", bodystr)
+	request, err := http.NewRequest("POST", OkexURL+path, strings.NewReader(bodystr))
+	if err != nil {
+		return err, nil
+	}
+
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36")
+
+	// setup a http client
+	httpTransport := &http.Transport{}
+	httpClient := &http.Client{Transport: httpTransport}
+
+	if p.config.Proxy != "" {
+		values := strings.Split(p.config.Proxy, ":")
+		if values[0] == "SOCKS5" {
+			dialer, err := proxy.SOCKS5("tcp", values[1]+":"+values[2], nil, proxy.Direct)
+			if err != nil {
+				return err, nil
+			}
+
+			httpTransport.Dial = dialer.Dial
+		}
+
+	}
+
+	var resp *http.Response
+	resp, err = httpClient.Do(request)
+	if err != nil {
+		return err, nil
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err, nil
+	}
+
+	log.Printf("Body:%v", string(body))
+
+	return nil, body
+}
+
+func (p *OkexRestAPI) GetPosition(pair string, contract_type string) float64 {
+
+	coins := ParsePair(pair)
+	symbol := coins[0] + "_" + coins[1]
+
+	parameters := map[string]string{
+		"symbol":        symbol,
+		"contract_type": contract_type,
+		"api_key":       p.apiKey,
+	}
+
+	if parameters != nil {
+		var keys []string
+		var signPlain string
+
+		for k := range parameters {
+			keys = append(keys, k)
+		}
+
+		sort.Strings(keys)
+
+		for _, key := range keys {
+			if key == "sign" {
+				continue
+			}
+			signPlain += (key + "=" + parameters[key])
+			signPlain += "&"
+		}
+
+		signPlain += ("secret_key=" + p.secretKey)
+
+		// log.Printf("Plain:%v", signPlain)
+		md5Value := fmt.Sprintf("%x", md5.Sum([]byte(signPlain)))
+		// log.Printf("MD5:%v", md5Value)
+		parameters["sign"] = strings.ToUpper(md5Value)
+
+	}
+
+	if err, response := p.tradeRequest("future_position_4fix.do", parameters); err != nil {
+		logger.Errorf("无效数据:%v", err)
+		return -1
+	} else {
+		var values map[string]interface{}
+		if response != nil {
+			if err = json.Unmarshal(response, &values); err != nil {
+				logger.Errorf("Fail to Unmarshal:%v", err)
+				return -1
+			}
+		}
+
+		log.Printf("Values:%v", values)
+		return 0
+	}
 }
 
 func (p *OkexRestAPI) GetKline(pair string, period int, limit int) []KlineValue {

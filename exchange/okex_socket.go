@@ -260,7 +260,7 @@ func (o *OKExAPI) Start() error {
 
 			if channel == EventAddChannel || channel == EventRemoveChannel {
 				// the response of some command
-			} else if channel == ChannelFutureUserInfo || channel == ChannelSpotUserInfo {
+			} else if channel == ChannelFutureUserInfo || channel == ChannelSpotUserInfo || channel == ChannelSubPositions {
 				if recvChan, ok := o.messageChannels.Load(channel); recvChan != nil && ok {
 					data := response[0]["data"].(map[string]interface{})
 					if data != nil && data["result"] == true {
@@ -1010,6 +1010,7 @@ func (o *OKExAPI) GetBalance() map[string]interface{} {
 				// }
 				result := make(map[string]interface{})
 				balances := recv.(map[string]interface{})
+				log.Printf("Balance:%v", balances)
 				for coin, value := range balances {
 					var bond float64
 					balance := value.(map[string]interface{})["rights"]

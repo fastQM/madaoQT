@@ -2,6 +2,7 @@ package exchange
 
 import (
 	"log"
+	Mongo "madaoQT/mongo"
 	"testing"
 	"time"
 )
@@ -254,11 +255,21 @@ func TestFutureGetOrderInfo(t *testing.T) {
 }
 
 func TestSpotGetUserInfo(t *testing.T) {
+
+	mongo := &Mongo.ExchangeDB{
+		Server: "mongodb://localhost:27017",
+	}
+	err, key := GetExchangeKey(mongo, NameOKEX, []byte(""), []byte(""))
+	if err != nil {
+		log.Printf("Err:%v", err)
+		return
+	}
+
 	okex := new(OKExAPI)
 	okex.SetConfigure(Config{
-		API:    constAPIKey,
-		Secret: constSecretKey,
-		Custom: map[string]interface{}{"exchangeType": ExchangeTypeSpot},
+		API:    key.API,
+		Secret: key.Secret,
+		Custom: map[string]interface{}{"exchangeType": ExchangeTypeFuture},
 	})
 
 	okex.Start()
