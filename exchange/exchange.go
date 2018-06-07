@@ -549,7 +549,7 @@ func GetLastPeriodArea(kline []KlineValue) (high float64, low float64, err error
 			time.Unix(int64(kline[end].OpenTime), 0),
 			time.Unix(int64(kline[len(kline)-1].OpenTime), 0))
 
-		for i := start; i < len(kline)-1; i++ {
+		for i := start; i < len(kline); i++ {
 			// log.Printf("[%s]high:%v low:%v close:%v",
 			// 	time.Unix(int64(kline[i].OpenTime), 0), kline[i].High, kline[i].Low, kline[i].Close)
 			// tmp := (kline[i].Close*0.8 + kline[i].High*0.2)
