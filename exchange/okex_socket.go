@@ -23,6 +23,10 @@ const NameOKEXFuture = "OkexFuture"
 const futureEndPoint = "wss://real.okex.com:10440/websocket/okexapi"
 const spotEndPoint = "wss://real.okex.com:10441/websocket"
 
+const ContractTypeThisWeek = "this_week"
+const ContractTypeNextWeek = "next_week"
+const ContractTypeQuarter = "quarter"
+
 // event
 const EventAddChannel = "addChannel"
 const EventRemoveChannel = "removeChannel"
