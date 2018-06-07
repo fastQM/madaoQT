@@ -414,15 +414,16 @@ func GetCurrentPeriodArea(kline []KlineValue) (high float64, low float64, err er
 			time.Unix(int64(kline[start].OpenTime), 0),
 			time.Unix(int64(kline[end].OpenTime), 0))
 
-		// log.Printf("起始点:%v 结束点(当前):%v",
-		// 	kline[start].OpenTime,
-		// 	kline[end].OpenTime)
+		// log.Printf("起始点:%v 结束点(当前):%v %v",
+		// 	kline[start].Time,
+		// 	kline[end].Time,
+		// 	kline[start:])
 
 		if len(kline[start:]) == 1 {
 			return kline[start].High, kline[start].Low, nil
 
 		} else {
-			for i := start; i < len(kline)-1; i++ {
+			for i := start; i < len(kline); i++ {
 				tmp := kline[i].High
 				if high == 0 {
 					high = tmp

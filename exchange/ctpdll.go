@@ -80,6 +80,30 @@ func (p *CTPDll) InitTrade() bool {
 	return false
 }
 
+func (p *CTPDll) CloseMarket() bool {
+	function := p.Dll.NewProc("CloseMarket")
+	result, _, err := function.Call()
+	if err != nil {
+		// log.Printf("error:%v result:%v", err, result)
+	}
+	if result == 1 {
+		return true
+	}
+	return false
+}
+
+func (p *CTPDll) CloseTrade() bool {
+	function := p.Dll.NewProc("CloseTrade")
+	result, _, err := function.Call()
+	if err != nil {
+		// log.Printf("error:%v result:%v", err, result)
+	}
+	if result == 1 {
+		return true
+	}
+	return false
+}
+
 func (p *CTPDll) GetDepth(instrument string) map[string]interface{} {
 	buffer := make([]byte, 1024)
 	function := p.Dll.NewProc("GetDepth")

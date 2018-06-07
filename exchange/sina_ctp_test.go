@@ -28,7 +28,7 @@ func TestSinaCtp(t *testing.T) {
 	var klines []KlineValue
 	var logs []string
 
-	name := "y0"
+	name := "rb0"
 	sina := new(SinaCTP)
 	if true {
 		klines = sina.GetKline(name, time.Now(), nil, 0)
