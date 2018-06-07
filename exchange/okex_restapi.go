@@ -150,7 +150,7 @@ func (p *OkexRestAPI) tradeRequest(path string, params map[string]string) (error
 	return nil, body
 }
 
-func (p *OkexRestAPI) GetPosition(pair string, contract_type string) float64 {
+func (p *OkexRestAPI) GetPosition(pair string, contract_type string) map[string]float64 {
 
 	coins := ParsePair(pair)
 	symbol := coins[0] + "_" + coins[1]
@@ -190,18 +190,25 @@ func (p *OkexRestAPI) GetPosition(pair string, contract_type string) float64 {
 
 	if err, response := p.tradeRequest("future_position_4fix.do", parameters); err != nil {
 		logger.Errorf("无效数据:%v", err)
-		return -1
+		return nil
 	} else {
 		var values map[string]interface{}
 		if response != nil {
 			if err = json.Unmarshal(response, &values); err != nil {
 				logger.Errorf("Fail to Unmarshal:%v", err)
-				return -1
+				return nil
 			}
 		}
 
-		log.Printf("Values:%v", values)
-		return 0
+		if !values["result"].(bool) {
+			logger.Error("获取持仓失败")
+			return nil
+		}
+
+		return map[string]float64{
+			"long":  values["holding"].([]interface{})[0].(map[string]interface{})["buy_amount"].(float64),
+			"short": values["holding"].([]interface{})[0].(map[string]interface{})["sell_amount"].(float64),
+		}
 	}
 }
 
