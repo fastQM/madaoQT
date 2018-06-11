@@ -158,7 +158,7 @@ func TestGetKlines(t *testing.T) {
 
 	binance := new(Binance)
 	binance.SetConfigure(Config{
-		// Proxy: "SOCKS5:127.0.0.1:1080",
+		Proxy: "SOCKS5:127.0.0.1:1080",
 	})
 
 	klines := binance.GetKline("eth/usdt", KlinePeriod2Hour, 700)

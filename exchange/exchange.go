@@ -446,6 +446,35 @@ func GetCurrentPeriodArea(kline []KlineValue) (high float64, low float64, err er
 	return 0, 0, errors.New("Invalid Period")
 }
 
+func GetLastDaysArea(days int, kline []KlineValue) (high float64, low float64, err error) {
+
+	length := len(kline)
+	if length < days {
+		return 0, 0, errors.New("Invalid period")
+	}
+
+	subKline := kline[length-days : length]
+
+	for i := 0; i < len(subKline)-1; i++ {
+		tmp := subKline[i].High
+		if high == 0 {
+			high = tmp
+		} else if high < tmp {
+			high = tmp
+		}
+
+		tmp = subKline[i].Low
+		if low == 0 {
+			low = tmp
+		} else if low > tmp {
+			low = tmp
+		}
+	}
+
+	return high, low, nil
+
+}
+
 // 20日均线周期波段
 func GetLastPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 
@@ -575,7 +604,7 @@ func GetLastPeriodArea(kline []KlineValue) (high float64, low float64, err error
 	return 0, 0, errors.New("Invalid Period")
 }
 
-const Path = "C:\\history"
+const Path = "C:\\history\\"
 
 func SaveHistory(code string, klines []KlineValue) {
 
@@ -621,4 +650,22 @@ func LoadHistory(code string) []KlineValue {
 	}
 
 	return klines
+}
+
+func RevertArray(array []KlineValue) []KlineValue {
+	var tmp KlineValue
+	var length int
+
+	if len(array)%2 != 0 {
+		length = len(array) / 2
+	} else {
+		length = len(array)/2 - 1
+	}
+	for i := 0; i <= length; i++ {
+		tmp = array[i]
+		array[i] = array[len(array)-1-i]
+		array[len(array)-1-i] = tmp
+
+	}
+	return array
 }
