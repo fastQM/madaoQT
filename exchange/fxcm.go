@@ -512,6 +512,7 @@ type FxcmKlineValue struct {
 
 const (
 	FxcmPairEURUSD = "EUR/USD"
+	FxcmPairUS30   = "US30"
 )
 
 var MapOfferID = map[string]string{
@@ -522,13 +523,14 @@ var MapOfferID = map[string]string{
 	"USD/CAD":      "7",
 	"GER30":        "1004",
 	"HKG33":        "1005",
-	"US30":         "1013",
+	FxcmPairUS30:   "1013",
 	"USOil":        "2001",
 	"XAU/USD":      "4001",
 }
 
 var MapDeposit = map[string]float64{
 	FxcmPairEURUSD: 3.5,
+	FxcmPairUS30:   14,
 }
 
 func (p *FXCM) GetKline(pair string, period int, limit int) []KlineValue {
