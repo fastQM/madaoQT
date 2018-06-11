@@ -145,7 +145,7 @@ func (p *ExchangeGdax) GetKline(pair string, interval int, limit int) []KlineVal
 	params := map[string]string{
 		// "start":       start,
 		// "end":         end,
-		"granularity": strconv.Itoa(interval),
+		"granularity": strconv.Itoa(interval * 60),
 	}
 
 	// 2014-11-06T10:34:47.123456Z

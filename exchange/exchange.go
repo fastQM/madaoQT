@@ -414,16 +414,15 @@ func GetCurrentPeriodArea(kline []KlineValue) (high float64, low float64, err er
 			time.Unix(int64(kline[start].OpenTime), 0),
 			time.Unix(int64(kline[end].OpenTime), 0))
 
-		// log.Printf("起始点:%v 结束点(当前):%v %v",
-		// 	kline[start].Time,
-		// 	kline[end].Time,
-		// 	kline[start:])
+		// log.Printf("起始点:%v 结束点(当前):%v",
+		// 	kline[start].OpenTime,
+		// 	kline[end].OpenTime)
 
 		if len(kline[start:]) == 1 {
 			return kline[start].High, kline[start].Low, nil
 
 		} else {
-			for i := start; i < len(kline); i++ {
+			for i := start; i < len(kline)-1; i++ {
 				tmp := kline[i].High
 				if high == 0 {
 					high = tmp
@@ -549,7 +548,7 @@ func GetLastPeriodArea(kline []KlineValue) (high float64, low float64, err error
 			time.Unix(int64(kline[end].OpenTime), 0),
 			time.Unix(int64(kline[len(kline)-1].OpenTime), 0))
 
-		for i := start; i < len(kline); i++ {
+		for i := start; i < len(kline)-1; i++ {
 			// log.Printf("[%s]high:%v low:%v close:%v",
 			// 	time.Unix(int64(kline[i].OpenTime), 0), kline[i].High, kline[i].Low, kline[i].Close)
 			// tmp := (kline[i].Close*0.8 + kline[i].High*0.2)
@@ -576,7 +575,7 @@ func GetLastPeriodArea(kline []KlineValue) (high float64, low float64, err error
 	return 0, 0, errors.New("Invalid Period")
 }
 
-const Path = "E:\\Backup\\stock\\"
+const Path = "C:\\history"
 
 func SaveHistory(code string, klines []KlineValue) {
 
