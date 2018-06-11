@@ -34,17 +34,17 @@ type FXCM struct {
 	mutex  sync.Mutex
 }
 
-func GetFxcmInstance(config Config) *FXCM {
+// func GetFxcmInstance(config Config) *FXCM {
 
-	shareFxcm = &FXCM{}
-	shareFxcm.SetConfigure(config)
-	if err := shareFxcm.Start(); err != nil {
-		log.Printf("Fail to start fxcm instance:%v", err)
-		shareFxcm = nil
-	}
+// 	shareFxcm = &FXCM{}
+// 	shareFxcm.SetConfigure(config)
+// 	if err := shareFxcm.Start(); err != nil {
+// 		log.Printf("Fail to start fxcm instance:%v", err)
+// 		shareFxcm = nil
+// 	}
 
-	return shareFxcm
-}
+// 	return shareFxcm
+// }
 
 func (p *FXCM) GetExchangeName() string {
 	return ExchangeFXCM

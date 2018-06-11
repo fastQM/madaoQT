@@ -393,6 +393,8 @@ func (p *Binance) GetKline(pair string, period int, limit int) []KlineValue {
 		interval = "1h"
 	case KlinePeriod2Hour:
 		interval = "2h"
+	case KlinePeriod6Hour:
+		interval = "6h"
 	case KlinePeriod1Day:
 		interval = "1d"
 	}
