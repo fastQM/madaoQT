@@ -56,7 +56,7 @@ const (
 func (p *SinaCTP) marketRequest(name string) (error, []byte) {
 
 	// logger.Debugf("Params:%v", bodystr)
-	request, err := http.NewRequest("GET", SinaStockUrl+name, nil)
+	request, err := http.NewRequest("GET", SinaFutureUrl+name, nil)
 	if err != nil {
 		return err, nil
 	}

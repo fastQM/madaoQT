@@ -341,8 +341,10 @@ func ParsePair(pair string) []string {
 
 func GetCurrentPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 
+	// location, _ := time.LoadLocation("Asia/Shanghai")
 	length := len(kline)
 
+	// log.Printf("Kline:%v", kline)
 	array5 := kline[length-5 : length]
 	array10 := kline[length-10 : length]
 
@@ -372,6 +374,8 @@ func GetCurrentPeriodArea(kline []KlineValue) (high float64, low float64, err er
 			avg10 := GetAverage(10, array10)
 			avg20 := GetAverage(20, array20)
 
+			// log.Printf("Time:%v Avg10:%.5f, avg20:%.5f", time.Unix(int64(kline[i].OpenTime), 0), avg10, avg20)
+
 			if avg10 < avg20 {
 				start = i
 				found = true
@@ -395,6 +399,8 @@ func GetCurrentPeriodArea(kline []KlineValue) (high float64, low float64, err er
 			avg10 := GetAverage(10, array10)
 			avg20 := GetAverage(20, array20)
 
+			// log.Printf("Time:%v Avg10:%.5f, avg20:%.5f", time.Unix(int64(kline[i].OpenTime), 0), avg10, avg20)
+
 			if avg10 > avg20 {
 				start = i
 				found = true
@@ -415,8 +421,8 @@ func GetCurrentPeriodArea(kline []KlineValue) (high float64, low float64, err er
 			time.Unix(int64(kline[end].OpenTime), 0))
 
 		// log.Printf("起始点:%v 结束点(当前):%v",
-		// 	kline[start].OpenTime,
-		// 	kline[end].OpenTime)
+		// 	time.Unix(int64(kline[start].OpenTime), 0).In(location),
+		// 	time.Unix(int64(kline[end].OpenTime), 0).In(location))
 
 		if len(kline[start:]) == 1 {
 			return kline[start].High, kline[start].Low, nil

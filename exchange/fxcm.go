@@ -130,6 +130,8 @@ func (p *FXCM) marketRequest(method, path string, params map[string]string) (err
 		return errors.New("Socket is not connected"), nil
 	}
 
+	// log.Printf("Path:%s", path)
+
 	var bodystr string
 	for k, v := range params {
 		if bodystr == "" {
@@ -513,6 +515,8 @@ type FxcmKlineValue struct {
 const (
 	FxcmPairEURUSD = "EUR/USD"
 	FxcmPairUS30   = "US30"
+	FxcmPairCHN50  = "CHN50"
+	FxcmPairUSOil  = "USOil"
 )
 
 var MapOfferID = map[string]string{
@@ -524,13 +528,16 @@ var MapOfferID = map[string]string{
 	"GER30":        "1004",
 	"HKG33":        "1005",
 	FxcmPairUS30:   "1013",
-	"USOil":        "2001",
+	FxcmPairUSOil:  "2001",
 	"XAU/USD":      "4001",
+	FxcmPairCHN50:  "1020",
 }
 
 var MapDeposit = map[string]float64{
 	FxcmPairEURUSD: 3.5,
 	FxcmPairUS30:   14,
+	FxcmPairCHN50:  70,
+	FxcmPairUSOil:  20,
 }
 
 func (p *FXCM) GetKline(pair string, period int, limit int) []KlineValue {
