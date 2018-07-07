@@ -1,7 +1,6 @@
 package exchange
 
 import (
-	"fmt"
 	"log"
 	"testing"
 	"time"
@@ -78,34 +77,33 @@ const Period1Day = 86400
 
 func TestGetKline(t *testing.T) {
 
-	var logs []string
+	// var logs []string
 	// date1 := time.Date(2017, 8, 10, 0, 0, 0, 0, time.Local)
 	date2 := time.Date(2018, 1, 1, 0, 0, 0, 0, time.Local)
 
 	polo := new(PoloniexAPI)
 	// result := polo.GetKline("eth/usdt", date1, &date2, Period5Min)
-	var result []KlineValue
+	var klines []KlineValue
 
-	filename := "poloniex-2hour-20180425"
+	filename := "poloniex-2hour-20180629"
 
 	if true {
-		result = polo.GetKline("eth/usdt", date2, nil, Period2H)
-		SaveHistory(filename, result)
+		klines = polo.GetKline("eth/usdt", date2, nil, Period2H)
+		SaveHistory(filename, klines)
 	} else {
-		result = LoadHistory(filename)
+		klines = LoadHistory(filename)
 	}
 
-	for value := 0.0; value < 0.6; value += 0.01 {
-		// log.Printf("Klines:%v", klines)
-		ChangeOffset(value)
-		result := StrategyTrendTest(result, true, true)
-		msg := fmt.Sprintf("Offset:%.2f Result:%s", value, result)
-		logs = append(logs, msg)
+	// for value := 0.0; value < 0.6; value += 0.01 {
+	// 	// log.Printf("Klines:%v", klines)
+	// 	ChangeOffset(value)
+	result := StrategyTrendTest(klines, true, false)
+	// msg := fmt.Sprintf("Offset:%.2f Result:%s", value, result)
+	// logs = append(logs, msg)
 
-	}
-	for _, msg := range logs {
-		log.Printf(msg)
-	}
+	// }
+
+	log.Printf("Result:%v", result)
 }
 
 func TestMapArray(t *testing.T) {

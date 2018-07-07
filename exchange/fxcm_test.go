@@ -15,7 +15,8 @@ func TestSocketConnection(t *testing.T) {
 	}
 
 	select {
-	case <-time.After(10 * time.Second):
+	case <-time.After(3 * time.Second):
+		fxcm.GetOffers()
 		log.Printf("Timeout")
 		return
 	}

@@ -4,6 +4,7 @@ import (
 	"log"
 	Mongo "madaoQT/mongo"
 	"testing"
+	"time"
 )
 
 func TestGetOkexRestAPIKline(t *testing.T) {
@@ -12,7 +13,12 @@ func TestGetOkexRestAPIKline(t *testing.T) {
 	okex.SetConfigure(Config{
 		// Proxy: "SOCKS5:127.0.0.1:1080",
 	})
-	klines := okex.GetKline("eth/usdt", KlinePeriod2Hour, 600)
+	klines := okex.GetKline("eth/usdt", KlinePeriod2Hour, 100)
+	for _, kline := range klines {
+		log.Printf("%.2f Time:%v", kline.OpenTime, time.Unix(int64(kline.OpenTime), 0).String())
+	}
+
+	log.Printf("%v", time.Now())
 
 	if len(klines) != 0 {
 		log.Printf("共有%d条", len(klines))
