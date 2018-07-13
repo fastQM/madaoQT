@@ -694,3 +694,8 @@ func RevertArray(array []KlineValue) []KlineValue {
 	}
 	return array
 }
+
+func GetThreshHold(avg5first float64, avg5 float64, avg10first float64, avg10 float64) float64 {
+	// 45x > 50*avg10 - 5 * avg10first - avg5 *50 + 10*avg5first
+	return (50*avg10 - 5*avg10first - avg5*50 + 10*avg5first) / 5
+}
