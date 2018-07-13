@@ -2,6 +2,7 @@ package exchange
 
 import (
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -39,7 +40,7 @@ import (
 const SinaFuture15Min = "http://stock2.finance.sina.com.cn/futures/api/json.php/IndexService.getInnerFuturesMiniKLine15m?symbol="
 const SinaFuture60Min = "http://stock2.finance.sina.com.cn/futures/api/json.php/IndexService.getInnerFuturesMiniKLine60m?symbol="
 const SinaStockUrl = "http://stock2.finance.sina.com.cn/futures/api/json.php/CffexFuturesService.getCffexFuturesDailyKLine?symbol="
-const SinaFutureUrl = "http://stock2.finance.sina.com.cn/futures/api/json.php/IndexService.getInnerFuturesDailyKLine?symbol="
+const SinaFuture1Day = "http://stock2.finance.sina.com.cn/futures/api/json.php/IndexService.getInnerFuturesDailyKLine?symbol="
 
 type SinaCTP struct {
 }
@@ -53,10 +54,18 @@ const (
 	Silver = "AG0"
 )
 
-func (p *SinaCTP) marketRequest(name string) (error, []byte) {
+func (p *SinaCTP) marketRequest(name string, interval int) (error, []byte) {
 
+	var root string
+	if interval == KlinePeriod1Hour {
+		root = SinaFuture60Min
+	} else if interval == KlinePeriod1Day {
+		root = SinaFuture1Day
+	} else {
+		return errors.New("Invalid Interval"), nil
+	}
 	// logger.Debugf("Params:%v", bodystr)
-	request, err := http.NewRequest("GET", SinaFutureUrl+name, nil)
+	request, err := http.NewRequest("GET", root+name, nil)
 	if err != nil {
 		return err, nil
 	}
@@ -86,9 +95,9 @@ func (p *SinaCTP) marketRequest(name string) (error, []byte) {
 
 }
 
-func (p *SinaCTP) GetKline(pair string, start time.Time, end *time.Time, periodBySec int) []KlineValue {
+func (p *SinaCTP) GetKline(pair string, start time.Time, end *time.Time, interval int) []KlineValue {
 
-	if err, response := p.marketRequest(pair); err != nil {
+	if err, response := p.marketRequest(pair, interval); err != nil {
 		logger.Errorf("无效数据:%v", err)
 		return nil
 	} else {
@@ -107,7 +116,10 @@ func (p *SinaCTP) GetKline(pair string, start time.Time, end *time.Time, periodB
 				kline[i].Low, _ = strconv.ParseFloat(value[3].(string), 64)
 				kline[i].Close, _ = strconv.ParseFloat(value[4].(string), 64)
 				kline[i].Volumn, _ = strconv.ParseFloat(value[5].(string), 64)
+			}
 
+			if interval != KlinePeriod1Day {
+				kline = RevertArray(kline)
 			}
 
 			return kline
