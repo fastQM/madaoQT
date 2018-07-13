@@ -303,6 +303,25 @@ func revertDepthArray(array []DepthPrice) []DepthPrice {
 	return array
 }
 
+func GetArea(values []KlineValue) (float64, float64) {
+	var high, low float64
+	for _, kline := range values {
+		if high == 0 {
+			high = kline.High
+		} else if kline.High > high {
+			high = kline.High
+		}
+
+		if low == 0 {
+			low = kline.Low
+		} else if kline.Low < low {
+			low = kline.Low
+		}
+	}
+
+	return high, low
+}
+
 func GetAverage(period int, values []KlineValue) float64 {
 
 	if values == nil || len(values) != period {

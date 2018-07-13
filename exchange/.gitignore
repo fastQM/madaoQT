@@ -2,3 +2,4 @@ tencent*
 test/
 exchange/
 strategies.go
+strategy_splite.go

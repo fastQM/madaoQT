@@ -141,7 +141,7 @@ func (p *FXCM) marketRequest(method, path string, params map[string]string) (err
 		}
 
 	}
-	logger.Debugf("Params:%s auth[%s]", bodystr, "Bearer "+p.socket.Id()+p.config.Custom["token"].(string))
+	// logger.Debugf("Params:%s auth[%s]", bodystr, "Bearer "+p.socket.Id()+p.config.Custom["token"].(string))
 
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -534,9 +534,9 @@ var MapOfferID = map[string]string{
 }
 
 var MapDeposit = map[string]float64{
-	FxcmPairEURUSD: 3.5,
-	FxcmPairUS30:   14,
-	FxcmPairCHN50:  70,
+	FxcmPairEURUSD: 13,
+	FxcmPairUS30:   13.5,
+	FxcmPairCHN50:  65,
 	FxcmPairUSOil:  20,
 }
 
@@ -549,6 +549,8 @@ func (p *FXCM) GetKline(pair string, period int, limit int) []KlineValue {
 		interval = "m5"
 	case KlinePeriod15Min:
 		interval = "m15"
+	case KlinePeriod30Min:
+		interval = "m30"
 	case KlinePeriod1Hour:
 		interval = "H1"
 	case KlinePeriod2Hour:
