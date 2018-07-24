@@ -11,10 +11,10 @@ func TestSinaCtp(t *testing.T) {
 	var klines []KlineValue
 	var logs []string
 
-	name := "rb1810"
+	name := "t1"
 	sina := new(SinaCTP)
 	if true {
-		klines = sina.GetKline(name, time.Now(), nil, KlinePeriod1Hour)
+		klines = sina.GetKline(name, time.Now(), nil, KlinePeriod1Day)
 		SaveHistory(name, klines)
 		log.Printf("Init Done!!!")
 	} else {

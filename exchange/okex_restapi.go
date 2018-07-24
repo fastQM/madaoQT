@@ -206,8 +206,10 @@ func (p *OkexRestAPI) GetPosition(pair string, contract_type string) map[string]
 		}
 
 		return map[string]float64{
-			"long":  values["holding"].([]interface{})[0].(map[string]interface{})["buy_amount"].(float64),
-			"short": values["holding"].([]interface{})[0].(map[string]interface{})["sell_amount"].(float64),
+			"long":     values["holding"].([]interface{})[0].(map[string]interface{})["buy_amount"].(float64),
+			"short":    values["holding"].([]interface{})[0].(map[string]interface{})["sell_amount"].(float64),
+			"buy_avg":  values["holding"].([]interface{})[0].(map[string]interface{})["buy_price_avg"].(float64),
+			"sell_avg": values["holding"].([]interface{})[0].(map[string]interface{})["sell_price_avg"].(float64),
 		}
 	}
 }
