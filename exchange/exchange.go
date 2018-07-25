@@ -699,3 +699,8 @@ func GetThreshHold(avg5first float64, avg5 float64, avg10first float64, avg10 fl
 	// 45x > 50*avg10 - 5 * avg10first - avg5 *50 + 10*avg5first
 	return (50*avg10 - 5*avg10first - avg5*50 + 10*avg5first) / 5
 }
+
+func GetThreshHoldByAverage(avg1first float64, avg1 float64, interval1 float64, avg2first float64, avg2 float64, interval2 float64) float64 {
+	// 45x > 50*avg10 - 5 * avg10first - avg5 *50 + 10*avg5first
+	return (interval1*interval2*avg2 - interval1*avg2first - interval1*interval2*avg1 + interval2*avg1first) / (interval2 - interval1)
+}
