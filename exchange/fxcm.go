@@ -427,6 +427,10 @@ func (p *FXCM) GetOpenPositions() []OrderInfo {
 		if positions != nil && len(positions) > 0 {
 			orders := make([]OrderInfo, len(positions))
 			for i, position := range positions {
+				if position.(map[string]interface{})["open"].(float64) == 0 && position.(map[string]interface{})["amountK"].(float64) == 0 {
+					logger.Error("该仓位为无效仓位")
+					continue
+				}
 				orders[i].Pair = position.(map[string]interface{})["currency"].(string)
 				orders[i].AvgPrice = position.(map[string]interface{})["open"].(float64)
 				orders[i].DealAmount = position.(map[string]interface{})["amountK"].(float64)
