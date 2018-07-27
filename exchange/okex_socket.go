@@ -924,41 +924,50 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 
 	select {
 	case recv := <-recvChan:
-		orders := recv.(map[string]interface{})["orders"].([]interface{})
+		if recv != nil {
+			result := recv.(map[string]interface{})["result"]
+			if result != nil && result.(bool) {
+				orders := recv.(map[string]interface{})["orders"].([]interface{})
 
-		if len(orders) == 0 {
-			return nil
+				if len(orders) == 0 {
+					return nil
+				}
+
+				result := make([]OrderInfo, len(orders))
+
+				for i, tmp := range orders {
+					order := tmp.(map[string]interface{})
+
+					var orderType TradeType
+					var avgPrice float64
+					if o.exchangeType == ExchangeTypeFuture {
+						orderType = o.getTradeTypeByFloat(order["type"].(float64))
+						avgPrice = order["price_avg"].(float64)
+					} else if o.exchangeType == ExchangeTypeSpot {
+						orderType = o.getTradeTypeByString(order["type"].(string))
+						avgPrice = order["avg_price"].(float64)
+					}
+					item := OrderInfo{
+						Pair:    order["symbol"].(string),
+						OrderID: strconv.FormatFloat(order["order_id"].(float64), 'f', 0, 64),
+						// OrderID: strconv.FormatInt(order["order_id"].(int64), 64),
+						Price:      order["price"].(float64),
+						Amount:     order["amount"].(float64),
+						Type:       orderType,
+						Status:     o.getStatus(order["status"].(float64)),
+						DealAmount: order["deal_amount"].(float64),
+						AvgPrice:   avgPrice,
+					}
+					result[i] = item
+				}
+
+				return result
+			}
 		}
 
-		result := make([]OrderInfo, len(orders))
+		log.Printf("Fail to get Order Info")
+		return nil
 
-		for i, tmp := range orders {
-			order := tmp.(map[string]interface{})
-
-			var orderType TradeType
-			var avgPrice float64
-			if o.exchangeType == ExchangeTypeFuture {
-				orderType = o.getTradeTypeByFloat(order["type"].(float64))
-				avgPrice = order["price_avg"].(float64)
-			} else if o.exchangeType == ExchangeTypeSpot {
-				orderType = o.getTradeTypeByString(order["type"].(string))
-				avgPrice = order["avg_price"].(float64)
-			}
-			item := OrderInfo{
-				Pair:    order["symbol"].(string),
-				OrderID: strconv.FormatFloat(order["order_id"].(float64), 'f', 0, 64),
-				// OrderID: strconv.FormatInt(order["order_id"].(int64), 64),
-				Price:      order["price"].(float64),
-				Amount:     order["amount"].(float64),
-				Type:       orderType,
-				Status:     o.getStatus(order["status"].(float64)),
-				DealAmount: order["deal_amount"].(float64),
-				AvgPrice:   avgPrice,
-			}
-			result[i] = item
-		}
-
-		return result
 	case <-time.After(DefaultTimeoutSec * time.Second):
 		log.Printf("Timeout to get user info")
 		go o.triggerEvent(EventLostConnection)
