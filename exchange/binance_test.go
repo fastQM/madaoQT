@@ -154,17 +154,46 @@ func TestPeriodArea(t *testing.T) {
 
 }
 
+// 阈值反转：2018/07/28 18:05:58 Result:盈利次数：16 亏损次数 ：15 盈利求和：73.987131 亏损求和 ：-30.726701 净值 ：1.449912 阈值比例:0.3800
+// 反转：2018/07/28 17:50:58 Result:盈利次数：15 亏损次数 ：15 盈利求和：73.530383 亏损求和 ：-32.472681 净值 ：1.413358 阈值比例:0.3800
+// 开盘突破：2018/07/28 17:51:56 Result:盈利次数：18 亏损次数 ：17 盈利求和：68.505646 亏损求和 ：-32.352515 净值 ：1.351174 阈值比例:0.3800
+// 低点突破：2018/07/28 17:53:25 Result:盈利次数：22 亏损次数 ：17 盈利求和：69.102114 亏损求和 ：-25.644934 净值 ：1.450424 阈值比例:0.3800
 func TestGetKlines(t *testing.T) {
 
+	var results []string
+	var klines []KlineValue
 	binance := new(Binance)
 	binance.SetConfigure(Config{
 		Proxy: "SOCKS5:127.0.0.1:1080",
 	})
 
-	klines := binance.GetKline("eth/usdt", KlinePeriod2Hour, 700)
+	// filename := "binance-ethusdt-2h"
+	filename := "binance-btcusdt-2h"
+	if true {
+		klines = binance.GetKline("btc/usdt", KlinePeriod2Hour, 5000)
+		SaveHistory(filename, klines)
+	} else {
+		klines = LoadHistory(filename)
+	}
 
+	// result := StrategyTrendArea(klines, true, true)
+	// log.Printf("Result:%v", result)
+
+	// for value := 0.1; value < 0.6; value += 0.01 {
+	// for value := 1; value < 45; value++ {
+	// 	// log.Printf("Klines:%v", klines)
+	// ChangeOffset(value)
+	// ChangeInterval(value)
 	result := StrategyTrendArea(klines, true, true)
-	log.Printf("Result:%v", result)
+	// result := CTPStrategyTrendSplit(klines, true, true, true)
+	// msg := fmt.Sprintf("Offset:%.2f Result:%s", value, result)
+	results = append(results, result)
+
+	// }
+
+	for _, result := range results {
+		log.Printf("Result:%v", result)
+	}
 }
 
 func TestKlineRatio(t *testing.T) {
