@@ -606,7 +606,8 @@ func GetLastPeriodArea(kline []KlineValue) (high float64, low float64, err error
 			// log.Printf("[%s]high:%v low:%v close:%v",
 			// 	time.Unix(int64(kline[i].OpenTime), 0), kline[i].High, kline[i].Low, kline[i].Close)
 			// tmp := (kline[i].Close*0.8 + kline[i].High*0.2)
-			tmp := kline[i].High
+			tmp := (kline[i].High*0.618 + kline[i].Close*0.382)
+			// tmp := kline[i].High
 			if high == 0 {
 				high = tmp
 			} else if high < tmp {
@@ -614,7 +615,8 @@ func GetLastPeriodArea(kline []KlineValue) (high float64, low float64, err error
 			}
 
 			// tmp = (kline[i].Close*0.8 + kline[i].Low*0.2)
-			tmp = kline[i].Low
+			tmp = (kline[i].Low*0.618 + kline[i].Close*0.382)
+			// tmp = kline[i].Low
 			if low == 0 {
 				low = tmp
 			} else if low > tmp {

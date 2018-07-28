@@ -75,35 +75,46 @@ const Period1Day = 86400
 2018/03/26 14:34:06 盈利求和：226.815438 亏损求和 ：-6.503738
 */
 
+// 20180728
+// 阈值反转：2018/07/28 18:04:33 Result:盈利次数：120 亏损次数 ：117 盈利求和：899.858982 亏损求和 ：-301.188964 净值 ：157.569041 阈值比例:0.3800
+// 单纯均线反转平仓：2018/07/28 17:50:00 Result:盈利次数：126 亏损次数 ：102 盈利求和：898.044983 亏损求和 ：-309.698358 净值 ：138.044938 阈值比例:0.3800
+// 开盘低于十日线平仓：2018/07/28 15:59:44 Result:盈利次数：131 亏损次数 ：147 盈利求和：820.745112 亏损求和 ：-372.870958 净值 ：36.328032 阈值比例:0.3800
+// 低点平仓：2018/07/28 17:44:28 Result:盈利次数：145 亏损次数 ：204 盈利求和：764.129442 亏损求和 ：-402.364582 净值 ：16.424115 阈值比例:0.3800
 func TestGetKline(t *testing.T) {
 
-	// var logs []string
+	var results []string
 	// date1 := time.Date(2017, 8, 10, 0, 0, 0, 0, time.Local)
-	date2 := time.Date(2018, 1, 1, 0, 0, 0, 0, time.Local)
+	date2 := time.Date(2017, 1, 1, 0, 0, 0, 0, time.Local)
 
 	polo := new(PoloniexAPI)
 	// result := polo.GetKline("eth/usdt", date1, &date2, Period5Min)
 	var klines []KlineValue
 
-	filename := "poloniex-2hour-20180629"
-
+	// filename := "poloniex-ethusdt-4hour-20160101"
+	// filename := "poloniex-ethusdt-2hour-20160101"
+	filename := "poloniex-btcusdt-2hour-20170101"
 	if true {
-		klines = polo.GetKline("eth/usdt", date2, nil, Period2H)
+		klines = polo.GetKline("btc/usdt", date2, nil, Period2H)
 		SaveHistory(filename, klines)
 	} else {
 		klines = LoadHistory(filename)
 	}
 
-	// for value := 0.0; value < 0.6; value += 0.01 {
+	// for value := 0.1; value < 0.6; value += 0.01 {
+	// for value := 1; value < 45; value++ {
 	// 	// log.Printf("Klines:%v", klines)
-	// 	ChangeOffset(value)
-	result := StrategyTrendTest(klines, true, false)
+	// ChangeOffset(value)
+	// ChangeInterval(value)
+	result := StrategyTrendArea(klines, true, true)
+	// result := CTPStrategyTrendSplit(klines, true, true, true)
 	// msg := fmt.Sprintf("Offset:%.2f Result:%s", value, result)
-	// logs = append(logs, msg)
-
+	results = append(results, result)
 	// }
 
-	log.Printf("Result:%v", result)
+	for _, result := range results {
+		log.Printf("Result:%v", result)
+	}
+
 }
 
 func TestMapArray(t *testing.T) {
