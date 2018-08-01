@@ -46,7 +46,7 @@ func (p *OkexRestAPI) SetConfigure(config Config) {
 	p.secretKey = config.Secret
 
 	if p.config.Proxy != "" {
-		logger.Infof("使用代理:%s", p.config.Proxy)
+		logger.Infof("Proxy:%s", p.config.Proxy)
 	}
 }
 
@@ -189,7 +189,7 @@ func (p *OkexRestAPI) GetPosition(pair string, contract_type string) map[string]
 	}
 
 	if err, response := p.tradeRequest("future_position_4fix.do", parameters); err != nil {
-		logger.Errorf("无效数据:%v", err)
+		logger.Errorf("Invalid response:%v", err)
 		return nil
 	} else {
 		var values map[string]interface{}
@@ -201,7 +201,7 @@ func (p *OkexRestAPI) GetPosition(pair string, contract_type string) map[string]
 		}
 
 		if !values["result"].(bool) {
-			logger.Error("获取持仓失败")
+			logger.Error("Fail to get position")
 			return nil
 		}
 
@@ -248,7 +248,7 @@ func (p *OkexRestAPI) GetKline(pair string, period int, limit int) []KlineValue 
 	}
 
 	if err, response := p.marketRequest("future_kline.do", params); err != nil {
-		logger.Errorf("无效数据:%v", err)
+		logger.Errorf("Invalid response:%v", err)
 		return nil
 	} else {
 		var values [][]interface{}
