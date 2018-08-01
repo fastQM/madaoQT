@@ -151,7 +151,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 					Price:    tradePrice,
 					OrderID:  trade.OrderID,
 				}); err != nil {
-					Logger.Errorf("保存交易操作失败:%v", err)
+					Logger.Errorf("Fail to save trade record:%v", err)
 				}
 			}
 
@@ -168,7 +168,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 					})
 
 					if info == nil || len(info) == 0 {
-						Logger.Error("未取得订单信息")
+						Logger.Error("Fail to get the order info")
 						goto __ERROR
 					}
 
@@ -190,10 +190,10 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 					}
 
 					loop--
-					Logger.Debugf("等待成交...")
+					Logger.Debugf("Waiting for the trading result...")
 
 					if loop == 0 {
-						Logger.Debugf("超时，取消订单...")
+						Logger.Debugf("Timeout，cancel the order...")
 						// cancle the order, if it is traded when we cancle?
 						trade := exchange.CancelOrder(Exchange.OrderInfo{
 							Pair:    tradeConfig.Pair,
@@ -217,7 +217,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 							})
 
 							if info == nil || len(info) == 0 {
-								Logger.Error("未取得订单信息")
+								Logger.Error("Fail to get the order info")
 								goto __ERROR
 							}
 
@@ -236,18 +236,18 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 							dealAmount += info[0].DealAmount
 							totalCost += (info[0].AvgPrice * info[0].DealAmount)
-							Logger.Debugf("成功取消订单：%v, 已成交金额:%v", info[0].OrderID, dealAmount)
+							Logger.Debugf("Succeed to get the order info:%v, deal amout:%v", info[0].OrderID, dealAmount)
 							goto __CheckDealAmount
 
 						} else {
-							Logger.Errorf("取消订单：%v失败，请手动操作", info[0].OrderID)
+							Logger.Errorf("Fail to cancel the order:%v", info[0].OrderID)
 							errorCode = TaskUnableCancelOrder
 							goto __ERROR
 						}
 					}
 				}
 			} else {
-				Logger.Errorf("交易失败：%v", trade.Error)
+				Logger.Errorf("Trade Failed:%v", trade.Error)
 				errorCode = TaskUnableTrade
 				goto __ERROR
 			}
@@ -277,7 +277,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 			return
 
 		__CheckDealAmount:
-			Logger.Debugf("已成交:%v 总量:%v", dealAmount, tradeConfig.Amount)
+			Logger.Debugf("Deal:%v Total:%v", dealAmount, tradeConfig.Amount)
 			if tradeConfig.Amount-dealAmount >= 0.01 {
 				goto _NEXTLOOP
 			}
