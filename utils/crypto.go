@@ -5,7 +5,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -46,7 +45,7 @@ func (f *AESCrypto) init() error {
 
 	if len(f.Key) > 32 || len(f.Key) == 0 {
 
-		fmt.Print("请输入密码:\r\n")
+		log.Print("请输入密码:\r\n")
 		f.Key, err = terminal.ReadPassword(int(syscall.Stdin))
 		if err != nil {
 			return err
@@ -59,7 +58,7 @@ func (f *AESCrypto) init() error {
 
 	if len(f.Nonce) > 12 || len(f.Nonce) == 0 {
 
-		fmt.Print("请输入随机数:\r\n")
+		log.Print("请输入随机数:\r\n")
 		f.Nonce, err = terminal.ReadPassword(int(syscall.Stdin))
 		if err != nil {
 			return err
