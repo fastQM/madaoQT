@@ -91,10 +91,10 @@ func TestGetKline(t *testing.T) {
 	var klines []KlineValue
 
 	// filename := "poloniex-ethusdt-4hour-20160101"
-	// filename := "poloniex-ethusdt-2hour-20160101"
-	filename := "poloniex-btcusdt-2hour-20170101"
-	if true {
-		klines = polo.GetKline("btc/usdt", date2, nil, Period2H)
+	filename := "poloniex-ethusdt-2hour-20160101"
+	// filename := "poloniex-btcusdt-2hour-20170101"
+	if false {
+		klines = polo.GetKline("eth/usdt", date2, nil, Period2H)
 		SaveHistory(filename, klines)
 	} else {
 		klines = LoadHistory(filename)

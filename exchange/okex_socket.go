@@ -198,7 +198,7 @@ func (o *OKExAPI) Start() error {
 	dialer := Websocket.DefaultDialer
 
 	if o.proxy != "" {
-		logger.Infof("使用代理:%s", o.proxy)
+		logger.Infof("Proxy:%s", o.proxy)
 		values := strings.Split(o.proxy, ":")
 		if values[0] == "SOCKS5" {
 			proxy, err := proxy.SOCKS5("tcp", values[1]+":"+values[2], nil, proxy.Direct)
@@ -322,7 +322,7 @@ func (o *OKExAPI) Start() error {
 						// logger.Debugf("update ticker:%d", ticker)
 						o.depthValues[channel].Store(KeyTicker, ticker)
 					} else {
-						logger.Error("无法获取ticker")
+						logger.Error("Fail to get ticker")
 					}
 
 					goto __END

@@ -20,18 +20,18 @@ func TestGetOkexRestAPIKline(t *testing.T) {
 
 	var klines []KlineValue
 	// file := "okex-ethusdt-1h-tmp"
-	// file := "okex-ethusdt-1h"
-	file := "okex-btcusdt-2h"
-	if true {
+	file := "okex-ethusdt-1h"
+	// file := "okex-btcusdt-2h"
+	if false {
 		klines = okex.GetKline("btc/usdt", KlinePeriod2Hour, 1400)
 		SaveHistory(file, klines)
 	} else {
 		klines = LoadHistory(file)
 	}
 
-	// for _, kline := range klines {
-	// 	log.Printf("%.2f Time:%v", kline.OpenTime, time.Unix(int64(kline.OpenTime), 0).String())
-	// }
+	for _, kline := range klines {
+		log.Printf("Time:%v %v", time.Unix(int64(kline.OpenTime), 0).String(), kline)
+	}
 
 	log.Printf("%v", time.Now())
 
@@ -39,10 +39,11 @@ func TestGetOkexRestAPIKline(t *testing.T) {
 	if len(klines) != 0 {
 		log.Printf("共有%d条", len(klines))
 
-		// for i := 0.01; i < 0.8; i += 0.01 {
+		// for i := 0.01; i < 0.2; i += 0.01 {
 		// for i := 1; i < 45; i++ {
 		// ChangeOffset(i)
 		// ChangeInterval(i)
+		// ChangeLoss(i)
 		result := StrategyTrendArea(klines, true, true)
 		results = append(results, result)
 		// }

@@ -471,6 +471,7 @@ func GetCurrentPeriodArea(kline []KlineValue) (high float64, low float64, err er
 	return 0, 0, errors.New("Invalid Period")
 }
 
+// GetLastDaysArea to get the high/low values from kline[length-10:length], current kline is included
 func GetLastDaysArea(days int, kline []KlineValue) (high float64, low float64, err error) {
 
 	length := len(kline)
