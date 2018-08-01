@@ -200,7 +200,7 @@ func (p *OkexRestAPI) GetPosition(pair string, contract_type string) map[string]
 			}
 		}
 
-		if !values["result"].(bool) {
+		if !values["result"].(bool) || values["holding"] == nil || len(values["holding"].([]interface{})) == 0 {
 			logger.Error("Fail to get position")
 			return nil
 		}
