@@ -3,6 +3,7 @@ package exchange
 import (
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -304,7 +305,72 @@ func (p *OkexRestAPI) GetBalance() map[string]interface{} {
 
 // Trade() trade as the configs
 func (p *OkexRestAPI) Trade(configs TradeConfig) *TradeResult {
-	return nil
+	coins := ParsePair(configs.Pair)
+
+	parameters := map[string]string{
+		"symbol":        coins[0] + "_usd",
+		"contract_type": "quarter",
+		"api_key":       p.apiKey,
+		"price":         strconv.FormatFloat(configs.Price, 'f', 4, 64),
+		"amount":        strconv.FormatFloat(configs.Amount, 'f', 4, 64),
+		"type":          OkexGetTradeTypeString(configs.Type),
+		"match_price":   "1",
+	}
+
+	if parameters != nil {
+		var keys []string
+		var signPlain string
+
+		for k := range parameters {
+			keys = append(keys, k)
+		}
+
+		sort.Strings(keys)
+
+		for _, key := range keys {
+			if key == "sign" {
+				continue
+			}
+			signPlain += (key + "=" + parameters[key])
+			signPlain += "&"
+		}
+
+		signPlain += ("secret_key=" + p.secretKey)
+
+		// log.Printf("Plain:%v", signPlain)
+		md5Value := fmt.Sprintf("%x", md5.Sum([]byte(signPlain)))
+		// log.Printf("MD5:%v", md5Value)
+		parameters["sign"] = strings.ToUpper(md5Value)
+
+	}
+
+	if err, response := p.tradeRequest("future_trade.do", parameters); err != nil {
+		logger.Errorf("Invalid response:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if response != nil {
+			if err = json.Unmarshal(response, &values); err != nil {
+				logger.Errorf("Fail to Unmarshal:%v", err)
+				return nil
+			}
+		}
+
+		if !values["result"].(bool) {
+			logger.Error("Fail to get position")
+			errMsg := fmt.Sprintf("Error code:%f", values["error_code"].(float64))
+			return &TradeResult{
+				Error: errors.New(errMsg),
+			}
+		}
+
+		orderId := strconv.FormatFloat(values["order_id"].(float64), 'f', 0, 64)
+		return &TradeResult{
+			Error:   nil,
+			OrderID: orderId,
+		}
+
+	}
 }
 
 // CancelOrder() cancel the order as the order information
@@ -314,5 +380,97 @@ func (p *OkexRestAPI) CancelOrder(order OrderInfo) *TradeResult {
 
 // GetOrderInfo() get the information with order filter
 func (p *OkexRestAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
-	return nil
+	coins := ParsePair(filter.Pair)
+
+	parameters := map[string]string{
+		"symbol":        coins[0] + "_usd",
+		"contract_type": "quarter",
+		"api_key":       p.apiKey,
+		"order_id":      filter.OrderID,
+	}
+
+	if parameters != nil {
+		var keys []string
+		var signPlain string
+
+		for k := range parameters {
+			keys = append(keys, k)
+		}
+
+		sort.Strings(keys)
+
+		for _, key := range keys {
+			if key == "sign" {
+				continue
+			}
+			signPlain += (key + "=" + parameters[key])
+			signPlain += "&"
+		}
+
+		signPlain += ("secret_key=" + p.secretKey)
+
+		// log.Printf("Plain:%v", signPlain)
+		md5Value := fmt.Sprintf("%x", md5.Sum([]byte(signPlain)))
+		// log.Printf("MD5:%v", md5Value)
+		parameters["sign"] = strings.ToUpper(md5Value)
+
+	}
+
+	if err, response := p.tradeRequest("future_order_info.do", parameters); err != nil {
+		logger.Errorf("Invalid response:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if response != nil {
+			if err = json.Unmarshal(response, &values); err != nil {
+				logger.Errorf("Fail to Unmarshal:%v", err)
+				return nil
+			}
+		}
+
+		if values["result"] != nil && !values["result"].(bool) {
+			logger.Error("Fail to get order info")
+			return nil
+		}
+
+		if values["orders"] != nil {
+			orders := values["orders"].([]interface{})
+
+			if len(orders) == 0 {
+				logger.Error("The order info is not found")
+				return nil
+			}
+
+			result := make([]OrderInfo, len(orders))
+
+			for i, tmp := range orders {
+				order := tmp.(map[string]interface{})
+
+				var orderType TradeType
+				var avgPrice float64
+
+				orderType = OkexGetTradeTypeByFloat(order["type"].(float64))
+				avgPrice = order["price_avg"].(float64)
+
+				item := OrderInfo{
+					Pair:    order["symbol"].(string),
+					OrderID: strconv.FormatFloat(order["order_id"].(float64), 'f', 0, 64),
+					// OrderID: strconv.FormatInt(order["order_id"].(int64), 64),
+					Price:      order["price"].(float64),
+					Amount:     order["amount"].(float64),
+					Type:       orderType,
+					Status:     OkexGetTradeStatus(order["status"].(float64)),
+					DealAmount: order["deal_amount"].(float64),
+					AvgPrice:   avgPrice,
+				}
+				result[i] = item
+			}
+
+			return result
+		}
+
+		logger.Error("Invalid order info")
+		return nil
+
+	}
 }
