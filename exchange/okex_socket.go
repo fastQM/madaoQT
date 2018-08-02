@@ -747,7 +747,7 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 			"price":         strconv.FormatFloat(configs.Price, 'f', 2, 64),
 			// the exact amount orders is amount/level_rate
 			"amount":      strconv.FormatFloat(configs.Amount, 'f', 2, 64),
-			"type":        o.getTradeTypeString(configs.Type),
+			"type":        OkexGetTradeTypeString(configs.Type),
 			"match_price": "0",
 			"lever_rate":  "10",
 		}
@@ -759,7 +759,7 @@ func (o *OKExAPI) Trade(configs TradeConfig) *TradeResult {
 		parameters = map[string]string{
 			"api_key": o.apiKey,
 			"symbol":  coins[0] + "_" + coins[1],
-			"type":    o.getTradeTypeString(configs.Type),
+			"type":    OkexGetTradeTypeString(configs.Type),
 			"price":   strconv.FormatFloat(configs.Price, 'f', 4, 64),
 			"amount":  strconv.FormatFloat(configs.Amount, 'f', 4, 64),
 		}
@@ -941,7 +941,7 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 					var orderType TradeType
 					var avgPrice float64
 					if o.exchangeType == ExchangeTypeFuture {
-						orderType = o.getTradeTypeByFloat(order["type"].(float64))
+						orderType = OkexGetTradeTypeByFloat(order["type"].(float64))
 						avgPrice = order["price_avg"].(float64)
 					} else if o.exchangeType == ExchangeTypeSpot {
 						orderType = o.getTradeTypeByString(order["type"].(string))
@@ -954,7 +954,7 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 						Price:      order["price"].(float64),
 						Amount:     order["amount"].(float64),
 						Type:       orderType,
-						Status:     o.getStatus(order["status"].(float64)),
+						Status:     OkexGetTradeStatus(order["status"].(float64)),
 						DealAmount: order["deal_amount"].(float64),
 						AvgPrice:   avgPrice,
 					}
@@ -1074,7 +1074,7 @@ func (o *OKExAPI) GetBalance() map[string]interface{} {
 
 }
 
-func (o *OKExAPI) getStatus(status float64) OrderStatusType {
+func OkexGetTradeStatus(status float64) OrderStatusType {
 	switch status {
 	case 0:
 		return OrderStatusOpen
@@ -1110,7 +1110,7 @@ func (o *OKExAPI) getTradeTypeByString(orderType string) TradeType {
 	return TradeTypeUnknown
 }
 
-func (o *OKExAPI) getTradeTypeByFloat(orderType float64) TradeType {
+func OkexGetTradeTypeByFloat(orderType float64) TradeType {
 	switch orderType {
 	case 1:
 		return TradeTypeOpenLong
@@ -1125,7 +1125,7 @@ func (o *OKExAPI) getTradeTypeByFloat(orderType float64) TradeType {
 	return TradeTypeUnknown
 }
 
-func (o *OKExAPI) getTradeTypeString(orderType TradeType) string {
+func OkexGetTradeTypeString(orderType TradeType) string {
 
 	switch orderType {
 	case TradeTypeOpenLong:
@@ -1142,7 +1142,6 @@ func (o *OKExAPI) getTradeTypeString(orderType TradeType) string {
 		return "sell"
 	}
 
-	logger.Errorf("[%s]getTradeType: Invalid type", o.GetExchangeName())
 	return ""
 }
 

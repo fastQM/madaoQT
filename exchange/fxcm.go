@@ -257,6 +257,29 @@ func (p *FXCM) GetBalance() map[string]interface{} {
 
 func (p *FXCM) GetTicker(pair string) *TickerValue {
 
+	// not necessary, because the result of the rest api is the same
+
+	// p.socket.On(pair, func(c *socketio.Channel, args interface{}) {
+	// 	var values map[string]interface{}
+	// 	if err := json.Unmarshal([]byte(args.(string)), &values); err != nil {
+	// 		logger.Errorf("解析错误:%v", err)
+	// 		return
+	// 	}
+
+	// 	if values != nil {
+	// 		pair := values["Symbol"].(string)
+	// 		rates := values["Rates"].([]interface{})
+	// 		ticker := &TickerValue{
+	// 			High: rates[2].(float64),
+	// 			Low:  rates[3].(float64),
+	// 			Last: (rates[0].(float64) + rates[1].(float64)) / 2,
+	// 			Time: time.Unix(int64(values["Updated"].(float64)/1000), 0).Format(Global.TimeFormat),
+	// 		}
+
+	// 		logger.Infof("Pair:%v Values: %v", pair, ticker)
+	// 	}
+	// })
+
 	if err, response := p.marketRequest("POST", "/subscribe", map[string]string{
 		"pairs": pair,
 	}); err != nil {
@@ -284,11 +307,6 @@ func (p *FXCM) GetTicker(pair string) *TickerValue {
 				Time: time.Unix(int64(pairs[len(pairs)-1].(map[string]interface{})["Updated"].(float64)/1000), 0).Format(Global.TimeFormat),
 			}
 		}
-
-		p.socket.On(pair, func(c *socketio.Channel, args interface{}) {
-			log.Printf("[IGNORE]Values:%v", args)
-		})
-
 	}
 
 	return nil

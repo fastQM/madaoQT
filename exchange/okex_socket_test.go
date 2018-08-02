@@ -283,8 +283,7 @@ func _TestGetTradeType(t *testing.T) {
 }
 
 func _TestGetOrderStatus(t *testing.T) {
-	okex := new(OKExAPI)
-	log.Printf("Type:%d", okex.getStatus(1))
+	log.Printf("Type:%d", OkexGetTradeStatus(1))
 }
 
 func TestGetFutureKline(t *testing.T) {

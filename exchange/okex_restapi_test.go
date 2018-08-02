@@ -82,3 +82,56 @@ func TestGetPosition(t *testing.T) {
 
 	log.Printf("Balance:%v", okex.GetPosition("eth/usd", "quarter"))
 }
+
+func TestOKEXRestTrade(t *testing.T) {
+
+	mongo := &Mongo.ExchangeDB{
+		Server: "mongodb://localhost:27017",
+	}
+	err, key := GetExchangeKey(mongo, NameOKEX, []byte(""), []byte(""))
+	if err != nil {
+		log.Printf("Err:%v", err)
+		return
+	}
+
+	okex := new(OkexRestAPI)
+	okex.SetConfigure(Config{
+		API:    key.API,
+		Secret: key.Secret,
+	})
+
+	okex.Start()
+
+	log.Printf("Result:%v", okex.Trade(TradeConfig{
+		Type:   TradeTypeCloseLong,
+		Amount: 1,
+		Price:  300,
+		Pair:   "eth/usdt",
+	}))
+}
+
+func TestOKEXRestGetOrderInfo(t *testing.T) {
+
+	mongo := &Mongo.ExchangeDB{
+		Server: "mongodb://localhost:27017",
+	}
+	err, key := GetExchangeKey(mongo, NameOKEX, []byte(""), []byte(""))
+	if err != nil {
+		log.Printf("Err:%v", err)
+		return
+	}
+
+	okex := new(OkexRestAPI)
+	okex.SetConfigure(Config{
+		API:    key.API,
+		Secret: key.Secret,
+	})
+
+	okex.Start()
+
+	//1208688209050624
+	log.Printf("Result:%v", okex.GetOrderInfo(OrderInfo{
+		Pair:    "eth/usdt",
+		OrderID: "1208772889369600",
+	}))
+}
