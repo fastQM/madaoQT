@@ -94,7 +94,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 		for {
 
 			if time.Now().After(stopTime) {
-				Logger.Debugf("超出操作时间")
+				Logger.Debugf("Timeout when trading")
 				errorCode = TaskErrorTimeout
 				goto __ERROR
 			}
@@ -247,7 +247,6 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 					}
 				}
 			} else {
-				Logger.Errorf("Trade Failed:%v", trade.Error)
 				errorCode = TaskUnableTrade
 				goto __ERROR
 			}
@@ -417,11 +416,11 @@ func getPlacedPrice(tradeType Exchange.TradeType, price float64, limit float64) 
 
 	if tradeType == Exchange.TradeTypeOpenLong || tradeType == Exchange.TradeTypeCloseShort || tradeType == Exchange.TradeTypeBuy {
 		limitPriceHigh := price * (1 + limit)
-		Logger.Debugf("买入操作，接受最高价格：%v", limitPriceHigh)
+		Logger.Debugf("Buy Price:%v", limitPriceHigh)
 		return limitPriceHigh
 	} else {
 		limitPriceLow := price * (1 - limit)
-		Logger.Debugf("卖出操作，接受最低价格：%v", limitPriceLow)
+		Logger.Debugf("Sell Price:%v", limitPriceLow)
 		return limitPriceLow
 
 	}
