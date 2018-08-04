@@ -330,14 +330,14 @@ func (p *FXCM) openTrade(configs TradeConfig) *TradeResult {
 		"order_type":    "AtMarket",
 		"time_in_force": "FOK",
 	}); err != nil {
-		logger.Errorf("下单失败:%v", err)
+		logger.Errorf("Fail to open trade:%v", err)
 		return &TradeResult{
 			Error: err,
 		}
 	} else {
 		var values map[string]interface{}
 		if err = json.Unmarshal(response, &values); err != nil {
-			logger.Errorf("解析错误:%v", err)
+			logger.Errorf("Fail to parse json:%v", err)
 			return &TradeResult{
 				Error: err,
 			}
@@ -426,17 +426,18 @@ func (p *FXCM) GetOpenPositions() []OrderInfo {
 	if err, response := p.marketRequest("GET", "/trading/get_model", map[string]string{
 		"models": "OpenPosition",
 	}); err != nil {
-		logger.Errorf("获取仓位失败:%v", err)
+		logger.Errorf("Failt to get positions:%v", err)
 		return nil
 	} else {
 		var values map[string]interface{}
+		logger.Debugf("Response:%s", string(response))
 		if err = json.Unmarshal(response, &values); err != nil {
-			logger.Errorf("解析错误:%v", err)
+			logger.Errorf("Fail to parse json datas:%v", err)
 			return nil
 		}
 
 		if values["response"] != nil && values["response"].(map[string]interface{})["executed"].(bool) != true {
-			logger.Error("获取仓位失败")
+			logger.Error("Fail to executed")
 			return nil
 		}
 
@@ -446,7 +447,7 @@ func (p *FXCM) GetOpenPositions() []OrderInfo {
 			orders := make([]OrderInfo, len(positions))
 			for i, position := range positions {
 				if position.(map[string]interface{})["open"].(float64) == 0 && position.(map[string]interface{})["amountK"].(float64) == 0 {
-					logger.Error("该仓位为无效仓位")
+					logger.Error("Invalid position")
 					continue
 				}
 				orders[i].Pair = position.(map[string]interface{})["currency"].(string)
