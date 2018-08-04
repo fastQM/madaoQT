@@ -10,7 +10,8 @@ func SendMail(user, password, host, to, subject, body, mailtype string) error {
 	hp := strings.Split(host, ":")
 	auth := smtp.PlainAuth("", user, password, hp[0])
 	var content_type string
-	now := time.Now().Format("2006-01-02 15:04:05")
+	location, _ := time.LoadLocation("Asia/Shanghai")
+	now := time.Now().In(location).Format("2006-01-02 15:04:05")
 	if mailtype == "html" {
 		content_type = "Content-Type: text/" + mailtype + "; charset=UTF-8"
 	} else {
