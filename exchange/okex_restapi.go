@@ -156,38 +156,11 @@ func (p *OkexRestAPI) GetPosition(pair string, contract_type string) map[string]
 	coins := ParsePair(pair)
 	symbol := coins[0] + "_" + coins[1]
 
-	parameters := map[string]string{
+	parameters := p.sign(map[string]string{
 		"symbol":        symbol,
 		"contract_type": contract_type,
 		"api_key":       p.apiKey,
-	}
-
-	if parameters != nil {
-		var keys []string
-		var signPlain string
-
-		for k := range parameters {
-			keys = append(keys, k)
-		}
-
-		sort.Strings(keys)
-
-		for _, key := range keys {
-			if key == "sign" {
-				continue
-			}
-			signPlain += (key + "=" + parameters[key])
-			signPlain += "&"
-		}
-
-		signPlain += ("secret_key=" + p.secretKey)
-
-		// log.Printf("Plain:%v", signPlain)
-		md5Value := fmt.Sprintf("%x", md5.Sum([]byte(signPlain)))
-		// log.Printf("MD5:%v", md5Value)
-		parameters["sign"] = strings.ToUpper(md5Value)
-
-	}
+	})
 
 	if err, response := p.tradeRequest("future_position_4fix.do", parameters); err != nil {
 		logger.Errorf("Invalid response:%v", err)
@@ -296,12 +269,7 @@ func (p *OkexRestAPI) GetDepthValue(pair string) [][]DepthPrice {
 	return nil
 }
 
-// GetBalance() get the balances of all the coins
-func (p *OkexRestAPI) GetBalance() map[string]interface{} {
-
-	parameters := map[string]string{
-		"api_key": p.apiKey,
-	}
+func (p *OkexRestAPI) sign(parameters map[string]string) map[string]string {
 
 	if parameters != nil {
 		var keys []string
@@ -328,7 +296,18 @@ func (p *OkexRestAPI) GetBalance() map[string]interface{} {
 		// log.Printf("MD5:%v", md5Value)
 		parameters["sign"] = strings.ToUpper(md5Value)
 
+		return parameters
 	}
+
+	return nil
+}
+
+// GetBalance() get the balances of all the coins
+func (p *OkexRestAPI) GetBalance() map[string]interface{} {
+
+	parameters := p.sign(map[string]string{
+		"api_key": p.apiKey,
+	})
 
 	if err, response := p.tradeRequest("future_userinfo_4fix.do", parameters); err != nil {
 		logger.Errorf("Invalid response:%v", err)
@@ -368,7 +347,7 @@ func (p *OkexRestAPI) GetBalance() map[string]interface{} {
 func (p *OkexRestAPI) Trade(configs TradeConfig) *TradeResult {
 	coins := ParsePair(configs.Pair)
 
-	parameters := map[string]string{
+	parameters := p.sign(map[string]string{
 		"symbol":        coins[0] + "_usd",
 		"contract_type": "quarter",
 		"api_key":       p.apiKey,
@@ -376,34 +355,7 @@ func (p *OkexRestAPI) Trade(configs TradeConfig) *TradeResult {
 		"amount":        strconv.FormatFloat(configs.Amount, 'f', 4, 64),
 		"type":          OkexGetTradeTypeString(configs.Type),
 		"match_price":   "1",
-	}
-
-	if parameters != nil {
-		var keys []string
-		var signPlain string
-
-		for k := range parameters {
-			keys = append(keys, k)
-		}
-
-		sort.Strings(keys)
-
-		for _, key := range keys {
-			if key == "sign" {
-				continue
-			}
-			signPlain += (key + "=" + parameters[key])
-			signPlain += "&"
-		}
-
-		signPlain += ("secret_key=" + p.secretKey)
-
-		// log.Printf("Plain:%v", signPlain)
-		md5Value := fmt.Sprintf("%x", md5.Sum([]byte(signPlain)))
-		// log.Printf("MD5:%v", md5Value)
-		parameters["sign"] = strings.ToUpper(md5Value)
-
-	}
+	})
 
 	if err, response := p.tradeRequest("future_trade.do", parameters); err != nil {
 		logger.Errorf("Invalid response:%v", err)
@@ -443,39 +395,12 @@ func (p *OkexRestAPI) CancelOrder(order OrderInfo) *TradeResult {
 func (p *OkexRestAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 	coins := ParsePair(filter.Pair)
 
-	parameters := map[string]string{
+	parameters := p.sign(map[string]string{
 		"symbol":        coins[0] + "_usd",
 		"contract_type": "quarter",
 		"api_key":       p.apiKey,
 		"order_id":      filter.OrderID,
-	}
-
-	if parameters != nil {
-		var keys []string
-		var signPlain string
-
-		for k := range parameters {
-			keys = append(keys, k)
-		}
-
-		sort.Strings(keys)
-
-		for _, key := range keys {
-			if key == "sign" {
-				continue
-			}
-			signPlain += (key + "=" + parameters[key])
-			signPlain += "&"
-		}
-
-		signPlain += ("secret_key=" + p.secretKey)
-
-		// log.Printf("Plain:%v", signPlain)
-		md5Value := fmt.Sprintf("%x", md5.Sum([]byte(signPlain)))
-		// log.Printf("MD5:%v", md5Value)
-		parameters["sign"] = strings.ToUpper(md5Value)
-
-	}
+	})
 
 	if err, response := p.tradeRequest("future_order_info.do", parameters); err != nil {
 		logger.Errorf("Invalid response:%v", err)
