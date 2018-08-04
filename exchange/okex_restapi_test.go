@@ -135,3 +135,26 @@ func TestOKEXRestGetOrderInfo(t *testing.T) {
 		OrderID: "1208772889369600",
 	}))
 }
+
+func TestOKEXRestGetBalance(t *testing.T) {
+
+	mongo := &Mongo.ExchangeDB{
+		Server: "mongodb://localhost:27017",
+	}
+	err, key := GetExchangeKey(mongo, NameOKEX, []byte(""), []byte(""))
+	if err != nil {
+		log.Printf("Err:%v", err)
+		return
+	}
+
+	okex := new(OkexRestAPI)
+	okex.SetConfigure(Config{
+		API:    key.API,
+		Secret: key.Secret,
+	})
+
+	okex.Start()
+
+	//1208688209050624
+	log.Printf("Result:%v", okex.GetBalance())
+}
