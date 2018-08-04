@@ -298,8 +298,69 @@ func (p *OkexRestAPI) GetDepthValue(pair string) [][]DepthPrice {
 
 // GetBalance() get the balances of all the coins
 func (p *OkexRestAPI) GetBalance() map[string]interface{} {
-	return map[string]interface{}{
-		"helo": "wolrd",
+
+	parameters := map[string]string{
+		"api_key": p.apiKey,
+	}
+
+	if parameters != nil {
+		var keys []string
+		var signPlain string
+
+		for k := range parameters {
+			keys = append(keys, k)
+		}
+
+		sort.Strings(keys)
+
+		for _, key := range keys {
+			if key == "sign" {
+				continue
+			}
+			signPlain += (key + "=" + parameters[key])
+			signPlain += "&"
+		}
+
+		signPlain += ("secret_key=" + p.secretKey)
+
+		// log.Printf("Plain:%v", signPlain)
+		md5Value := fmt.Sprintf("%x", md5.Sum([]byte(signPlain)))
+		// log.Printf("MD5:%v", md5Value)
+		parameters["sign"] = strings.ToUpper(md5Value)
+
+	}
+
+	if err, response := p.tradeRequest("future_userinfo_4fix.do", parameters); err != nil {
+		logger.Errorf("Invalid response:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if response != nil {
+			if err = json.Unmarshal(response, &values); err != nil {
+				logger.Errorf("Fail to Unmarshal:%v", err)
+				return nil
+			}
+		}
+
+		if values["result"] != nil && !values["result"].(bool) {
+			logger.Error("Fail to get order info")
+			return nil
+		}
+
+		if values["info"] != nil {
+			balance := values["info"].(map[string]interface{})
+
+			result := map[string]interface{}{}
+
+			for key, value := range balance {
+				result[key] = value.(map[string]interface{})["rights"].(float64)
+			}
+
+			return result
+		}
+
+		return nil
+
 	}
 }
 
