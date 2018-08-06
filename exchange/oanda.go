@@ -1,23 +1,23 @@
 package exchange
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"io/ioutil"
+	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"golang.org/x/net/proxy"
 )
 
 const OandaURL = "https://api-fxtrade.oanda.com"
 const NameOdanda = "Oanda"
+
+//REST API
+//120 requests per second. Excess requests will receive HTTP 429 error. This restriction is applied against the requesting IP address.
 
 type OandaAPI struct {
 	event  chan EventType
@@ -33,7 +33,7 @@ func (p *OandaAPI) SetConfigure(config Config) {
 	p.config = config
 
 	if p.config.Proxy != "" {
-		logger.Infof("使用代理:%s", p.config.Proxy)
+		logger.Infof("Proxy:%s", p.config.Proxy)
 	}
 }
 
@@ -46,25 +46,44 @@ func (h *OandaAPI) Start() error {
 	return nil
 }
 
-func (p *OandaAPI) marketRequest(path string, params map[string]string) (error, []byte) {
-	var req http.Request
-	req.ParseForm()
+func (h *OandaAPI) marketRequest(method, path string, params map[string]string) (error, []byte) {
+
+	// log.Printf("Path:%s", path)
+	var bodystr string
 	for k, v := range params {
-		req.Form.Add(k, v)
+		if bodystr == "" {
+			bodystr += (k + "=" + v)
+		} else {
+			bodystr += ("&" + k + "=" + v)
+		}
+
 	}
-	bodystr := strings.TrimSpace(req.Form.Encode())
-	// logger.Debugf("Params:%v", bodystr)
-	request, err := http.NewRequest("GET", BinanceURL+path+"?"+bodystr, nil)
-	if err != nil {
-		return err, nil
+	// logger.Debugf("Params:%s auth[%s]", bodystr, "Bearer "+h.config.Custom["token"].(string))
+
+	var request *http.Request
+	var err error
+	if method == "GET" {
+		request, err = http.NewRequest(method, OandaURL+path+"?"+string(bodystr), nil)
+		if err != nil {
+			return err, nil
+		}
+	} else if method == "POST" || method == "PUT" {
+		request, err = http.NewRequest(method, OandaURL+path, strings.NewReader(params["data"]))
+		if err != nil {
+			return err, nil
+		}
 	}
+
+	request.Header.Add("Content-Type", "application/json")
+	request.Header.Add("Accept-Datetime-Format", "UNIX")
+	request.Header.Add("Authorization", "Bearer "+h.config.Custom["token"].(string))
 
 	// setup a http client
 	httpTransport := &http.Transport{}
 	httpClient := &http.Client{Transport: httpTransport}
 
-	if p.config.Proxy != "" {
-		values := strings.Split(p.config.Proxy, ":")
+	if h.config.Proxy != "" {
+		values := strings.Split(h.config.Proxy, ":")
 		if values[0] == "SOCKS5" {
 			dialer, err := proxy.SOCKS5("tcp", values[1]+":"+values[2], nil, proxy.Direct)
 			if err != nil {
@@ -87,70 +106,31 @@ func (p *OandaAPI) marketRequest(path string, params map[string]string) (error, 
 	if err != nil {
 		return err, nil
 	}
-	// log.Printf("Body:%v", string(body))
+
+	keywords := []string{
+		"candles",
+		"pairs",
+		"prices",
+	}
+
+	filtered := false
+
+	for _, keyword := range keywords {
+		if strings.Contains(string(body), keyword) {
+			filtered = true
+			break
+		}
+	}
+
+	if !filtered {
+		logger.Infof("Body:%v", string(body))
+	}
+
 	// var value map[string]interface{}
 	// if err = json.Unmarshal(body, &value); err != nil {
 	// 	return err, nil
 	// }
 
-	return nil, body
-
-}
-
-func (p *OandaAPI) orderRequest(method string, path string, params map[string]string) (error, []byte) {
-
-	// add the common parameters
-	params["timestamp"] = strconv.FormatInt(time.Now().Unix()*1000, 10)
-
-	var req http.Request
-
-	req.ParseForm()
-	for k, v := range params {
-		req.Form.Add(k, v)
-	}
-	bodystr := strings.TrimSpace(req.Form.Encode())
-
-	h := hmac.New(sha256.New, []byte(p.config.Secret))
-	io.WriteString(h, bodystr)
-	signature := "&signature=" + fmt.Sprintf("%x", h.Sum(nil))
-	logger.Debugf("Path:%s", BinanceURL+path+"?"+bodystr+signature)
-
-	request, err := http.NewRequest(method, BinanceURL+path+"?"+bodystr+signature, nil)
-	if err != nil {
-		return err, nil
-	}
-	request.Header.Add("X-MBX-APIKEY", p.config.API)
-
-	// setup a http client
-	httpTransport := &http.Transport{}
-	httpClient := &http.Client{Transport: httpTransport}
-
-	if p.config.Proxy != "" {
-		values := strings.Split(p.config.Proxy, ":")
-		if values[0] == "SOCKS5" {
-			dialer, err := proxy.SOCKS5("tcp", values[1]+":"+values[2], nil, proxy.Direct)
-			if err != nil {
-				return err, nil
-			}
-
-			httpTransport.Dial = dialer.Dial
-		}
-
-	}
-
-	var resp *http.Response
-	resp, err = httpClient.Do(request)
-	if err != nil {
-		return err, nil
-	}
-
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err, nil
-	}
-
-	logger.Debugf("RSP:%s", string(body))
 	return nil, body
 
 }
@@ -166,6 +146,42 @@ func (p *OandaAPI) StartTicker(pair string) {
 
 // GetTicker(), better to use the ITicker to notify the ticker information
 func (p *OandaAPI) GetTicker(pair string) *TickerValue {
+	coins := ParsePair(pair)
+	symbol := strings.ToUpper(coins[0] + "_" + coins[1])
+	if err, response := p.marketRequest("GET", "/v3/accounts/"+p.config.Custom["account"].(string)+"/pricing", map[string]string{
+		"instruments": symbol,
+	}); err != nil {
+		logger.Errorf("Fail to get ticker info:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse the json:%v", err)
+			return nil
+		}
+
+		if values["prices"] != nil {
+			prices := values["prices"].([]interface{})
+
+			for _, tmp := range prices {
+				price := tmp.(map[string]interface{})
+				if price["instrument"].(string) == symbol {
+					asks := price["asks"].([]interface{})
+					bids := price["bids"].([]interface{})
+					// updateTime, _ := strconv.ParseFloat(price["time"].(string), 64)
+					askPrice, _ := strconv.ParseFloat(asks[0].(map[string]interface{})["price"].(string), 64)
+					bidPrice, _ := strconv.ParseFloat(bids[0].(map[string]interface{})["price"].(string), 64)
+					return &TickerValue{
+						High: askPrice,
+						Low:  bidPrice,
+						Last: (askPrice + bidPrice) / 2,
+						Time: price["time"].(string),
+					}
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -177,81 +193,27 @@ func (p *OandaAPI) getSymbol(pair string) string {
 // GetDepthValue() get the depth of the assigned price area and quantity
 // GetDepthValue(pair string, price float64, limit float64, orderQuantity float64, tradeType TradeType) []DepthPrice
 func (p *OandaAPI) GetDepthValue(pair string) [][]DepthPrice {
-	//ethusdt@depth20
-	symbol := p.getSymbol(pair)
-	if err, response := p.marketRequest("/api/v1/depth", map[string]string{
-		"symbol": symbol,
-		// "limit":  "100",
-	}); err != nil {
-		logger.Errorf("无效深度:%v", err)
-		return nil
-	} else {
-
-		var value map[string]interface{}
-		if err = json.Unmarshal(response, &value); err != nil {
-			logger.Errorf("解析错误:%v", err)
-			return nil
-		}
-
-		if value["code"] == nil {
-			list := make([][]DepthPrice, 2)
-
-			asks := value["asks"].([]interface{})
-			bids := value["bids"].([]interface{})
-
-			if asks != nil && len(asks) > 0 {
-				askList := make([]DepthPrice, len(asks))
-				for i, ask := range asks {
-					values := ask.([]interface{})
-					askList[i].Price, _ = strconv.ParseFloat(values[0].(string), 64)
-					askList[i].Quantity, _ = strconv.ParseFloat(values[1].(string), 64)
-				}
-
-				list[DepthTypeAsks] = askList
-			}
-
-			if bids != nil && len(bids) > 0 {
-				bidList := make([]DepthPrice, len(bids))
-				for i, bid := range bids {
-					values := bid.([]interface{})
-					bidList[i].Price, _ = strconv.ParseFloat(values[0].(string), 64)
-					bidList[i].Quantity, _ = strconv.ParseFloat(values[1].(string), 64)
-				}
-
-				list[DepthTypeBids] = bidList
-			}
-
-			return list
-		}
-	}
-
 	return nil
 }
 
 // GetBalance() get the balances of all the coins
 func (p *OandaAPI) GetBalance() map[string]interface{} {
 
-	if err, response := p.orderRequest("GET", "/api/v3/account", map[string]string{}); err != nil {
-		logger.Errorf("无法获取余额:%v", err)
+	if err, response := p.marketRequest("GET", "/v3/accounts/"+p.config.Custom["account"].(string), map[string]string{}); err != nil {
+		logger.Errorf("Fail to get account info:%v", err)
 		return nil
 	} else {
 		var values map[string]interface{}
 		if err = json.Unmarshal(response, &values); err != nil {
-			logger.Errorf("解析错误:%v", err)
+			logger.Errorf("Fail to parse the json:%v", err)
 			return nil
 		}
 
-		if values["code"] == nil {
-			// log.Printf("Val:%v", values)
-			balances := make(map[string]interface{})
-			assets := values["balances"].([]interface{})
-			for _, asset := range assets {
-				key := asset.(map[string]interface{})["asset"].(string)
-				value := asset.(map[string]interface{})["free"].(string)
-				balances[key], _ = strconv.ParseFloat(value, 64)
+		if values["account"] != nil {
+			balance, _ := strconv.ParseFloat(values["account"].(map[string]interface{})["balance"].(string), 64)
+			return map[string]interface{}{
+				"balance": balance,
 			}
-
-			return balances
 		}
 
 	}
@@ -259,75 +221,130 @@ func (p *OandaAPI) GetBalance() map[string]interface{} {
 	return nil
 }
 
-// Trade() trade as the configs
-func (p *OandaAPI) Trade(configs TradeConfig) *TradeResult {
-	symbol := p.getSymbol(configs.Pair)
+func (p *OandaAPI) openTrade(configs TradeConfig) *TradeResult {
+	coins := ParsePair(configs.Pair)
+	symbol := strings.ToUpper(coins[0] + "_" + coins[1])
 
-	if err, response := p.orderRequest("POST", "/api/v3/order", map[string]string{
-		"symbol":           symbol,
-		"side":             BinanceTradeTypeMap[configs.Type],
-		"type":             "LIMIT",
-		"quantity":         strconv.FormatFloat(configs.Amount, 'f', 4, 64),
-		"price":            strconv.FormatFloat(configs.Price, 'f', 2, 64),
-		"timeInForce":      "IOC",
-		"newOrderRespType": "FULL",
+	var amount string
+	if configs.Type == TradeTypeOpenLong {
+		amount = strconv.Itoa(int(configs.Amount))
+	} else {
+		amount = strconv.Itoa(int(configs.Amount) * -1)
+	}
+	body := map[string]interface{}{
+		"order": map[string]string{
+			"units":        amount,
+			"instrument":   symbol,
+			"timeInForce":  "FOK",
+			"type":         "MARKET",
+			"positionFill": "DEFAULT",
+		},
+	}
+
+	data, _ := json.Marshal(body)
+	log.Printf("%s", string(data))
+
+	if err, response := p.marketRequest("POST", "/v3/accounts/"+p.config.Custom["account"].(string)+"/orders", map[string]string{
+		"data": string(data),
 	}); err != nil {
-		logger.Errorf("下单失败:%v", err)
+		logger.Errorf("Fail to open trade:%v", err)
 		return &TradeResult{
 			Error: err,
 		}
 	} else {
 		var values map[string]interface{}
 		if err = json.Unmarshal(response, &values); err != nil {
-			logger.Errorf("解析错误:%v", err)
+			logger.Errorf("Fail to parse json:%v", err)
 			return &TradeResult{
 				Error: err,
 			}
 		}
 
-		if values["code"] != nil || values["msg"] != nil {
-			return &TradeResult{
-				Error: errors.New(values["msg"].(string)),
+		if values["orderFillTransaction"] != nil {
+			result := values["orderFillTransaction"].(map[string]interface{})
+			price, _ := strconv.ParseFloat(result["units"].(string), 64)
+			amount, _ := strconv.ParseFloat(result["price"].(string), 64)
+			info := &OrderInfo{
+				Pair:       result["instrument"].(string),
+				OrderID:    result["orderID"].(string),
+				DealAmount: amount,
+				AvgPrice:   math.Abs(price),
 			}
-		}
 
-		if p.getStatusType(values["status"].(string)) != OrderStatusDone {
 			return &TradeResult{
 				Error: nil,
-				Info:  nil,
-			}
-
-		} else {
-
-			fills := values["fills"].([]interface{})
-
-			var avgPrice, totalCost float64
-
-			for _, fill := range fills {
-				price, _ := strconv.ParseFloat(fill.(map[string]interface{})["price"].(string), 64)
-				qty, _ := strconv.ParseFloat(fill.(map[string]interface{})["qty"].(string), 64)
-				totalCost += (price * qty)
-			}
-
-			executedQty, _ := strconv.ParseFloat(values["executedQty"].(string), 64)
-			avgPrice = totalCost / executedQty
-
-			info := &OrderInfo{
-				OrderID:    values["clientOrderId"].(string),
-				Pair:       symbol,
-				Price:      configs.Price,
-				Amount:     configs.Amount,
-				AvgPrice:   avgPrice,
-				DealAmount: executedQty,
-			}
-
-			return &TradeResult{
-				Error:   nil,
-				OrderID: values["clientOrderId"].(string),
-				Info:    info,
+				// OrderID: values["clientOrderId"].(string),
+				Info: info,
 			}
 		}
 	}
+
+	return &TradeResult{
+		Error: errors.New("Invalid response"),
+	}
+}
+
+func (p *OandaAPI) closeTrade(configs TradeConfig) *TradeResult {
+
+	body := map[string]interface{}{
+		"units": "ALL",
+	}
+
+	data, _ := json.Marshal(body)
+	log.Printf("%s", string(data))
+
+	if err, response := p.marketRequest("PUT",
+		"/v3/accounts/"+p.config.Custom["account"].(string)+"/trades/"+configs.Batch+"/close", map[string]string{
+			"data": string(data),
+		}); err != nil {
+		logger.Errorf("Fail to open trade:%v", err)
+		return &TradeResult{
+			Error: err,
+		}
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse json:%v", err)
+			return &TradeResult{
+				Error: err,
+			}
+		}
+
+		if values["orderFillTransaction"] != nil {
+			result := values["orderFillTransaction"].(map[string]interface{})
+			price, _ := strconv.ParseFloat(result["units"].(string), 64)
+			amount, _ := strconv.ParseFloat(result["price"].(string), 64)
+			info := &OrderInfo{
+				Pair:       result["instrument"].(string),
+				OrderID:    result["orderID"].(string),
+				DealAmount: amount,
+				AvgPrice:   price,
+			}
+
+			return &TradeResult{
+				Error: nil,
+				// OrderID: values["clientOrderId"].(string),
+				Info: info,
+			}
+		}
+	}
+
+	return &TradeResult{
+		Error: errors.New("Invalid response"),
+	}
+}
+
+// Trade() trade as the configs
+func (p *OandaAPI) Trade(configs TradeConfig) *TradeResult {
+	if configs.Type == TradeTypeOpenLong || configs.Type == TradeTypeOpenShort {
+		return p.openTrade(configs)
+	} else if configs.Type == TradeTypeCloseLong || configs.Type == TradeTypeCloseShort {
+		return p.closeTrade(configs)
+	} else {
+		log.Printf("Invalid trade type")
+	}
+
+	return nil
 }
 
 // CancelOrder() cancel the order as the order information
@@ -336,92 +353,141 @@ func (p *OandaAPI) CancelOrder(order OrderInfo) *TradeResult {
 }
 
 // GetOrderInfo() get the information with order filter
-func (p *OandaAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
-	symbol := p.getSymbol(filter.Pair)
-	if err, response := p.orderRequest("GET", "/api/v3/order", map[string]string{
-		"symbol":            symbol,
-		"origClientOrderId": filter.OrderID,
-	}); err != nil {
-		logger.Errorf("无法获取订单信息:%v", err)
+func (p *OandaAPI) GetPositionInfo(filter OrderInfo) *OrderInfo {
+
+	if err, response := p.marketRequest("GET",
+		"/v3/accounts/"+p.config.Custom["account"].(string)+"/trades/"+filter.OrderID, map[string]string{}); err != nil {
+		logger.Errorf("Fail to get account info:%v", err)
 		return nil
 	} else {
 		var values map[string]interface{}
 		if err = json.Unmarshal(response, &values); err != nil {
-			logger.Errorf("解析错误:%v", err)
+			logger.Errorf("Fail to parse:%v", err)
 			return nil
 		}
 
-		if values["code"] != nil || values["msg"] != nil {
-			logger.Errorf("命令错误:%v", values["msg"])
-			return nil
+		if values["trade"] != nil {
+			trade := values["trade"].(map[string]interface{})
+			order := &OrderInfo{}
+
+			order.Pair = trade["instrument"].(string)
+			order.AvgPrice, _ = strconv.ParseFloat(trade["price"].(string), 64)
+			order.DealAmount, _ = strconv.ParseFloat(trade["currentUnits"].(string), 64)
+			order.OrderID = trade["id"].(string)
+
+			return order
 		}
-
-		info := make([]OrderInfo, 1)
-		info[0].Amount, _ = strconv.ParseFloat(values["origQty"].(string), 64)
-		info[0].Pair = symbol
-		info[0].DealAmount, _ = strconv.ParseFloat(values["executedQty"].(string), 64)
-		info[0].Status = p.getStatusType(values["status"].(string))
-		info[0].OrderID = filter.OrderID
-		info[0].AvgPrice, _ = strconv.ParseFloat(values["stopPrice"].(string), 64)
-
-		return info
 
 	}
+	return nil
+}
+
+var oandaOrderStatus = map[OrderStatusType]string{
+	OrderStatusDone:     "FILLED",
+	OrderStatusCanceled: "CANCELLED",
+	OrderStatusOpen:     "PENDING",
+}
+
+func oandaGetStatusFromString(status string) OrderStatusType {
+	for key, value := range oandaOrderStatus {
+		if value == status {
+			return key
+		}
+	}
+	return OrderStatusUnknown
+}
+
+func (p *OandaAPI) GetOrderInfo(filter OrderInfo) *OrderInfo {
+	// get the status of the order and the transation id, so we can check the status of the trade/position
+	if err, response := p.marketRequest("GET",
+		"/v3/accounts/"+p.config.Custom["account"].(string)+"/orders/"+filter.OrderID, map[string]string{}); err != nil {
+		logger.Errorf("Fail to get account info:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse:%v", err)
+			return nil
+		}
+
+		if values["order"] != nil {
+			trade := values["order"].(map[string]interface{})
+
+			order := &OrderInfo{}
+			order.Pair = trade["instrument"].(string)
+			order.OrderID = trade["fillingTransactionID"].(string)
+			order.Status = oandaGetStatusFromString(trade["state"].(string))
+
+			return order
+
+		}
+
+	}
+	return nil
 }
 
 func (p *OandaAPI) GetKline(pair string, period int, limit int) []KlineValue {
 	coins := ParsePair(pair)
-	symbol := strings.ToUpper(coins[0] + coins[1])
+	symbol := strings.ToUpper(coins[0] + "_" + coins[1])
 
 	var interval string
-	// if period == KlinePeriod5Min {
-	// 	interval = "5m"
-	// } else if period == KlinePeriod15Min {
-	// 	interval = "15m"
-	// } else if period == KlinePeriod1Day {
-	// 	interval = "1d"
-	// }
+
 	switch period {
 	case KlinePeriod5Min:
-		interval = "5m"
+		interval = "M5"
 	case KlinePeriod15Min:
-		interval = "15m"
+		interval = "M15"
 	case KlinePeriod1Hour:
-		interval = "1h"
+		interval = "H1"
 	case KlinePeriod2Hour:
-		interval = "2h"
+		interval = "H2"
 	case KlinePeriod6Hour:
-		interval = "6h"
+		interval = "H6"
 	case KlinePeriod1Day:
-		interval = "1d"
+		interval = "D"
 	}
 
-	if err, response := p.marketRequest("/api/v1/klines", map[string]string{
-		"symbol":   symbol,
-		"interval": interval,
-		"limit":    strconv.Itoa(limit),
+	// The Price component(s) to get candlestick data for.
+	// Can contain any combination of the characters “M” (midpoint candles) “B” (bid candles) and “A” (ask candles).
+	// [default=M]
+
+	// The number of candlesticks to return in the reponse.
+	// Count should not be specified if both the start and end parameters are provided,
+	// as the time range combined with the graularity will determine the number of candlesticks to return.
+	// [default=500, maximum=5000]
+
+	if err, response := p.marketRequest("GET", "/v3/instruments/"+symbol+"/candles", map[string]string{
+		"granularity": interval,
+		"count":       strconv.Itoa(limit),
 	}); err != nil {
-		logger.Errorf("无效数据:%v", err)
+		logger.Errorf("Invalid klines:%v", err)
 		return nil
 	} else {
-		var values [][]interface{}
 		if response != nil {
+			var values map[string]interface{}
 			if err = json.Unmarshal(response, &values); err != nil {
 				logger.Errorf("Fail to Unmarshal:%v", err)
 				return nil
 			}
 
-			kline := make([]KlineValue, len(values))
-			for i, value := range values {
-				// kline[i].OpenTime = time.Unix((int64)(value[0].(float64)/1000), 0).Format(Global.TimeFormat)
-				kline[i].OpenTime = value[0].(float64) / 1000
-				kline[i].Open, _ = strconv.ParseFloat(value[1].(string), 64)
-				kline[i].High, _ = strconv.ParseFloat(value[2].(string), 64)
-				kline[i].Low, _ = strconv.ParseFloat(value[3].(string), 64)
-				kline[i].Close, _ = strconv.ParseFloat(value[4].(string), 64)
-				kline[i].Volumn, _ = strconv.ParseFloat(value[5].(string), 64)
-				// kline[i].CloseTime = time.Unix((int64)(value[6].(float64)/1000), 0).Format(Global.TimeFormat)
-				kline[i].CloseTime = value[6].(float64) / 1000
+			if values["candles"] == nil {
+				logger.Errorf("Invalid kline datas")
+				return nil
+			}
+
+			datas := values["candles"].([]interface{})
+
+			kline := make([]KlineValue, len(datas))
+			for i, data := range datas {
+				// 	// kline[i].OpenTime = time.Unix((int64)(value[0].(float64)/1000), 0).Format(Global.TimeFormat)
+				kline[i].OpenTime, _ = strconv.ParseFloat(data.(map[string]interface{})["time"].(string), 64)
+				prices := data.(map[string]interface{})["mid"].(map[string]interface{})
+				kline[i].Open, _ = strconv.ParseFloat(prices["o"].(string), 64)
+				kline[i].High, _ = strconv.ParseFloat(prices["h"].(string), 64)
+				kline[i].Low, _ = strconv.ParseFloat(prices["l"].(string), 64)
+				kline[i].Close, _ = strconv.ParseFloat(prices["c"].(string), 64)
+				kline[i].Volumn = data.(map[string]interface{})["volume"].(float64)
+				// 	// kline[i].CloseTime = time.Unix((int64)(value[6].(float64)/1000), 0).Format(Global.TimeFormat)
 
 			}
 
@@ -439,4 +505,36 @@ func (p *OandaAPI) getStatusType(key string) OrderStatusType {
 		}
 	}
 	return OrderStatusUnknown
+}
+
+func (p *OandaAPI) GetAccountInfo() map[string]interface{} {
+	if err, response := p.marketRequest("GET", "/v3/accounts/"+p.config.Custom["account"].(string), map[string]string{}); err != nil {
+		logger.Errorf("Fail to get account info:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse:%v", err)
+			return nil
+		}
+
+		return values
+
+	}
+}
+
+func (p *OandaAPI) GetInstruments() map[string]interface{} {
+	if err, response := p.marketRequest("GET", "/v3/accounts/"+p.config.Custom["account"].(string)+"/instruments", map[string]string{}); err != nil {
+		logger.Errorf("无法获取账户信息:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("解析错误:%v", err)
+			return nil
+		}
+
+		return values
+
+	}
 }
