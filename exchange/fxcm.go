@@ -227,17 +227,17 @@ func (p *FXCM) GetBalance() map[string]interface{} {
 	if err, response := p.marketRequest("GET", "/trading/get_model", map[string]string{
 		"models": "Account",
 	}); err != nil {
-		logger.Errorf("无法获取余额:%v", err)
+		logger.Errorf("Fail to get balance:%v", err)
 		return nil
 	} else {
 		var values map[string]interface{}
 		if err = json.Unmarshal(response, &values); err != nil {
-			logger.Errorf("解析错误:%v", err)
+			logger.Errorf("Fail to parse:%v", err)
 			return nil
 		}
 
 		if values["response"] != nil && values["response"].(map[string]interface{})["executed"].(bool) != true {
-			logger.Errorf("无法获取余额:%v", err)
+			logger.Errorf("Fail to get balance:%v", err)
 			return nil
 		}
 
@@ -283,17 +283,17 @@ func (p *FXCM) GetTicker(pair string) *TickerValue {
 	if err, response := p.marketRequest("POST", "/subscribe", map[string]string{
 		"pairs": pair,
 	}); err != nil {
-		logger.Errorf("无法获取ticker值:%v", err)
+		logger.Errorf("Fail to get ticker:%v", err)
 		return nil
 	} else {
 		var values map[string]interface{}
 		if err = json.Unmarshal(response, &values); err != nil {
-			logger.Errorf("解析错误:%v", err)
+			logger.Errorf("Fail to parse:%v", err)
 			return nil
 		}
 
 		if values["response"] != nil && values["response"].(map[string]interface{})["executed"].(bool) != true {
-			logger.Errorf("无法获取ticker值:%v", err)
+			logger.Errorf("Fail to get ticker:%v", err)
 			return nil
 		}
 
