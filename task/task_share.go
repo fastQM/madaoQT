@@ -39,6 +39,7 @@ const (
 	TaskErrorTimeout
 	TaskInvalidDepth
 	TaskUnableTrade
+	TaskUnableGetOrderInfo
 	TaskUnableCancelOrder
 	TaskInvalidConfig
 	TaskErrorStatus
@@ -169,7 +170,14 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 					if info == nil || len(info) == 0 {
 						Logger.Error("Fail to get the order info")
-						goto __ERROR
+						if loop > 0 {
+							loop--
+							continue
+						} else {
+							errorCode = TaskUnableGetOrderInfo
+							goto __ERROR
+						}
+
 					}
 
 					// dbOrders.Insert(&Mongo.OrderInfo{
@@ -189,9 +197,9 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 						goto __CheckDealAmount
 					}
 
-					loop--
 					Logger.Debugf("Waiting for the trading result...")
 
+					loop--
 					if loop == 0 {
 						Logger.Debugf("Timeout，cancel the order...")
 						// cancle the order, if it is traded when we cancle?
@@ -218,8 +226,8 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 							if info == nil || len(info) == 0 {
 								Logger.Error("Fail to get the order info")
-								// goto __ERROR
-								continue
+								errorCode = TaskUnableGetOrderInfo
+								goto __ERROR
 							}
 
 							if dbTrades != nil {
