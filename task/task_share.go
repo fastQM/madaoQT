@@ -445,7 +445,7 @@ func CalcDepthPrice(isFuture bool, ratios map[string]float64, exchange Exchange.
 	var quantity float64
 	var askFlag, bidFlag bool
 	if exchange == nil {
-		return errors.New("交易所接口无效"), 0, 0, 0, 0
+		return errors.New("Invalid exchange"), 0, 0, 0, 0
 	}
 	depths := exchange.GetDepthValue(pair)
 	// Logger.Debugf("Future:%v 深度:%v", isFuture, depths)
@@ -453,7 +453,7 @@ func CalcDepthPrice(isFuture bool, ratios map[string]float64, exchange Exchange.
 		asks = depths[Exchange.DepthTypeAsks]
 		bids = depths[Exchange.DepthTypeBids]
 	} else {
-		return errors.New("未获取深度信息"), 0, 0, 0, 0
+		return errors.New("Fail to get depth info"), 0, 0, 0, 0
 	}
 
 	// amount *= 2
