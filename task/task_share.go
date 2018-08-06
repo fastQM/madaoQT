@@ -218,7 +218,8 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 							if info == nil || len(info) == 0 {
 								Logger.Error("Fail to get the order info")
-								goto __ERROR
+								// goto __ERROR
+								continue
 							}
 
 							if dbTrades != nil {
