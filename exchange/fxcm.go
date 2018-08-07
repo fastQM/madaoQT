@@ -55,7 +55,7 @@ func (p *FXCM) SetConfigure(config Config) {
 	p.config = config
 
 	if p.config.Proxy != "" {
-		logger.Infof("使用代理:%s", p.config.Proxy)
+		logger.Infof("Proxy:%s", p.config.Proxy)
 	}
 }
 
@@ -81,7 +81,48 @@ func (p *FXCM) CancelOrder(order OrderInfo) *TradeResult {
 }
 
 // GetOrderInfo() get the information with order filter
-func (p *FXCM) GetOrderInfo(filter OrderInfo) []OrderInfo {
+func (p *FXCM) GetOrderInfo(filter OrderInfo) *OrderInfo {
+	if err, response := p.marketRequest("GET", "/trading/get_model", map[string]string{
+		"models": "Order",
+	}); err != nil {
+		logger.Errorf("Fail to get order Info:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse:%v", err)
+			return nil
+		}
+
+		if values["response"] != nil {
+			logger.Errorf("Failt to execute:%v", err)
+			return nil
+		}
+
+		orders := values["orders"].([]interface{})
+		for _, order := range orders {
+			if order.(map[string]interface{})["orderId"].(string) == filter.OrderID {
+				var price float64
+				if filter.Type == TradeTypeOpenLong || filter.Type == TradeTypeCloseShort {
+					price = order.(map[string]interface{})["buy"].(float64)
+				} else if filter.Type == TradeTypeOpenShort || filter.Type == TradeTypeCloseLong {
+					price = order.(map[string]interface{})["sell"].(float64)
+				} else {
+					logger.Errorf("Invalid trade type")
+					return nil
+				}
+
+				return &OrderInfo{
+					Pair:       filter.Pair,
+					AvgPrice:   price,
+					DealAmount: order.(map[string]interface{})["amountK"].(float64),
+					OrderID:    order.(map[string]interface{})["tradeId"].(string),
+				}
+			}
+		}
+
+	}
+
 	return nil
 }
 
@@ -91,7 +132,7 @@ func (p *FXCM) GetDepthValue(pair string) [][]DepthPrice {
 
 func (p *FXCM) Start() error {
 
-	logger.Infof("启动socket")
+	logger.Infof("Start websocket")
 	p.event = make(chan EventType)
 	token := p.config.Custom["token"].(string)
 	socket, err := socketio.Dial(WssFXCMUrl+"/socket.io/?EIO=3&transport=websocket&access_token="+token,
@@ -209,7 +250,7 @@ func (p *FXCM) marketRequest(method, path string, params map[string]string) (err
 	}
 
 	if !filtered {
-		log.Printf("Body:%v", string(body))
+		logger.Infof("Body:%v", string(body))
 	}
 
 	// var value map[string]interface{}
@@ -301,8 +342,8 @@ func (p *FXCM) GetTicker(pair string) *TickerValue {
 		if pairs != nil && len(pairs) > 0 {
 			rates := pairs[len(pairs)-1].(map[string]interface{})["Rates"].([]interface{})
 			return &TickerValue{
-				High: rates[2].(float64),
-				Low:  rates[3].(float64),
+				High: rates[1].(float64), // asks
+				Low:  rates[0].(float64), // bids
 				Last: (rates[0].(float64) + rates[1].(float64)) / 2,
 				Time: time.Unix(int64(pairs[len(pairs)-1].(map[string]interface{})["Updated"].(float64)/1000), 0).Format(Global.TimeFormat),
 			}
@@ -464,20 +505,45 @@ func (p *FXCM) GetOpenPositions() []OrderInfo {
 	return nil
 }
 
-func (p *FXCM) GetClosePositions() {
+func (p *FXCM) GetClosePositions(filter OrderInfo) *OrderInfo {
 	if err, response := p.marketRequest("GET", "/trading/get_model", map[string]string{
 		"models": "ClosedPosition",
 	}); err != nil {
-		logger.Errorf("下单失败:%v", err)
-		return
+		logger.Errorf("Fail to get close positions:%v", err)
+		return nil
 	} else {
 		var values map[string]interface{}
 		if err = json.Unmarshal(response, &values); err != nil {
-			logger.Errorf("解析错误:%v", err)
-			return
+			logger.Errorf("Fail to parse:%v", err)
+			return nil
 		}
-		log.Printf("values:%v", values)
+		if values["response"] != nil && values["response"].(map[string]interface{})["executed"].(bool) != true {
+			logger.Error("Fail to executed")
+			return nil
+		}
+
+		positions := values["closed_positions"].([]interface{})
+
+		if positions != nil && len(positions) > 0 {
+
+			for _, position := range positions {
+				if position.(map[string]interface{})["tradeId"].(string) == filter.OrderID {
+					order := OrderInfo{}
+					order.Pair = position.(map[string]interface{})["currency"].(string)
+					order.AvgPrice = position.(map[string]interface{})["close"].(float64)
+					order.DealAmount = position.(map[string]interface{})["amountK"].(float64)
+					order.OrderID = position.(map[string]interface{})["tradeId"].(string)
+
+					return &order
+				}
+
+			}
+
+		}
+
 	}
+
+	return nil
 }
 
 func (p *FXCM) GetOffers() {

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -146,7 +145,7 @@ func (p *OkexRestAPI) tradeRequest(path string, params map[string]string) (error
 		return err, nil
 	}
 
-	log.Printf("Body:%v", string(body))
+	logger.Infof("Body:%v", string(body))
 
 	return nil, body
 }
