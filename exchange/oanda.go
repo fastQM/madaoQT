@@ -262,8 +262,8 @@ func (p *OandaAPI) openTrade(configs TradeConfig) *TradeResult {
 
 		if values["orderFillTransaction"] != nil {
 			result := values["orderFillTransaction"].(map[string]interface{})
-			price, _ := strconv.ParseFloat(result["units"].(string), 64)
-			amount, _ := strconv.ParseFloat(result["price"].(string), 64)
+			price, _ := strconv.ParseFloat(result["price"].(string), 64)
+			amount, _ := strconv.ParseFloat(result["units"].(string), 64)
 			info := &OrderInfo{
 				Pair:       result["instrument"].(string),
 				OrderID:    result["orderID"].(string),
