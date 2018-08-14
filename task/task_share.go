@@ -158,10 +158,10 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 			if trade != nil && trade.Error == nil {
 				// 300 seconds = 5 minutes
-				loop := 20
+				loop := 10
 
 				for {
-					Utils.SleepAsyncByMillisecond(500)
+					Utils.SleepAsyncByMillisecond(1000)
 
 					info := exchange.GetOrderInfo(Exchange.OrderInfo{
 						OrderID: trade.OrderID,

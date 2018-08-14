@@ -167,10 +167,10 @@ func TestGetKlines(t *testing.T) {
 		Proxy: "SOCKS5:127.0.0.1:1080",
 	})
 
-	filename := "binance-ethusdt-2h-20180729"
+	filename := "binance-ethusdt-2h-20180808"
 	// filename := "binance-btcusdt-2h"
-	if false {
-		klines = binance.GetKline("eth/usdt", KlinePeriod2Hour, 5000)
+	if true {
+		klines = binance.GetKline("eth/usdt", KlinePeriod2Hour, 100)
 		SaveHistory(filename, klines)
 	} else {
 		klines = LoadHistory(filename)

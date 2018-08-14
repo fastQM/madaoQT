@@ -463,7 +463,7 @@ func (p *FXCM) Trade(configs TradeConfig) *TradeResult {
 	return nil
 }
 
-func (p *FXCM) GetOpenPositions() []OrderInfo {
+func (p *FXCM) GetOpenPositions() *OrderInfo {
 	if err, response := p.marketRequest("GET", "/trading/get_model", map[string]string{
 		"models": "OpenPosition",
 	}); err != nil {
@@ -485,19 +485,20 @@ func (p *FXCM) GetOpenPositions() []OrderInfo {
 		positions := values["open_positions"].([]interface{})
 
 		if positions != nil && len(positions) > 0 {
-			orders := make([]OrderInfo, len(positions))
-			for i, position := range positions {
+
+			for _, position := range positions {
 				if position.(map[string]interface{})["open"].(float64) == 0 && position.(map[string]interface{})["amountK"].(float64) == 0 {
-					logger.Error("Invalid position")
+					logger.Error("Ignore total position")
 					continue
 				}
-				orders[i].Pair = position.(map[string]interface{})["currency"].(string)
-				orders[i].AvgPrice = position.(map[string]interface{})["open"].(float64)
-				orders[i].DealAmount = position.(map[string]interface{})["amountK"].(float64)
-				orders[i].OrderID = position.(map[string]interface{})["tradeId"].(string)
+				order := OrderInfo{}
+				order.Pair = position.(map[string]interface{})["currency"].(string)
+				order.AvgPrice = position.(map[string]interface{})["open"].(float64)
+				order.DealAmount = position.(map[string]interface{})["amountK"].(float64)
+				order.OrderID = position.(map[string]interface{})["tradeId"].(string)
+				return &order
 			}
 
-			return orders
 		}
 
 	}
@@ -644,6 +645,8 @@ func (p *FXCM) GetKline(pair string, period int, limit int) []KlineValue {
 		interval = "H1"
 	case KlinePeriod2Hour:
 		interval = "H2"
+	case KlinePeriod4Hour:
+		interval = "H4"
 	case KlinePeriod1Day:
 		interval = "D1"
 	}
