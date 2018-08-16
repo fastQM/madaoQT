@@ -667,13 +667,16 @@ func (p *FXCM) GetKline(pair string, period int, limit int) []KlineValue {
 
 		kline := make([]KlineValue, len(arrays))
 		for i, item := range arrays {
-			value := item.([]interface{})
-			kline[i].OpenTime = value[0].(float64)
-			kline[i].Open = (value[1].(float64) + value[5].(float64)) / 2
-			kline[i].Close = (value[2].(float64) + value[6].(float64)) / 2
-			kline[i].High = (value[3].(float64) + value[7].(float64)) / 2
-			kline[i].Low = (value[4].(float64) + value[8].(float64)) / 2
-			kline[i].Volumn = value[9].(float64)
+			if item != nil {
+				value := item.([]interface{})
+				kline[i].OpenTime = value[0].(float64)
+				kline[i].Open = (value[1].(float64) + value[5].(float64)) / 2
+				kline[i].Close = (value[2].(float64) + value[6].(float64)) / 2
+				kline[i].High = (value[3].(float64) + value[7].(float64)) / 2
+				kline[i].Low = (value[4].(float64) + value[8].(float64)) / 2
+				kline[i].Volumn = value[9].(float64)
+			}
+
 		}
 
 		return kline

@@ -427,8 +427,14 @@ func (p *OandaAPI) GetOrderInfo(filter OrderInfo) *OrderInfo {
 }
 
 func (p *OandaAPI) GetKline(pair string, period int, limit int) []KlineValue {
-	coins := ParsePair(pair)
-	symbol := strings.ToUpper(coins[0] + "_" + coins[1])
+	var symbol string
+	var coins []string
+	if strings.Contains(pair, "/") {
+		coins = ParsePair(pair)
+		symbol = strings.ToUpper(coins[0] + "_" + coins[1])
+	} else {
+		symbol = pair
+	}
 
 	var interval string
 
@@ -437,10 +443,14 @@ func (p *OandaAPI) GetKline(pair string, period int, limit int) []KlineValue {
 		interval = "M5"
 	case KlinePeriod15Min:
 		interval = "M15"
+	case KlinePeriod30Min:
+		interval = "M30"
 	case KlinePeriod1Hour:
 		interval = "H1"
 	case KlinePeriod2Hour:
 		interval = "H2"
+	case KlinePeriod4Hour:
+		interval = "H4"
 	case KlinePeriod6Hour:
 		interval = "H6"
 	case KlinePeriod1Day:
