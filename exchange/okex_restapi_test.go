@@ -19,21 +19,27 @@ func TestGetOkexRestAPIKline(t *testing.T) {
 	})
 
 	var klines []KlineValue
-	// file := "okex-ethusdt-1h-tmp"
-	file := "okex-ethusdt-1h"
+	file := "okex-ethusdt-2h-tmp"
+	// file := "okex-ethusdt-1h"
 	// file := "okex-btcusdt-2h"
 	if false {
-		klines = okex.GetKline("btc/usdt", KlinePeriod2Hour, 1400)
+		klines = okex.GetKline("eth/usdt", KlinePeriod1Hour, 20000)
 		SaveHistory(file, klines)
 	} else {
 		klines = LoadHistory(file)
 	}
 
 	for _, kline := range klines {
-		log.Printf("Time:%v %v", time.Unix(int64(kline.OpenTime), 0).String(), kline)
+		log.Printf("Hour Time:%v %v", time.Unix(int64(kline.OpenTime), 0).String(), kline)
 	}
 
-	log.Printf("%v", time.Now())
+	// klines = Swith1HourToDialyKlines(klines)
+	klines = Swith1HourToHoursKlines(4, klines)
+
+	for _, kline := range klines {
+		log.Printf("Day Time:%v %v", time.Unix(int64(kline.OpenTime), 0).String(), kline)
+	}
+	return
 
 	var results []string
 	if len(klines) != 0 {

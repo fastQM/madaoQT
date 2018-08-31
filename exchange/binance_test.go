@@ -167,10 +167,10 @@ func TestGetKlines(t *testing.T) {
 		Proxy: "SOCKS5:127.0.0.1:1080",
 	})
 
-	filename := "binance-ethusdt-2h-20180808"
+	filename := "binance-ethusdt-1day"
 	// filename := "binance-btcusdt-2h"
 	if true {
-		klines = binance.GetKline("eth/usdt", KlinePeriod2Hour, 100)
+		klines = binance.GetKline("eth/usdt", KlinePeriod1Hour, 10000)
 		SaveHistory(filename, klines)
 	} else {
 		klines = LoadHistory(filename)
@@ -184,6 +184,7 @@ func TestGetKlines(t *testing.T) {
 	// 	// log.Printf("Klines:%v", klines)
 	// ChangeOffset(value)
 	// ChangeInterval(value)
+	// klines = Swith1HourToDialyKlines(klines)
 	result := StrategyTrendArea(klines, true, true)
 	// result := CTPStrategyTrendSplit(klines, true, true, true)
 	// msg := fmt.Sprintf("Offset:%.2f Result:%s", value, result)

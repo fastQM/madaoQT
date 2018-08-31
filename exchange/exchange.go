@@ -607,8 +607,8 @@ func GetLastPeriodArea(kline []KlineValue) (high float64, low float64, err error
 			// log.Printf("[%s]high:%v low:%v close:%v",
 			// 	time.Unix(int64(kline[i].OpenTime), 0), kline[i].High, kline[i].Low, kline[i].Close)
 			// tmp := (kline[i].Close*0.8 + kline[i].High*0.2)
-			tmp := (kline[i].High*0.618 + kline[i].Close*0.382)
-			// tmp := kline[i].High
+			// tmp := (kline[i].High*0.618 + kline[i].Close*0.382)
+			tmp := kline[i].High
 			if high == 0 {
 				high = tmp
 			} else if high < tmp {
@@ -616,8 +616,8 @@ func GetLastPeriodArea(kline []KlineValue) (high float64, low float64, err error
 			}
 
 			// tmp = (kline[i].Close*0.8 + kline[i].Low*0.2)
-			tmp = (kline[i].Low*0.618 + kline[i].Close*0.382)
-			// tmp = kline[i].Low
+			// tmp = (kline[i].Low*0.618 + kline[i].Close*0.382)
+			tmp = kline[i].Low
 			if low == 0 {
 				low = tmp
 			} else if low > tmp {
@@ -706,4 +706,162 @@ func GetThreshHold(avg5first float64, avg5 float64, avg10first float64, avg10 fl
 func GetThreshHoldByAverage(avg1first float64, avg1 float64, interval1 float64, avg2first float64, avg2 float64, interval2 float64) float64 {
 	// 45x > 50*avg10 - 5 * avg10first - avg5 *50 + 10*avg5first
 	return (interval1*interval2*avg2 - interval1*avg2first - interval1*interval2*avg1 + interval2*avg1first) / (interval2 - interval1)
+}
+
+func CTPDailyKlinesToWeek(klines []KlineValue) []KlineValue {
+	var KlinesByWeek []KlineValue
+
+	var high, low, open, close float64
+	var klineTime time.Time
+
+	location, _ := time.LoadLocation("Asia/Shanghai")
+
+	for _, kline := range klines {
+
+		klineTime, _ = time.ParseInLocation("2006-01-02", kline.Time, location)
+
+		if open == 0 {
+			open = kline.Open
+		}
+		// log.Printf("Time:%v", klineTime)
+		if high == 0 || high < kline.High {
+			high = kline.High
+		}
+
+		if low == 0 || low > kline.Low {
+			low = kline.Low
+		}
+
+		close = kline.Close
+
+		if klineTime.Weekday() == time.Friday {
+			if high != 0 && low != 0 && close != 0 {
+				lastKline := KlineValue{
+					High:  high,
+					Low:   low,
+					Open:  open,
+					Close: close,
+					Time:  klineTime.Format("2006-01-02"),
+				}
+				KlinesByWeek = append(KlinesByWeek, lastKline)
+			}
+			open = 0
+			high = 0
+			low = 0
+			close = 0
+		}
+
+	}
+
+	if high != 0 && low != 0 && close != 0 {
+		lastKline := KlineValue{
+			High:  high,
+			Low:   low,
+			Open:  open,
+			Close: low,
+			Time:  klineTime.Add((-1) * 7 * 24 * 60 * 60).Format("2006-01-02"),
+		}
+		KlinesByWeek = append(KlinesByWeek, lastKline)
+	}
+
+	return KlinesByWeek
+}
+
+func CTPDailyKlinesToMonth(klines []KlineValue) []KlineValue {
+	var KlinesByMonth []KlineValue
+
+	var high, low, open, close float64
+	var klineTime time.Time
+	var currentMonth time.Month
+
+	location, _ := time.LoadLocation("Asia/Shanghai")
+	first, _ := time.ParseInLocation("2006-01-02", klines[0].Time, location)
+	currentMonth = first.Month()
+
+	for i, kline := range klines {
+
+		klineTime, _ = time.ParseInLocation("2006-01-02", kline.Time, location)
+		if open == 0 {
+			open = kline.Open
+		}
+		// log.Printf("Time:%v", klineTime)
+		if high == 0 || high < kline.High {
+			high = kline.High
+		}
+
+		if low == 0 || low > kline.Low {
+			low = kline.Low
+		}
+
+		close = kline.Close
+
+		if i+1 < len(klines) {
+			nextTime, _ := time.ParseInLocation("2006-01-02", klines[i+1].Time, location)
+			if nextTime.Month() != currentMonth {
+				if high != 0 && low != 0 && close != 0 {
+					lastKline := KlineValue{
+						High:  high,
+						Low:   low,
+						Open:  open,
+						Close: close,
+						Time:  klineTime.Format("2006-01-02"),
+					}
+					KlinesByMonth = append(KlinesByMonth, lastKline)
+				}
+				currentMonth = nextTime.Month()
+				open = 0
+				high = 0
+				low = 0
+				close = 0
+			}
+		} else {
+			if high != 0 && low != 0 && close != 0 {
+				lastKline := KlineValue{
+					High:  high,
+					Low:   low,
+					Open:  open,
+					Close: close,
+					Time:  klineTime.Format("2006-01-02"),
+				}
+				KlinesByMonth = append(KlinesByMonth, lastKline)
+			}
+		}
+
+	}
+
+	return KlinesByMonth
+
+}
+
+func CTPDailyKlinesSplitToYears(klines []KlineValue) [][]KlineValue {
+	var KlinesByYear [][]KlineValue
+	var tmp []KlineValue
+	var currentYear int
+
+	location, _ := time.LoadLocation("Asia/Shanghai")
+	first, _ := time.ParseInLocation("2006-01-02", klines[0].Time, location)
+	currentYear = first.Year()
+
+	for i, kline := range klines {
+		tmp = append(tmp, kline)
+		if i+1 < len(klines) {
+			nextTime, _ := time.ParseInLocation("2006-01-02", klines[i+1].Time, location)
+			if nextTime.Year() != currentYear {
+				if tmp != nil && len(tmp) > 0 {
+					KlinesByYear = append(KlinesByYear, tmp)
+				}
+				currentYear = nextTime.Year()
+				tmp = nil
+			}
+		} else {
+			if tmp != nil && len(tmp) > 0 {
+				KlinesByYear = append(KlinesByYear, tmp)
+			}
+
+		}
+
+	}
+
+	return KlinesByYear
+
 }

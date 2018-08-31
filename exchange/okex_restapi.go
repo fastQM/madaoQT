@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/net/proxy"
 )
@@ -458,4 +459,154 @@ func (p *OkexRestAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 		return nil
 
 	}
+}
+
+func Swith1HourToDialyKlines(klines []KlineValue) []KlineValue {
+	var KlinesByDate []KlineValue
+
+	var high, low, open, close float64
+	// var klineTime time.Time
+
+	location, _ := time.LoadLocation("Asia/Shanghai")
+	var first time.Time
+
+	for i, kline := range klines {
+		first = time.Unix(int64(kline.OpenTime), 0).In(location)
+		if first.Hour() == 0 { // start from 01:33
+			klines = klines[i:]
+			break
+		}
+
+	}
+
+	for i, kline := range klines {
+
+		// klineTime = time.Unix(int64(kline.OpenTime), 0).In(location)
+		if open == 0 {
+			open = kline.Open
+		}
+		// log.Printf("Time:%v", klineTime)
+		if high == 0 || high < kline.High {
+			high = kline.High
+		}
+
+		if low == 0 || low > kline.Low {
+			low = kline.Low
+		}
+
+		close = kline.Close
+
+		if i+1 < len(klines) {
+			nextTime := time.Unix(int64(klines[i+1].OpenTime), 0).In(location)
+			if nextTime.Day() != first.Day() {
+				if high != 0 && low != 0 && close != 0 {
+					lastKline := KlineValue{
+						High:     high,
+						Low:      low,
+						Open:     open,
+						Close:    close,
+						OpenTime: float64(time.Date(first.Year(), first.Month(), first.Day(), 0, 0, 0, 0, location).Unix()),
+					}
+					KlinesByDate = append(KlinesByDate, lastKline)
+				}
+				first = nextTime
+				open = 0
+				high = 0
+				low = 0
+				close = 0
+			}
+		} else {
+			if high != 0 && low != 0 && close != 0 {
+				lastKline := KlineValue{
+					High:     high,
+					Low:      low,
+					Open:     open,
+					Close:    close,
+					OpenTime: float64(time.Date(first.Year(), first.Month(), first.Day(), 0, 0, 0, 0, location).Unix()),
+				}
+				KlinesByDate = append(KlinesByDate, lastKline)
+			}
+		}
+
+	}
+
+	return KlinesByDate
+}
+
+func Swith1HourToHoursKlines(hours int, klines []KlineValue) []KlineValue {
+	var KlinesByHours []KlineValue
+
+	var high, low, open, close float64
+	var klineTime time.Time
+
+	location, _ := time.LoadLocation("Asia/Shanghai")
+	var first time.Time
+
+	if hours == 0 {
+		return nil
+	}
+
+	for i, kline := range klines {
+		first = time.Unix(int64(kline.OpenTime), 0).In(location)
+		if first.Hour() == 0 { // start from 01:33
+			klines = klines[i:]
+			break
+		}
+
+	}
+
+	for i, kline := range klines {
+
+		klineTime = time.Unix(int64(kline.OpenTime), 0).In(location)
+		if open == 0 {
+			open = kline.Open
+		}
+		// log.Printf("Time:%v", klineTime)
+		if high == 0 || high < kline.High {
+			high = kline.High
+		}
+
+		if low == 0 || low > kline.Low {
+			low = kline.Low
+		}
+
+		close = kline.Close
+
+		if klineTime.Hour()%hours == (hours - 1) {
+			if high != 0 && low != 0 && close != 0 {
+				lastKline := KlineValue{
+					High:     high,
+					Low:      low,
+					Open:     open,
+					Close:    close,
+					OpenTime: float64(time.Date(first.Year(), first.Month(), first.Day(), first.Hour(), 0, 0, 0, location).Unix()),
+				}
+				KlinesByHours = append(KlinesByHours, lastKline)
+			}
+			if i+1 < len(klines) {
+				first = time.Unix(int64(klines[i+1].OpenTime), 0).In(location)
+			}
+
+			open = 0
+			high = 0
+			low = 0
+			close = 0
+
+		}
+
+	}
+
+	// okex 包含了最新的k线数据，所以不用担心有时间但没有数据的问题
+	if high != 0 && low != 0 && close != 0 {
+		lastKline := KlineValue{
+			High:     high,
+			Low:      low,
+			Open:     open,
+			Close:    close,
+			OpenTime: float64(time.Date(first.Year(), first.Month(), first.Day(), first.Hour(), 0, 0, 0, location).Unix()),
+		}
+		KlinesByHours = append(KlinesByHours, lastKline)
+	}
+
+	return KlinesByHours
 }

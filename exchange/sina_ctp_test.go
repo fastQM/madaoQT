@@ -8,17 +8,32 @@ import (
 )
 
 var instruments = []string{
-	"RM1809",
-	"AP1810",
-	"rb1810",
-	"CF1901",
-	"m1809",
-	"j1809",
-	"bu1812",
-	"MA1809",
-	"SR1809",
-	"FG1809",
-	"hc1810",
+	// "RM1809",
+	// "AP1810",
+	// "rb1810",
+	// "CF1901",
+	// "m1809",
+	// "j1809",
+	// "bu1812",
+	// "MA1809",
+	// "SR1809",
+	// "FG1809",
+	// "hc1810",
+
+	"rb0",
+	// "RM0", //波动不活跃不操作
+	"AP0",
+	"CF0",
+	// "m0", //波动不活跃不操作
+	// "j0",
+	// "bu0",
+	"MA0",
+	"SR0",
+	// "FG0",
+	"hc0",
+	"ta0",
+	// "l0",
+	"pp0",
 }
 
 func TestSinaCtp(t *testing.T) {
@@ -26,7 +41,7 @@ func TestSinaCtp(t *testing.T) {
 	var logs []string
 
 	for _, instrument := range instruments {
-
+		log.Printf("当前种类:%v", instrument)
 		filename := instrument + "-1day"
 		sina := new(SinaCTP)
 		if true {
@@ -44,19 +59,30 @@ func TestSinaCtp(t *testing.T) {
 		// 	log.Printf("Time:%s value:%v", kline.Time, kline)
 		// }
 
-		value := 0.0
-		// for value := 0.0; value < 0.6; value += 0.01 {
-		// log.Printf("Klines:%v", klines)
-		ChangeOffset(0.382)
-		// result := StrategyTrendArea(klines, true, true)
+		// klines = CTPDailyKlinesToWeek(klines)
+		// for _, kline := range klinesByWeek {
+		// 	log.Printf("Time:%s High:%v Low:%v Open:%v Close:%v", kline.Time, kline.High, kline.Low, kline.Open, kline.Close)
+		// }
+		// return
+
+		// klinesByMonth := CTPDailyKlinesToMonth(klines)
+
+		// klinesByYears := CTPDailyKlinesSplitToYears(klines)
+		// for _, kline := range klinesByWeek {
+		// 	log.Printf("Time:%s High:%v Low:%v Open:%v Close:%v", kline.Time, kline.High, kline.Low, kline.Open, kline.Close)
+		// }
+		// return
 
 		// // for waveLimit := 0.1; waveLimit < 1; waveLimit += 0.1 {
 		// for interval = 6; interval < 20; interval++ {
 		// SpliteSetWaveLimit(0.2)
 		interval = 10
+		// for _, klines := range klinesByYears {
 		result := CTPStrategyTrendSplit(klines, true, true, false)
-		msg := fmt.Sprintf("[%s]Offset:%.2f Result:%s", instrument, value, result)
+		msg := fmt.Sprintf("[%v][%s]Result:%s", klines[0].Time, instrument, result)
 		logs = append(logs, msg)
+		// }
+
 		// }
 
 		// for interval := 1; interval < 100; interval++ {
