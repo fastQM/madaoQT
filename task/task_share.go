@@ -158,10 +158,10 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 			if trade != nil && trade.Error == nil {
 				// 300 seconds = 5 minutes
-				loop := 60
+				loop := 5
 
 				for {
-					Utils.SleepAsyncByMillisecond(1000)
+					Utils.SleepAsyncByMillisecond(3000)
 
 					info := exchange.GetOrderInfo(Exchange.OrderInfo{
 						OrderID: trade.OrderID,
@@ -201,7 +201,7 @@ func ProcessTradeRoutine(exchange Exchange.IExchange,
 
 					loop--
 					if loop == 0 {
-						Logger.Debugf("Timeout，cancel the order...")
+						Logger.Debugf("Timeout,cancel the order...")
 						// cancle the order, if it is traded when we cancle?
 						trade := exchange.CancelOrder(Exchange.OrderInfo{
 							Pair:    tradeConfig.Pair,
@@ -448,7 +448,7 @@ func CalcDepthPrice(isFuture bool, ratios map[string]float64, exchange Exchange.
 		return errors.New("Invalid exchange"), 0, 0, 0, 0
 	}
 	depths := exchange.GetDepthValue(pair)
-	// Logger.Debugf("Future:%v 深度:%v", isFuture, depths)
+	// Logger.Debugf("Future:%v Depth:%v", isFuture, depths)
 	if depths != nil {
 		asks = depths[Exchange.DepthTypeAsks]
 		bids = depths[Exchange.DepthTypeBids]
