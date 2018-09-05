@@ -3,7 +3,6 @@ package task
 import (
 	"errors"
 	"math"
-	"time"
 
 	"github.com/kataras/golog"
 
@@ -66,241 +65,7 @@ type TradeResult struct {
 	Error      TaskErrorType
 	DealAmount float64 // 已成交金额，如果部分成交，需要将该部分平仓
 	AvgPrice   float64
-}
-
-func ProcessTradeRoutine(exchange Exchange.IExchange,
-	tradeConfig Exchange.TradeConfig,
-	dbTrades *Mongo.Trades) chan TradeResult {
-
-	// var balance interface{} // 实际余额后台返回为准
-	// coin := Exchange.ParsePair(tradeConfig.Coin)[0]
-	channel := make(chan TradeResult)
-	stopTime := time.Now().Add(10 * time.Second)
-
-	Logger.Debugf("Trade Params:%v", tradeConfig)
-
-	go func() {
-		defer close(channel)
-
-		// var dealAmount, totalCost, avePrice float64
-		var dealAmount, totalCost, avePrice float64
-		var trade *Exchange.TradeResult
-		// var depthInvalidCount int
-		var errorCode TaskErrorType
-		// var depth *Exchange.DepthValue
-		// var depth [][]Exchange.DepthPrice
-		var tradePrice, tradeAmount float64
-		// var err error
-
-		for {
-
-			if time.Now().After(stopTime) {
-				Logger.Debugf("Timeout when trading")
-				errorCode = TaskErrorTimeout
-				goto __ERROR
-			}
-
-			// 1. 根据深度情况计算价格下单
-			// depth = exchange.GetDepthValue(tradeConfig.Pair)
-
-			// if depth == nil {
-			// 	Logger.Debugf("无操作价格")
-			// 	depthInvalidCount++
-			// 	/*
-			// 		连续十次无法达到操作价格，则退出
-			// 	*/
-			// 	if depthInvalidCount > 10 {
-			// 		errorCode = TaskInvalidDepth
-			// 		goto __ERROR
-			// 	}
-			// 	goto _NEXTLOOP
-			// } else {
-			// 	Logger.Debugf("深度:%v", depth)
-			// 	err, tradePrice, tradeAmount = getPlacedPrice(tradeConfig.Type,
-			// 		depth,
-			// 		tradeConfig.Price,
-			// 		tradeConfig.Limit,
-			// 		tradeConfig.Amount-dealAmount)
-
-			// 	if err != nil {
-			// 		Logger.Errorf("Trade Error:%v", err)
-			// 		Utils.SleepAsyncBySecond(3)
-			// 		goto _NEXTLOOP
-			// 	}
-
-			// 	Logger.Debugf("交易价格：%v 交易数量:%v", tradePrice, tradeAmount)
-			// }
-
-			// depthInvalidCount = 0
-
-			tradePrice = getPlacedPrice(tradeConfig.Type, tradeConfig.Price, tradeConfig.Limit)
-
-			trade = exchange.Trade(Exchange.TradeConfig{
-				Pair:   tradeConfig.Pair,
-				Type:   tradeConfig.Type,
-				Amount: tradeConfig.Amount - dealAmount,
-				Price:  tradePrice,
-			})
-
-			if dbTrades != nil {
-				if err := dbTrades.Insert(&Mongo.TradesRecord{
-					Batch:    tradeConfig.Batch,
-					Oper:     Exchange.TradeTypeString[tradeConfig.Type],
-					Exchange: exchange.GetExchangeName(),
-					Pair:     tradeConfig.Pair,
-					Quantity: tradeAmount,
-					Price:    tradePrice,
-					OrderID:  trade.OrderID,
-				}); err != nil {
-					Logger.Errorf("Fail to save trade record:%v", err)
-				}
-			}
-
-			if trade != nil && trade.Error == nil {
-				// 300 seconds = 5 minutes
-				loop := 5
-
-				for {
-					Utils.SleepAsyncByMillisecond(3000)
-
-					info := exchange.GetOrderInfo(Exchange.OrderInfo{
-						OrderID: trade.OrderID,
-						Pair:    tradeConfig.Pair,
-					})
-
-					if info == nil || len(info) == 0 {
-						Logger.Error("Fail to get the order info")
-						if loop > 0 {
-							loop--
-							continue
-						} else {
-							errorCode = TaskUnableGetOrderInfo
-							goto __ERROR
-						}
-
-					}
-
-					// dbOrders.Insert(&Mongo.OrderInfo{
-					// 	Batch:    tradeConfig.Batch,
-					// 	Exchange: exchange.GetExchangeName(),
-					// 	Coin:     tradeConfig.Coin,
-					// 	OrderID:  trade.OrderID,
-					// 	Status:   Exchange.OrderStatusString[info[0].Status],
-					// })
-
-					if info[0].Status == Exchange.OrderStatusDone {
-						dealAmount += info[0].DealAmount
-						totalCost += (info[0].AvgPrice * info[0].DealAmount) //手续费如何？
-						if dbTrades != nil {
-							dbTrades.SetDone(trade.OrderID)
-						}
-						goto __CheckDealAmount
-					}
-
-					Logger.Debugf("Waiting for the trading result...")
-
-					loop--
-					if loop == 0 {
-						Logger.Debugf("Timeout,cancel the order...")
-						// cancle the order, if it is traded when we cancle?
-						trade := exchange.CancelOrder(Exchange.OrderInfo{
-							Pair:    tradeConfig.Pair,
-							OrderID: info[0].OrderID,
-						})
-
-						// if err := dbTrades.Insert(&Mongo.TradesRecord{
-						// 	Batch:   tradeConfig.Batch,
-						// 	Oper:    Exchange.TradeTypeString[Exchange.TradeTypeCancel],
-						// 	OrderID: trade.OrderID,
-						// 	// Details: fmt.Sprintf("%v", trade),
-						// }); err != nil {
-						// 	Logger.Errorf("保存交易操作失败:%v", err)
-						// }
-
-						if trade != nil && trade.Error == nil {
-
-							info := exchange.GetOrderInfo(Exchange.OrderInfo{
-								OrderID: trade.OrderID,
-								Pair:    tradeConfig.Pair,
-							})
-
-							if info == nil || len(info) == 0 {
-								Logger.Error("Fail to get the order info")
-								errorCode = TaskUnableGetOrderInfo
-								goto __ERROR
-							}
-
-							if dbTrades != nil {
-								dbTrades.SetCanceled(trade.OrderID)
-							}
-
-							// dbOrders.Insert(&Mongo.OrderInfo{
-							// 	Batch:    tradeConfig.Batch,
-							// 	Exchange: exchange.GetExchangeName(),
-							// 	Coin:     tradeConfig.Coin,
-							// 	OrderID:  trade.OrderID,
-							// 	Status:   Exchange.OrderStatusString[info[0].Status],
-							// 	// Details:  fmt.Sprintf("%v", info[0]),
-							// })
-
-							dealAmount += info[0].DealAmount
-							totalCost += (info[0].AvgPrice * info[0].DealAmount)
-							Logger.Debugf("Succeed to get the order info:%v, deal amout:%v", info[0].OrderID, dealAmount)
-							goto __CheckDealAmount
-
-						} else {
-							Logger.Errorf("Fail to cancel the order:%v", info[0].OrderID)
-							errorCode = TaskUnableCancelOrder
-							goto __ERROR
-						}
-					}
-				}
-			} else {
-				errorCode = TaskUnableTrade
-				goto __ERROR
-			}
-
-		__ERROR:
-			if dealAmount != 0 {
-				avePrice = totalCost / dealAmount
-			}
-
-			channel <- TradeResult{
-				Error:      errorCode,
-				DealAmount: dealAmount,
-				AvgPrice:   avePrice,
-			}
-
-			return
-		__CheckBalance:
-			if dealAmount != 0 {
-				avePrice = totalCost / dealAmount
-			}
-
-			channel <- TradeResult{
-				Error:      TaskErrorSuccess,
-				AvgPrice:   avePrice,
-				DealAmount: dealAmount,
-			}
-			return
-
-		__CheckDealAmount:
-			Logger.Debugf("Deal:%v Total:%v", dealAmount, tradeConfig.Amount)
-			if tradeConfig.Amount-dealAmount >= 0.01 {
-				goto _NEXTLOOP
-			}
-			// else
-			goto __CheckBalance
-
-		_NEXTLOOP:
-			// 	延时
-			Utils.SleepAsyncBySecond(1)
-			continue
-		}
-	}()
-
-	return channel
-
+	OrderID    string
 }
 
 func ProcessTradeRoutineIOC(exchange Exchange.IExchange,
@@ -321,7 +86,7 @@ func ProcessTradeRoutineIOC(exchange Exchange.IExchange,
 
 		for {
 
-			tradePrice = getPlacedPrice(tradeConfig.Type, tradeConfig.Price, tradeConfig.Limit)
+			tradePrice = GetPlacedPrice(tradeConfig.Type, tradeConfig.Price, tradeConfig.Limit)
 
 			trade = exchange.Trade(Exchange.TradeConfig{
 				Pair:   tradeConfig.Pair,
@@ -421,7 +186,7 @@ func CheckPriceDiff(spotConfig Exchange.TradeConfig, futureConfig Exchange.Trade
 	return false
 }
 
-func getPlacedPrice(tradeType Exchange.TradeType, price float64, limit float64) float64 {
+func GetPlacedPrice(tradeType Exchange.TradeType, price float64, limit float64) float64 {
 
 	if tradeType == Exchange.TradeTypeOpenLong || tradeType == Exchange.TradeTypeCloseShort || tradeType == Exchange.TradeTypeBuy {
 		limitPriceHigh := price * (1 + limit)

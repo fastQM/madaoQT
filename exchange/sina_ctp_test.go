@@ -33,7 +33,7 @@ var instruments = []string{
 	"hc0",
 	"ta0",
 	// "l0",
-	"pp0",
+	// "pp0",
 }
 
 func TestSinaCtp(t *testing.T) {

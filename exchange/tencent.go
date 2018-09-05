@@ -131,3 +131,47 @@ func (p *TencentStock) GetLast(code string) *KlineValue {
 
 	return &kline
 }
+
+func (p *TencentStock) formatTime(openTime float64) string {
+	openTimeString := strconv.FormatFloat(openTime, 'f', 0, 32)
+	openTimeArray := strings.Split(openTimeString, "")
+	year := openTimeArray[0] + openTimeArray[1] + openTimeArray[2] + openTimeArray[3]
+	month := openTimeArray[4] + openTimeArray[5]
+	date := openTimeArray[6] + openTimeArray[7]
+	return year + "-" + month + "-" + date
+}
+
+func (p *TencentStock) GetMultipleLast(code string) map[string]KlineValue {
+	url := strings.Join([]string{TencentLatestPrefix, code}, "")
+	// log.Printf("URL:%v", url)
+	err, rsp := p.marketRequest(url)
+	if err != nil {
+		logger.Errorf("Error:%v", err)
+		return nil
+	}
+
+	prices := make(map[string]KlineValue)
+	stocks := strings.Split(string(rsp), ";")
+	for _, stock := range stocks {
+		// log.Printf("Stock:%s", stock)
+		data := strings.Split(string(stock), "~")
+		var kline KlineValue
+		if len(data) < 35 {
+			// log.Printf("Error:%v", data)
+			continue
+		}
+
+		code := data[2]
+		kline.OpenTime, _ = strconv.ParseFloat(data[30], 64)
+		kline.Time = p.formatTime(kline.OpenTime)
+		kline.Open, _ = strconv.ParseFloat(data[5], 64)
+		kline.High, _ = strconv.ParseFloat(data[33], 64)
+		kline.Low, _ = strconv.ParseFloat(data[34], 64)
+		kline.Close, _ = strconv.ParseFloat(data[3], 64)
+		kline.Volumn, _ = strconv.ParseFloat(data[6], 64)
+
+		prices[code] = kline
+	}
+
+	return prices
+}
