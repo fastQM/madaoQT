@@ -354,7 +354,7 @@ func (p *OkexRestAPI) Trade(configs TradeConfig) *TradeResult {
 		"price":         strconv.FormatFloat(configs.Price, 'f', 4, 64),
 		"amount":        strconv.FormatFloat(configs.Amount, 'f', 4, 64),
 		"type":          OkexGetTradeTypeString(configs.Type),
-		"match_price":   "1",
+		// "match_price":   "1",
 	})
 
 	if err, response := p.tradeRequest("future_trade.do", parameters); err != nil {
