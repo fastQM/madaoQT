@@ -23,7 +23,7 @@ func TestGetOkexRestAPIKline(t *testing.T) {
 	// file := "okex-ethusdt-1h"
 	// file := "okex-btcusdt-2h"
 	if true {
-		klines = okex.GetKline("btc/usdt", KlinePeriod1Day, 120)
+		klines = okex.GetKline("eth/usdt", KlinePeriod2Hour, 1000)
 		SaveHistory(file, klines)
 	} else {
 		klines = LoadHistory(file)

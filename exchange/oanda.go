@@ -441,6 +441,8 @@ func (p *OandaAPI) GetKline(pair string, period int, limit int) []KlineValue {
 	switch period {
 	case KlinePeriod5Min:
 		interval = "M5"
+	case KlinePeriod10Min:
+		interval = "M10"
 	case KlinePeriod15Min:
 		interval = "M15"
 	case KlinePeriod30Min:

@@ -260,6 +260,7 @@ type IExchange interface {
 
 // 以分钟为单位
 const KlinePeriod5Min = 5
+const KlinePeriod10Min = 10
 const KlinePeriod15Min = 15
 const KlinePeriod30Min = 30
 const KlinePeriod1Hour = 60

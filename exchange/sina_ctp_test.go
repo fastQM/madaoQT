@@ -25,15 +25,17 @@ var instruments = []string{
 	"AP0",
 	"CF0",
 	// "m0", //波动不活跃不操作
-	// "j0",
+	"j0",
 	// "bu0",
 	"MA0",
 	"SR0",
-	// "FG0",
+	// "FG0",	// 亏损
 	"hc0",
 	"ta0",
-	// "l0",
-	// "pp0",
+	"l0",
+	// "pp0",	// 	亏损
+	"i0",
+	// "v0",	// 收益太低
 }
 
 func TestSinaCtp(t *testing.T) {

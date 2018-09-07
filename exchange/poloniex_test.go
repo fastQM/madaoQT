@@ -84,7 +84,7 @@ func TestGetKline(t *testing.T) {
 
 	var results []string
 	// date1 := time.Date(2017, 8, 10, 0, 0, 0, 0, time.Local)
-	date2 := time.Date(2017, 1, 1, 0, 0, 0, 0, time.Local)
+	date2 := time.Date(2016, 1, 1, 0, 0, 0, 0, time.Local)
 
 	polo := new(PoloniexAPI)
 	// result := polo.GetKline("eth/usdt", date1, &date2, Period5Min)
