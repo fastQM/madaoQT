@@ -7,10 +7,6 @@ import (
 	"time"
 )
 
-// 阈值：2018/07/28 20:46:57 Result:盈利次数：24 亏损次数 ：17 盈利求和：125.697068 亏损求和 ：-54.244807 净值 ：1.826487 阈值比例:40
-// 反转：2018/07/28 18:00:47 Result:盈利次数：30 亏损次数 ：30 盈利求和：181.087415 亏损求和 ：-70.059811 净值 ：2.590557 阈值比例:0.3800
-// 开盘突破：2018/07/28 18:02:27 Result:盈利次数：30 亏损次数 ：39 盈利求和：179.961559 亏损求和 ：-84.617132 净值 ：2.201622 阈值比例:0.3800
-// 低点突破:2018/07/28 18:01:33 Result:盈利次数：36 亏损次数 ：42 盈利求和：176.474276 亏损求和 ：-67.213361 净值 ：2.540028 阈值比例:0.3800
 func TestGetOkexRestAPIKline(t *testing.T) {
 
 	okex := new(OkexRestAPI)
@@ -23,7 +19,7 @@ func TestGetOkexRestAPIKline(t *testing.T) {
 	// file := "okex-ethusdt-1h"
 	// file := "okex-btcusdt-2h"
 	if true {
-		klines = okex.GetKline("eth/usdt", KlinePeriod2Hour, 1000)
+		klines = okex.GetKline("eth/usdt", KlinePeriod2Hour, 10000)
 		SaveHistory(file, klines)
 	} else {
 		klines = LoadHistory(file)

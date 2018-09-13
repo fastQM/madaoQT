@@ -122,15 +122,15 @@ func (c *ChartsController) GetExamples() iris.Map {
 
 	var result []exchange.KlineValue
 
-	filename := "poloniex-15min"
+	filename := "poloniex-ethusdt-2hour-20160101"
 
 	result = exchange.LoadHistory(filename)
 
-	areas := exchange.StrategyTrendTest(result, true, true)
+	// areas := exchange.StrategyTrendTest(result, true, true)
 
 	return iris.Map{
 		"result": true,
-		"data":   areas,
+		"data":   result,
 	}
 }
 

@@ -36,7 +36,14 @@
             ready(){
                 super.ready()
                 // this.getProfit()
+                Highcharts.setOptions({
+                        lang: {
+                                rangeSelectorZoom: ''
+                        }
+                });
+
                 this.$.idGetProfit.generateRequest()
+                
             }
 
             onResult(){
@@ -49,27 +56,37 @@
 
             drawDiagram(){
                 var index = this.index;
-                this.index++;
                 var datas = [];
                 var i;
-                for(i=0;i<this.records[index].length;i++)
+                for(i=0;i<this.records.length;i++)
                 {
                     datas[i] = []
-                    datas[i][0] = new Date(this.records[index][i].OpenTime*1000).toString()
-                    datas[i][1] = this.records[index][i].Open
-                    datas[i][2] = this.records[index][i].High
-                    datas[i][3] = this.records[index][i].Low
-                    datas[i][4] = this.records[index][i].Close
+                    datas[i][0] = new Date(this.records[i].OpenTime*1000)
+                    datas[i][1] = this.records[i].Open
+                    datas[i][2] = this.records[i].High
+                    datas[i][3] = this.records[i].Low
+                    datas[i][4] = this.records[i].Close
                 }
 
                 var chart = Highcharts.chart(this.$.idProfit, {
+                    rangeSelector: {
+                        selected: 1,
+                        inputDateFormat: '%Y-%m-%d'
+                    },
                     title: {
-                        text: '单日收益走势图'
+                        text: 'K线历史数据'
                     },
                     xAxis:{
-                        // categories: times,
-                        // minTickInterval: 2000,
-                        startOnTick: true,
+						dateTimeLabelFormats: {
+								millisecond: '%H:%M:%S.%L',
+								second: '%H:%M:%S',
+								minute: '%H:%M',
+								hour: '%H:%M',
+								day: '%m-%d',
+								week: '%m-%d',
+								month: '%y-%m',
+								year: '%Y'
+						}
                     },
                     yAxis: {
                         title: {

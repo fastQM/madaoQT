@@ -821,8 +821,8 @@ func (a *IAnalyzer) Close() {
 func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfig Exchange.TradeConfig,
 	spot Exchange.IExchange, spotConfig Exchange.TradeConfig) {
 
-	channelFuture := Task.ProcessTradeRoutine(future, futureConfig, a.tradeDB)
-	channelSpot := Task.ProcessTradeRoutine(spot, spotConfig, a.tradeDB)
+	channelFuture := a.ProcessTradeRoutine(future, futureConfig, a.tradeDB)
+	channelSpot := a.ProcessTradeRoutine(spot, spotConfig, a.tradeDB)
 
 	var waitGroup sync.WaitGroup
 	var futureResult, spotResult Task.TradeResult
@@ -882,7 +882,7 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 	} else {
 
 		if spotResult.DealAmount > 0 {
-			channelSpot = Task.ProcessTradeRoutine(spot, operation.spotConfig, a.tradeDB)
+			channelSpot = a.ProcessTradeRoutine(spot, operation.spotConfig, a.tradeDB)
 			waitGroup.Add(1)
 			go func() {
 				select {
@@ -899,7 +899,7 @@ func (a *IAnalyzer) placeOrdersByQuantity(future Exchange.IExchange, futureConfi
 		}
 
 		if futureResult.DealAmount > 0 {
-			channelFuture = Task.ProcessTradeRoutine(future, operation.futureConfig, a.tradeDB)
+			channelFuture = a.ProcessTradeRoutine(future, operation.futureConfig, a.tradeDB)
 			waitGroup.Add(1)
 			select {
 			case futureResult = <-channelFuture:
@@ -1026,8 +1026,8 @@ func (a *IAnalyzer) checkPosition(coin string, askFuturePrice float64, bidFuture
 					// op.futureConfig.Price = futurePrice
 					// op.spotConfig.Price = spotPrice
 
-					channelFuture := Task.ProcessTradeRoutine(a.future, op.futureConfig, a.tradeDB)
-					channelSpot := Task.ProcessTradeRoutine(a.spot, op.spotConfig, a.tradeDB)
+					channelFuture := a.ProcessTradeRoutine(a.future, op.futureConfig, a.tradeDB)
+					channelSpot := a.ProcessTradeRoutine(a.spot, op.spotConfig, a.tradeDB)
 
 					var waitGroup sync.WaitGroup
 					var futureResult, spotResult Task.TradeResult
@@ -1086,4 +1086,198 @@ func (a *IAnalyzer) countError() {
 		a.errorCount = 0
 		a.status = Task.StatusError
 	}
+}
+
+func (a *IAnalyzer) ProcessTradeRoutine(exchange Exchange.IExchange,
+	tradeConfig Exchange.TradeConfig,
+	dbTrades *Mongo.Trades) chan Task.TradeResult {
+
+	// var balance interface{} // 实际余额后台返回为准
+	// coin := Exchange.ParsePair(tradeConfig.Coin)[0]
+	channel := make(chan Task.TradeResult)
+	stopTime := time.Now().Add(10 * time.Second)
+
+	Logger.Debugf("Trade Params:%v", tradeConfig)
+
+	go func() {
+		defer close(channel)
+
+		// var dealAmount, totalCost, avePrice float64
+		var dealAmount, totalCost, avePrice float64
+		var trade *Exchange.TradeResult
+		// var depthInvalidCount int
+		var errorCode Task.TaskErrorType
+		// var depth *Exchange.DepthValue
+		// var depth [][]Exchange.DepthPrice
+		var tradePrice, tradeAmount float64
+		// var err error
+
+		for {
+
+			if time.Now().After(stopTime) {
+				Logger.Debugf("Timeout when trading")
+				errorCode = Task.TaskErrorTimeout
+				goto __ERROR
+			}
+
+			tradePrice = Task.GetPlacedPrice(tradeConfig.Type, tradeConfig.Price, tradeConfig.Limit)
+
+			trade = exchange.Trade(Exchange.TradeConfig{
+				Pair:   tradeConfig.Pair,
+				Type:   tradeConfig.Type,
+				Amount: tradeConfig.Amount - dealAmount,
+				Price:  tradePrice,
+			})
+
+			if dbTrades != nil {
+				if err := dbTrades.Insert(&Mongo.TradesRecord{
+					Batch:    tradeConfig.Batch,
+					Oper:     Exchange.TradeTypeString[tradeConfig.Type],
+					Exchange: exchange.GetExchangeName(),
+					Pair:     tradeConfig.Pair,
+					Quantity: tradeAmount,
+					Price:    tradePrice,
+					OrderID:  trade.OrderID,
+				}); err != nil {
+					Logger.Errorf("Fail to save trade record:%v", err)
+				}
+			}
+
+			if trade != nil && trade.Error == nil {
+				// 300 seconds = 5 minutes
+				loop := 5
+
+				for {
+					Utils.SleepAsyncByMillisecond(3000)
+
+					info := exchange.GetOrderInfo(Exchange.OrderInfo{
+						OrderID: trade.OrderID,
+						Pair:    tradeConfig.Pair,
+					})
+
+					if info == nil || len(info) == 0 {
+						Logger.Error("Fail to get the order info")
+						if loop > 0 {
+							loop--
+							continue
+						} else {
+							errorCode = Task.TaskUnableGetOrderInfo
+							goto __ERROR
+						}
+
+					}
+
+					if info[0].Status == Exchange.OrderStatusDone {
+						dealAmount += info[0].DealAmount
+						totalCost += (info[0].AvgPrice * info[0].DealAmount) //手续费如何？
+						if dbTrades != nil {
+							dbTrades.SetDone(trade.OrderID)
+						}
+						goto __CheckDealAmount
+					}
+
+					Logger.Debugf("Waiting for the trading result...")
+
+					loop--
+					if loop == 0 {
+						Logger.Debugf("Timeout,cancel the order...")
+						// cancle the order, if it is traded when we cancle?
+						trade := exchange.CancelOrder(Exchange.OrderInfo{
+							Pair:    tradeConfig.Pair,
+							OrderID: info[0].OrderID,
+						})
+
+						// if err := dbTrades.Insert(&Mongo.TradesRecord{
+						// 	Batch:   tradeConfig.Batch,
+						// 	Oper:    Exchange.TradeTypeString[Exchange.TradeTypeCancel],
+						// 	OrderID: trade.OrderID,
+						// 	// Details: fmt.Sprintf("%v", trade),
+						// }); err != nil {
+						// 	Logger.Errorf("保存交易操作失败:%v", err)
+						// }
+
+						if trade != nil && trade.Error == nil {
+
+							info := exchange.GetOrderInfo(Exchange.OrderInfo{
+								OrderID: trade.OrderID,
+								Pair:    tradeConfig.Pair,
+							})
+
+							if info == nil || len(info) == 0 {
+								Logger.Error("Fail to get the order info")
+								errorCode = Task.TaskUnableGetOrderInfo
+								goto __ERROR
+							}
+
+							if dbTrades != nil {
+								dbTrades.SetCanceled(trade.OrderID)
+							}
+
+							// dbOrders.Insert(&Mongo.OrderInfo{
+							// 	Batch:    tradeConfig.Batch,
+							// 	Exchange: exchange.GetExchangeName(),
+							// 	Coin:     tradeConfig.Coin,
+							// 	OrderID:  trade.OrderID,
+							// 	Status:   Exchange.OrderStatusString[info[0].Status],
+							// 	// Details:  fmt.Sprintf("%v", info[0]),
+							// })
+
+							dealAmount += info[0].DealAmount
+							totalCost += (info[0].AvgPrice * info[0].DealAmount)
+							Logger.Debugf("Succeed to get the order info:%v, deal amout:%v", info[0].OrderID, dealAmount)
+							goto __CheckDealAmount
+
+						} else {
+							Logger.Errorf("Fail to cancel the order:%v", info[0].OrderID)
+							errorCode = Task.TaskUnableCancelOrder
+							goto __ERROR
+						}
+					}
+				}
+			} else {
+				errorCode = Task.TaskUnableTrade
+				goto __ERROR
+			}
+
+		__ERROR:
+			if dealAmount != 0 {
+				avePrice = totalCost / dealAmount
+			}
+
+			channel <- Task.TradeResult{
+				Error:      errorCode,
+				DealAmount: dealAmount,
+				AvgPrice:   avePrice,
+			}
+
+			return
+		__CheckBalance:
+			if dealAmount != 0 {
+				avePrice = totalCost / dealAmount
+			}
+
+			channel <- Task.TradeResult{
+				Error:      Task.TaskErrorSuccess,
+				AvgPrice:   avePrice,
+				DealAmount: dealAmount,
+			}
+			return
+
+		__CheckDealAmount:
+			Logger.Debugf("Deal:%v Total:%v", dealAmount, tradeConfig.Amount)
+			if tradeConfig.Amount-dealAmount >= 0.01 {
+				goto _NEXTLOOP
+			}
+			// else
+			goto __CheckBalance
+
+		_NEXTLOOP:
+			// 	延时
+			Utils.SleepAsyncBySecond(1)
+			continue
+		}
+	}()
+
+	return channel
+
 }

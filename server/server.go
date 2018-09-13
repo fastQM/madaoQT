@@ -130,7 +130,7 @@ func (h *HttpServer) SetupHttpServer() {
 	h.setupRoutes()
 	h.setupControllers()
 
-	h.app.Run(iris.Addr(":80"))
+	h.app.Run(iris.Addr(":"+Global.ServerPort))
 }
 
 func (h *HttpServer) setupTasks() {
