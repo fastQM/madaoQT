@@ -225,6 +225,7 @@ func CalcDepthPrice(isFuture bool, ratios map[string]float64, exchange Exchange.
 
 	if isFuture {
 		quantity = amount / ratios[Exchange.ParsePair(pair)[0]]
+		Logger.Debugf("Quantity:%f", quantity)
 	}
 
 	// Logger.Debugf("Asks:%v", asks)

@@ -480,6 +480,10 @@ func GetLastDaysArea(days int, kline []KlineValue) (high float64, low float64, e
 		return 0, 0, errors.New("Invalid period")
 	}
 
+	// for _, value := range kline {
+	// 	log.Printf("Value:%v", value)
+	// }
+
 	subKline := kline[length-days-1 : length-1]
 
 	for i := 0; i <= len(subKline)-1; i++ {
@@ -667,7 +671,7 @@ func LoadHistory(code string) []KlineValue {
 		if line != "" {
 			var kline KlineValue
 			// line = strings.Replace(line, "\n", "", 1)
-			// log.Printf("line:%s %x", line, line)
+			// log.Printf("line:%s", line)
 			err := json.Unmarshal([]byte(line), &kline)
 			if err != nil {
 				log.Printf("Error4:%v", err)
@@ -720,7 +724,6 @@ func CTPDailyKlinesToWeek(klines []KlineValue) []KlineValue {
 	for _, kline := range klines {
 
 		klineTime, _ = time.ParseInLocation("2006-01-02", kline.Time, location)
-
 		if open == 0 {
 			open = kline.Open
 		}
@@ -760,7 +763,7 @@ func CTPDailyKlinesToWeek(klines []KlineValue) []KlineValue {
 			Low:   low,
 			Open:  open,
 			Close: low,
-			Time:  klineTime.Add((-1) * 7 * 24 * 60 * 60).Format("2006-01-02"),
+			Time:  klineTime.Format("2006-01-02"),
 		}
 		KlinesByWeek = append(KlinesByWeek, lastKline)
 	}

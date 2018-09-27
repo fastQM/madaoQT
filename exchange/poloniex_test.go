@@ -95,7 +95,7 @@ func TestGetKline(t *testing.T) {
 		klines = LoadHistory(filename)
 	}
 
-	// for value := 0.1; value < 0.6; value += 0.01 {
+	// for StopLoss = 0.03; StopLoss < 0.1; StopLoss += 0.01 {
 	// for value := 1; value < 45; value++ {
 	// 	// log.Printf("Klines:%v", klines)
 	// ChangeOffset(value)

@@ -48,8 +48,8 @@ func (p *TencentStock) marketRequest(path string) (error, []byte) {
 func (p *TencentStock) GetDialyKlines(startyear int, code string) []KlineValue {
 
 	var klines []KlineValue
-	currentyear := time.Now().Year()
 
+	currentyear := time.Now().Year()
 	start := strings.Replace(strconv.Itoa(startyear), "20", "", 1)
 	end := strings.Replace(strconv.Itoa(currentyear), "20", "", 1)
 
@@ -133,7 +133,7 @@ func (p *TencentStock) GetLast(code string) *KlineValue {
 }
 
 func (p *TencentStock) formatTime(openTime float64) string {
-	openTimeString := strconv.FormatFloat(openTime, 'f', 0, 32)
+	openTimeString := strconv.FormatFloat(openTime, 'f', 0, 64)
 	openTimeArray := strings.Split(openTimeString, "")
 	year := openTimeArray[0] + openTimeArray[1] + openTimeArray[2] + openTimeArray[3]
 	month := openTimeArray[4] + openTimeArray[5]

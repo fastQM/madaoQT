@@ -471,6 +471,8 @@ func (p *OandaAPI) GetKline(pair string, period int, limit int) []KlineValue {
 	if err, response := p.marketRequest("GET", "/v3/instruments/"+symbol+"/candles", map[string]string{
 		"granularity": interval,
 		"count":       strconv.Itoa(limit),
+		// "from": strconv.Itoa(int(time.Date(2007, 1, 1, 0, 0, 0, 0, time.Local).Unix())),
+		// "to":   strconv.Itoa(int(time.Date(2009, 1, 1, 0, 0, 0, 0, time.Local).Unix())),
 	}); err != nil {
 		logger.Errorf("Invalid klines:%v", err)
 		return nil
