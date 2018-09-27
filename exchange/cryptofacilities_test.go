@@ -2,6 +2,7 @@ package exchange
 
 import (
 	"log"
+	Mongo "madaoQT/mongo"
 	"testing"
 )
 
@@ -20,10 +21,20 @@ func TestCFGetOrderBook(t *testing.T) {
 }
 
 func TestCFGetBalance(t *testing.T) {
+
+	mongo := &Mongo.ExchangeDB{
+		Server: "mongodb://localhost:27017",
+	}
+	err, key := GetExchangeKey(mongo, NameCryptoFacilities, []byte(""), []byte(""))
+	if err != nil {
+		log.Printf("Err:%v", err)
+		return
+	}
+
 	handle := new(CryptoFacilities)
 	handle.SetConfigure(Config{
-		API:    "",
-		Secret: "",
+		API:    key.API,
+		Secret: key.Secret,
 	})
 	result := handle.GetBalance()
 
@@ -31,16 +42,26 @@ func TestCFGetBalance(t *testing.T) {
 }
 
 func TestCFTrade(t *testing.T) {
+
+	mongo := &Mongo.ExchangeDB{
+		Server: "mongodb://localhost:27017",
+	}
+	err, key := GetExchangeKey(mongo, NameCryptoFacilities, []byte(""), []byte(""))
+	if err != nil {
+		log.Printf("Err:%v", err)
+		return
+	}
+
 	handle := new(CryptoFacilities)
 	handle.SetConfigure(Config{
-		API:    "",
-		Secret: "",
+		API:    key.API,
+		Secret: key.Secret,
 	})
 	result := handle.Trade(TradeConfig{
-		Amount: 2,
-		Price:  195,
+		Amount: 1,
+		Price:  220,
 		Pair:   "ETH/USD",
-		Type:   TradeTypeSell,
+		Type:   TradeTypeBuy,
 	})
 
 	log.Printf("===Result:%v", result)
@@ -59,11 +80,43 @@ func TestCFCancelOrder(t *testing.T) {
 	log.Printf("===Result:%v", result)
 }
 
-func TestCFGetPositions(t *testing.T) {
+func TestCFGetOrder(t *testing.T) {
+	mongo := &Mongo.ExchangeDB{
+		Server: "mongodb://localhost:27017",
+	}
+	err, key := GetExchangeKey(mongo, NameCryptoFacilities, []byte(""), []byte(""))
+	if err != nil {
+		log.Printf("Err:%v", err)
+		return
+	}
+
 	handle := new(CryptoFacilities)
 	handle.SetConfigure(Config{
-		API:    "",
-		Secret: "",
+		API:    key.API,
+		Secret: key.Secret,
+	})
+	result := handle.GetOrderInfo(OrderInfo{
+		OrderID: "b27a343d-e254-4fe4-8d4e-70d8a9558e2c",
+	})
+
+	log.Printf("===Result:%v", result)
+}
+
+func TestCFGetPositions(t *testing.T) {
+
+	mongo := &Mongo.ExchangeDB{
+		Server: "mongodb://localhost:27017",
+	}
+	err, key := GetExchangeKey(mongo, NameCryptoFacilities, []byte(""), []byte(""))
+	if err != nil {
+		log.Printf("Err:%v", err)
+		return
+	}
+
+	handle := new(CryptoFacilities)
+	handle.SetConfigure(Config{
+		API:    key.API,
+		Secret: key.Secret,
 	})
 	result := handle.GetPositions("eth/usd")
 

@@ -16,8 +16,9 @@ func TestSocketConnection(t *testing.T) {
 
 	select {
 	case <-time.After(3 * time.Second):
-		fxcm.GetOffers()
-		log.Printf("Timeout")
+		// fxcm.GetOffers()
+		result := fxcm.GetOpenPositions()
+		log.Printf("result:%v", *result)
 		return
 	}
 }

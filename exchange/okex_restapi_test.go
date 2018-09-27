@@ -107,7 +107,7 @@ func TestOKEXRestTrade(t *testing.T) {
 	log.Printf("Result:%v", okex.Trade(TradeConfig{
 		Type:   TradeTypeCloseLong,
 		Amount: 1,
-		Price:  300,
+		Price:  200,
 		Pair:   "eth/usdt",
 	}))
 }

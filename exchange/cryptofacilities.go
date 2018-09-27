@@ -310,6 +310,12 @@ func (p *CryptoFacilities) GetBalance() map[string]interface{} {
 func (p *CryptoFacilities) Trade(configs TradeConfig) *TradeResult {
 	symbol := p.getSymbol(configs.Pair)
 
+	if configs.Type == TradeTypeCloseLong {
+		configs.Type = TradeTypeSell
+	} else if configs.Type == TradeTypeCloseShort {
+		configs.Type = TradeTypeBuy
+	}
+
 	if err, response := p.orderRequest("POST", "/api/v3/sendorder", map[string]string{
 		"params": "orderType=lmt&symbol=" + symbol +
 			"&side=" + CryptoFacilitiesTradeTypeMap[configs.Type] +
@@ -337,6 +343,7 @@ func (p *CryptoFacilities) Trade(configs TradeConfig) *TradeResult {
 
 		status := values["sendStatus"].(map[string]interface{})
 		if status["status"].(string) != "placed" && status["status"].(string) != "attempted" {
+			logger.Errorf("Send status:%v", values)
 			return &TradeResult{
 				Error: errors.New(status["status"].(string)),
 				Info:  nil,
@@ -385,35 +392,31 @@ func (p *CryptoFacilities) CancelOrder(order OrderInfo) *TradeResult {
 
 // GetOrderInfo() get the information with order filter
 func (p *CryptoFacilities) GetOrderInfo(filter OrderInfo) []OrderInfo {
-	symbol := p.getSymbol(filter.Pair)
-	if err, response := p.orderRequest("GET", "/api/v3/order", map[string]string{
-		"symbol":            symbol,
-		"origClientOrderId": filter.OrderID,
-	}); err != nil {
-		logger.Errorf("无法获取订单信息:%v", err)
+	if err, response := p.orderRequest("GET", "/api/v3/openorders", map[string]string{}); err != nil {
+		logger.Errorf("Fail to get open Orders:%v", err)
 		return nil
 	} else {
 		var values map[string]interface{}
 		if err = json.Unmarshal(response, &values); err != nil {
-			logger.Errorf("解析错误:%v", err)
+			logger.Errorf("Fail to parse:%v", err)
 			return nil
 		}
 
-		if values["code"] != nil || values["msg"] != nil {
-			logger.Errorf("命令错误:%v", values["msg"])
+		if values["result"].(string) != "success" {
+			logger.Errorf("Fail to get the result:%v", values["error"].(string))
 			return nil
 		}
 
-		info := make([]OrderInfo, 1)
-		info[0].Amount, _ = strconv.ParseFloat(values["origQty"].(string), 64)
-		info[0].Pair = symbol
-		info[0].DealAmount, _ = strconv.ParseFloat(values["executedQty"].(string), 64)
-		info[0].Status = p.getStatusType(values["status"].(string))
-		info[0].OrderID = filter.OrderID
-		info[0].AvgPrice, _ = strconv.ParseFloat(values["stopPrice"].(string), 64)
+		orders := values["openOrders"].([]interface{})
+		if orders != nil {
+			infos := make([]OrderInfo, len(orders))
+			for i, order := range orders {
+				// infos[i].Status = order.(map[string]string)["status"]
+				infos[i].OrderID = order.(map[string]string)["order_id"]
+			}
+		}
 
-		return info
-
+		return nil
 	}
 }
 

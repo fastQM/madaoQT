@@ -751,7 +751,7 @@ func SwithDialyToWeekKlines(klines []KlineValue) []KlineValue {
 			Low:      low,
 			Open:     open,
 			Close:    close,
-			OpenTime: float64(time.Date(first.Year(), first.Month(), first.Day(), first.Hour(), 0, 0, 0, location).Unix()),
+			OpenTime: float64(time.Date(first.Year(), first.Month(), first.Day(), 0, 0, 0, 0, location).Unix()),
 		}
 		KlinesByWeek = append(KlinesByWeek, lastKline)
 	}

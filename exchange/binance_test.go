@@ -160,12 +160,12 @@ func TestGetKlines(t *testing.T) {
 	var klines []KlineValue
 	binance := new(Binance)
 	binance.SetConfigure(Config{
-		Proxy: "SOCKS5:127.0.0.1:1080",
+		// Proxy: "SOCKS5:127.0.0.1:1080",
 	})
 
 	filename := "binance-ethusdt-2h"
 	// filename := "binance-btcusdt-4h"
-	if true {
+	if false {
 		klines = binance.GetKline("eth/usdt", KlinePeriod2Hour, 10000)
 		SaveHistory(filename, klines)
 	} else {
