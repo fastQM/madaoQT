@@ -506,6 +506,156 @@ func GetLastDaysArea(days int, kline []KlineValue) (high float64, low float64, e
 
 }
 
+func GetLastTwoPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
+
+	length := len(kline)
+
+	array10 := kline[length-10 : length]
+	array20 := kline[length-20 : length]
+
+	avg10 := GetAverage(10, array10)
+	avg20 := GetAverage(20, array20)
+
+	var isOpenLong bool
+	if avg10 > avg20 {
+		isOpenLong = true
+	} else {
+		isOpenLong = false
+	}
+
+	var start, end int
+	found := false
+	if isOpenLong {
+
+		step := 0
+		for i := len(kline) - 1; i >= 0; i-- {
+
+			if i-20 < 0 {
+				start = i
+				found = true
+				break
+			}
+
+			array10 := kline[i-10 : i]
+			array20 := kline[i-20 : i]
+
+			avg10 := GetAverage(10, array10)
+			avg20 := GetAverage(20, array20)
+
+			if step == 0 {
+				if avg10 < avg20 {
+					step = 1
+					end = i
+					continue
+				}
+			} else if step == 1 {
+				if avg10 > avg20 {
+					step = 2
+					continue
+				}
+			} else if step == 2 {
+				if avg10 < avg20 {
+					step = 3
+					continue
+				}
+			} else if step == 3 {
+				if avg10 > avg20 {
+					step = 4
+					continue
+				}
+			} else if step == 4 {
+				if avg10 < avg20 {
+					start = i
+					found = true
+					break
+				}
+			}
+		}
+
+	} else {
+		step := 0
+		for i := len(kline) - 1; i >= 0; i-- {
+
+			if i-20 < 0 {
+				start = i
+				found = true
+				break
+			}
+
+			array10 := kline[i-10 : i]
+			array20 := kline[i-20 : i]
+
+			avg10 := GetAverage(10, array10)
+			avg20 := GetAverage(20, array20)
+
+			if step == 0 {
+				if avg10 > avg20 {
+					step = 1
+					end = i
+					continue
+				}
+			} else if step == 1 {
+				if avg10 < avg20 {
+					step = 2
+					continue
+				}
+			} else if step == 2 {
+				if avg10 > avg20 {
+					step = 3
+					continue
+				}
+			} else if step == 3 {
+				if avg10 < avg20 {
+					step = 4
+					continue
+				}
+			} else if step == 4 {
+				if avg10 > avg20 {
+					start = i
+					found = true
+					break
+				}
+			}
+		}
+	}
+
+	if found {
+		var high, low float64
+
+		fmt.Sprintf("起始点:%s 结束点:%s 当前:%s",
+			time.Unix(int64(kline[start].OpenTime), 0),
+			time.Unix(int64(kline[end].OpenTime), 0),
+			time.Unix(int64(kline[len(kline)-1].OpenTime), 0))
+
+		for i := start; i < len(kline)-1; i++ {
+			// log.Printf("[%s]high:%v low:%v close:%v",
+			// 	time.Unix(int64(kline[i].OpenTime), 0), kline[i].High, kline[i].Low, kline[i].Close)
+			// tmp := (kline[i].Close*0.8 + kline[i].High*0.2)
+			// tmp := (kline[i].High*0.618 + kline[i].Close*0.382)
+			tmp := kline[i].High
+			if high == 0 {
+				high = tmp
+			} else if high < tmp {
+				high = tmp
+			}
+
+			// tmp = (kline[i].Close*0.8 + kline[i].Low*0.2)
+			// tmp = (kline[i].Low*0.618 + kline[i].Close*0.382)
+			tmp = kline[i].Low
+			if low == 0 {
+				low = tmp
+			} else if low > tmp {
+				low = tmp
+			}
+		}
+
+		return high, low, nil
+
+	}
+
+	return 0, 0, errors.New("Invalid Period")
+}
+
 // 20日均线周期波段
 func GetLastPeriodArea(kline []KlineValue) (high float64, low float64, err error) {
 
