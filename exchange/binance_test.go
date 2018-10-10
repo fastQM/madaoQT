@@ -165,7 +165,7 @@ func TestGetKlines(t *testing.T) {
 
 	filename := "binance-ethusdt-2h"
 	// filename := "binance-btcusdt-4h"
-	if false {
+	if true {
 		klines = binance.GetKline("eth/usdt", KlinePeriod2Hour, 10000)
 		SaveHistory(filename, klines)
 	} else {
