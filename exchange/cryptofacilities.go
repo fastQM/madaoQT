@@ -207,6 +207,7 @@ func (p *CryptoFacilities) GetTicker(pair string) *TickerValue {
 }
 
 func (p *CryptoFacilities) getSymbol(pair string) string {
+	pair = strings.Replace(pair, "usdt", "usd", 1)
 	coins := ParsePair(pair)
 	return "pi_" + strings.ToLower(coins[0]+coins[1])
 }
@@ -320,7 +321,7 @@ func (p *CryptoFacilities) Trade(configs TradeConfig) *TradeResult {
 		"params": "orderType=lmt&symbol=" + symbol +
 			"&side=" + CryptoFacilitiesTradeTypeMap[configs.Type] +
 			"&size=" + strconv.FormatInt(int64(configs.Amount), 10) +
-			"&limitPrice=" + strconv.FormatFloat(configs.Price, 'f', 2, 64),
+			"&limitPrice=" + strconv.FormatFloat(configs.Price, 'f', 1, 64),
 	}); err != nil {
 		logger.Errorf("Fail to trade:%v", err)
 		return &TradeResult{

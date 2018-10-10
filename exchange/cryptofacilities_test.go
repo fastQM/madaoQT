@@ -58,10 +58,10 @@ func TestCFTrade(t *testing.T) {
 		Secret: key.Secret,
 	})
 	result := handle.Trade(TradeConfig{
-		Amount: 1,
-		Price:  220,
+		Amount: 2,
+		Price:  210,
 		Pair:   "ETH/USD",
-		Type:   TradeTypeBuy,
+		Type:   TradeTypeSell,
 	})
 
 	log.Printf("===Result:%v", result)
