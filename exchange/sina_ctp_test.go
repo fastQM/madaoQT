@@ -75,7 +75,7 @@ func TestSinaCtp(t *testing.T) {
 		// 	log.Printf("Time:%s value:%v", kline.Time, kline)
 		// }
 
-		// klines = CTPDailyKlinesToWeek(klines)
+		klines = CTPDailyKlinesToWeek(klines)
 		// for _, kline := range klinesByWeek {
 		// 	log.Printf("Time:%s High:%v Low:%v Open:%v Close:%v", kline.Time, kline.High, kline.Low, kline.Open, kline.Close)
 		// }

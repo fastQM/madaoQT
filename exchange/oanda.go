@@ -48,7 +48,7 @@ func (h *OandaAPI) Start() error {
 
 func (h *OandaAPI) marketRequest(method, path string, params map[string]string) (error, []byte) {
 
-	// log.Printf("Path:%s", path)
+	log.Printf("Path:%s", path)
 	var bodystr string
 	for k, v := range params {
 		if bodystr == "" {
