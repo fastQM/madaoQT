@@ -12,10 +12,7 @@ import (
 const TencentPrefix = "http://data.gtimg.cn/flashdata/hushen/daily/"
 const TencentLatestPrefix = "http://qt.gtimg.cn/q="
 const TencentURL = "http://data.gtimg.cn/flashdata/hushen/daily/[year]/[stock].js"
-<<<<<<< HEAD
-=======
 const TencentHongkongPrefix = "http://data.gtimg.cn/flashdata/hk/daily/"
->>>>>>> c361f72914637601fa889124e41d28a395d67c50
 
 type TencentStock struct {
 }
@@ -53,23 +50,16 @@ func (p *TencentStock) GetDialyKlines(startyear int, code string) []KlineValue {
 
 	var klines []KlineValue
 
-<<<<<<< HEAD
-=======
 	prefix := TencentPrefix
 	if strings.HasPrefix(code, "hk") {
 		prefix = TencentHongkongPrefix
 	}
 
->>>>>>> c361f72914637601fa889124e41d28a395d67c50
 	currentyear := time.Now().Year()
 	start := strings.Replace(strconv.Itoa(startyear), "20", "", 1)
 	end := strings.Replace(strconv.Itoa(currentyear), "20", "", 1)
 
-<<<<<<< HEAD
-	url := strings.Join([]string{TencentPrefix, start, "/", code, ".js"}, "")
-=======
 	url := strings.Join([]string{prefix, start, "/", code, ".js"}, "")
->>>>>>> c361f72914637601fa889124e41d28a395d67c50
 	// logger.Infof("URL:%s", url)
 
 	err, rsp := p.marketRequest(url)
@@ -93,11 +83,7 @@ func (p *TencentStock) GetDialyKlines(startyear int, code string) []KlineValue {
 	}
 
 	if end != start {
-<<<<<<< HEAD
-		url = strings.Join([]string{TencentPrefix, end, "/", code, ".js"}, "")
-=======
 		url = strings.Join([]string{prefix, end, "/", code, ".js"}, "")
->>>>>>> c361f72914637601fa889124e41d28a395d67c50
 		// logger.Infof("URL:%s", url)
 		p.marketRequest(url)
 
@@ -163,11 +149,7 @@ func (p *TencentStock) formatTime(openTime float64) string {
 
 func (p *TencentStock) GetMultipleLast(code string) map[string]KlineValue {
 	url := strings.Join([]string{TencentLatestPrefix, code}, "")
-<<<<<<< HEAD
-	// log.Printf("URL:%v", url)
-=======
 	log.Printf("URL:%v", url)
->>>>>>> c361f72914637601fa889124e41d28a395d67c50
 	err, rsp := p.marketRequest(url)
 	if err != nil {
 		logger.Errorf("Error:%v", err)
@@ -199,8 +181,6 @@ func (p *TencentStock) GetMultipleLast(code string) map[string]KlineValue {
 
 	return prices
 }
-<<<<<<< HEAD
-=======
 
 func (p *TencentStock) GetHKMultipleLast(code string) map[string]KlineValue {
 	url := strings.Join([]string{TencentLatestPrefix, code}, "")
@@ -236,4 +216,3 @@ func (p *TencentStock) GetHKMultipleLast(code string) map[string]KlineValue {
 
 	return prices
 }
->>>>>>> c361f72914637601fa889124e41d28a395d67c50
