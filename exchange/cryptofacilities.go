@@ -311,9 +311,9 @@ func (p *CryptoFacilities) GetBalance() map[string]interface{} {
 func (p *CryptoFacilities) Trade(configs TradeConfig) *TradeResult {
 	symbol := p.getSymbol(configs.Pair)
 
-	if configs.Type == TradeTypeCloseLong {
+	if configs.Type == TradeTypeOpenShort || configs.Type == TradeTypeCloseLong {
 		configs.Type = TradeTypeSell
-	} else if configs.Type == TradeTypeCloseShort {
+	} else if configs.Type == TradeTypeOpenLong || configs.Type == TradeTypeCloseShort {
 		configs.Type = TradeTypeBuy
 	}
 
