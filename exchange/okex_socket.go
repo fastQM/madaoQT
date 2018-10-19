@@ -1,10 +1,13 @@
 package exchange
 
 import (
+	"bytes"
+	"compress/flate"
 	"crypto/md5"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"sort"
 	"strconv"
@@ -20,7 +23,7 @@ const NameOKEX = "Okex"
 const NameOKEXSpot = "OkexSpot"
 const NameOKEXFuture = "OkexFuture"
 
-const futureEndPoint = "wss://real.okex.com:10440/websocket/okexapi"
+const futureEndPoint = "wss://real.okex.com:10440/websocket/okexapi?compress=true"
 const spotEndPoint = "wss://real.okex.com:10441/websocket"
 
 const ContractTypeThisWeek = "this_week"
@@ -227,6 +230,16 @@ func (o *OKExAPI) Start() error {
 				go o.triggerEvent(EventLostConnection)
 				return
 			}
+
+			r := flate.NewReader(bytes.NewReader(message))
+			defer r.Close()
+			out, err := ioutil.ReadAll(r)
+			if err != nil {
+				logger.Errorf("Fail to decompress:%s\n", err)
+				return
+			}
+
+			message = out
 
 			// to log the trade command
 			if Debug {
