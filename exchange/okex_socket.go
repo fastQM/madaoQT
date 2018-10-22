@@ -232,12 +232,14 @@ func (o *OKExAPI) Start() error {
 			}
 
 			r := flate.NewReader(bytes.NewReader(message))
-			defer r.Close()
 			out, err := ioutil.ReadAll(r)
 			if err != nil {
+				r.Close()
 				logger.Errorf("Fail to decompress:%s\n", err)
 				return
 			}
+
+			r.Close()
 
 			message = out
 

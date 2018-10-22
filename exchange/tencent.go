@@ -59,45 +59,24 @@ func (p *TencentStock) GetDialyKlines(startyear int, code string) []KlineValue {
 	start := strings.Replace(strconv.Itoa(startyear), "20", "", 1)
 	end := strings.Replace(strconv.Itoa(currentyear), "20", "", 1)
 
-	url := strings.Join([]string{prefix, start, "/", code, ".js"}, "")
-	// logger.Infof("URL:%s", url)
+	startYear, _ := strconv.Atoi(start)
+	endYear, _ := strconv.Atoi(end)
 
-	err, rsp := p.marketRequest(url)
-	if err != nil {
-		logger.Errorf("Error:%v", err)
-		return nil
-	}
-
-	lists := strings.Split(string(rsp), "\\n\\")
-	for i := 1; i < len(lists)-1; i++ {
-		var kline KlineValue
-		lists[i] = strings.Replace(lists[i], "\n", " ", 1)
-		item := strings.Split(lists[i], " ")
-		kline.OpenTime, _ = strconv.ParseFloat(item[1], 64)
-		kline.Open, _ = strconv.ParseFloat(item[2], 64)
-		kline.Close, _ = strconv.ParseFloat(item[3], 64)
-		kline.High, _ = strconv.ParseFloat(item[4], 64)
-		kline.Low, _ = strconv.ParseFloat(item[5], 64)
-		kline.Volumn, _ = strconv.ParseFloat(item[6], 64)
-		klines = append(klines, kline)
-	}
-
-	if end != start {
-		url = strings.Join([]string{prefix, end, "/", code, ".js"}, "")
+	for i := startYear; i <= endYear; i++ {
+		year := strconv.Itoa(i)
+		url := strings.Join([]string{prefix, year, "/", code, ".js"}, "")
 		// logger.Infof("URL:%s", url)
-		p.marketRequest(url)
 
-		err, rsp = p.marketRequest(url)
+		err, rsp := p.marketRequest(url)
 		if err != nil {
 			logger.Errorf("Error:%v", err)
 			return nil
 		}
 
-		lists = strings.Split(string(rsp), "\\n\\")
+		lists := strings.Split(string(rsp), "\\n\\")
 		for i := 1; i < len(lists)-1; i++ {
 			var kline KlineValue
 			lists[i] = strings.Replace(lists[i], "\n", " ", 1)
-			// log.Printf("%d value:%v", i, lists[i])
 			item := strings.Split(lists[i], " ")
 			kline.OpenTime, _ = strconv.ParseFloat(item[1], 64)
 			kline.Open, _ = strconv.ParseFloat(item[2], 64)
@@ -108,6 +87,33 @@ func (p *TencentStock) GetDialyKlines(startyear int, code string) []KlineValue {
 			klines = append(klines, kline)
 		}
 	}
+
+	// if end != start {
+	// 	url = strings.Join([]string{prefix, end, "/", code, ".js"}, "")
+	// 	// logger.Infof("URL:%s", url)
+	// 	p.marketRequest(url)
+
+	// 	err, rsp = p.marketRequest(url)
+	// 	if err != nil {
+	// 		logger.Errorf("Error:%v", err)
+	// 		return nil
+	// 	}
+
+	// 	lists = strings.Split(string(rsp), "\\n\\")
+	// 	for i := 1; i < len(lists)-1; i++ {
+	// 		var kline KlineValue
+	// 		lists[i] = strings.Replace(lists[i], "\n", " ", 1)
+	// 		// log.Printf("%d value:%v", i, lists[i])
+	// 		item := strings.Split(lists[i], " ")
+	// 		kline.OpenTime, _ = strconv.ParseFloat(item[1], 64)
+	// 		kline.Open, _ = strconv.ParseFloat(item[2], 64)
+	// 		kline.Close, _ = strconv.ParseFloat(item[3], 64)
+	// 		kline.High, _ = strconv.ParseFloat(item[4], 64)
+	// 		kline.Low, _ = strconv.ParseFloat(item[5], 64)
+	// 		kline.Volumn, _ = strconv.ParseFloat(item[6], 64)
+	// 		klines = append(klines, kline)
+	// 	}
+	// }
 
 	return klines
 }
