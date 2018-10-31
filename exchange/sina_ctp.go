@@ -64,6 +64,9 @@ func (p *SinaCTP) marketRequest(name string, interval int) (error, []byte) {
 	} else {
 		return errors.New("Invalid Interval"), nil
 	}
+
+	// root = SinaStockUrl
+
 	// logger.Debugf("Params:%v", bodystr)
 	request, err := http.NewRequest("GET", root+name, nil)
 	if err != nil {
