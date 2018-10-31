@@ -762,8 +762,8 @@ func GetLastPeriodArea(kline []KlineValue) (high float64, low float64, err error
 			// log.Printf("[%s]high:%v low:%v close:%v",
 			// 	time.Unix(int64(kline[i].OpenTime), 0), kline[i].High, kline[i].Low, kline[i].Close)
 			// tmp := (kline[i].Close*0.8 + kline[i].High*0.2)
-			// tmp := (kline[i].High*0.618 + kline[i].Close*0.382)
-			tmp := kline[i].High
+			tmp := (kline[i].High*0.9 + kline[i].Close*0.1)
+			// tmp := kline[i].High
 			if high == 0 {
 				high = tmp
 			} else if high < tmp {
@@ -771,8 +771,8 @@ func GetLastPeriodArea(kline []KlineValue) (high float64, low float64, err error
 			}
 
 			// tmp = (kline[i].Close*0.8 + kline[i].Low*0.2)
-			// tmp = (kline[i].Low*0.618 + kline[i].Close*0.382)
-			tmp = kline[i].Low
+			tmp = (kline[i].Low*0.9 + kline[i].Close*0.1)
+			// tmp = kline[i].Low
 			if low == 0 {
 				low = tmp
 			} else if low > tmp {
@@ -835,6 +835,63 @@ func LoadHistory(code string) []KlineValue {
 	return klines
 }
 
+func SaveHistoryWithSub(subdir string, code string, klines []KlineValue) {
+
+	fullpath := Path
+	if subdir != "" {
+		fullpath = fullpath + subdir + "\\"
+	}
+
+	file, err := os.Create(fullpath + code + ".txt")
+	if err != nil {
+		log.Printf("Error1:%v", err)
+		return
+	}
+	defer file.Close()
+
+	for _, kline := range klines {
+		data, err := json.Marshal(kline)
+		if err != nil {
+			log.Printf("Error2:%v", err)
+			return
+		}
+		file.WriteString(string(data) + "\n")
+	}
+}
+
+func LoadHistoryWithSub(subdir string, code string) []KlineValue {
+
+	fullpath := Path
+	if subdir != "" {
+		fullpath = fullpath + subdir + "\\"
+	}
+
+	datas, err := ioutil.ReadFile(fullpath + code + ".txt")
+	if err != nil {
+		log.Printf("Error3:%v", err)
+		return nil
+	}
+
+	var klines []KlineValue
+	lines := strings.Split(string(datas), "\n")
+	for _, line := range lines {
+		if line != "" {
+			var kline KlineValue
+			// line = strings.Replace(line, "\n", "", 1)
+			// log.Printf("line:%s", line)
+			err := json.Unmarshal([]byte(line), &kline)
+			if err != nil {
+				log.Printf("Error4:%v", err)
+				return nil
+			}
+
+			klines = append(klines, kline)
+		}
+	}
+
+	return klines
+}
+
 func RevertArray(array []KlineValue) []KlineValue {
 	var tmp KlineValue
 	var length int
@@ -866,7 +923,7 @@ func GetThreshHoldByAverage(avg1first float64, avg1 float64, interval1 float64, 
 func CTPDailyKlinesToWeek(klines []KlineValue) []KlineValue {
 	var KlinesByWeek []KlineValue
 
-	var high, low, open, close float64
+	var high, low, open, close, volumn float64
 	var klineTime time.Time
 
 	location, _ := time.LoadLocation("Asia/Shanghai")
@@ -887,15 +944,17 @@ func CTPDailyKlinesToWeek(klines []KlineValue) []KlineValue {
 		}
 
 		close = kline.Close
+		volumn += kline.Volumn
 
 		if klineTime.Weekday() == time.Friday {
 			if high != 0 && low != 0 && close != 0 {
 				lastKline := KlineValue{
-					High:  high,
-					Low:   low,
-					Open:  open,
-					Close: close,
-					Time:  klineTime.Format("2006-01-02"),
+					High:   high,
+					Low:    low,
+					Open:   open,
+					Close:  close,
+					Time:   klineTime.Format("2006-01-02"),
+					Volumn: volumn,
 				}
 				KlinesByWeek = append(KlinesByWeek, lastKline)
 			}
@@ -903,17 +962,19 @@ func CTPDailyKlinesToWeek(klines []KlineValue) []KlineValue {
 			high = 0
 			low = 0
 			close = 0
+			volumn = 0
 		}
 
 	}
 
 	if high != 0 && low != 0 && close != 0 {
 		lastKline := KlineValue{
-			High:  high,
-			Low:   low,
-			Open:  open,
-			Close: low,
-			Time:  klineTime.Format("2006-01-02"),
+			High:   high,
+			Low:    low,
+			Open:   open,
+			Close:  close,
+			Time:   klineTime.Format("2006-01-02"),
+			Volumn: volumn,
 		}
 		KlinesByWeek = append(KlinesByWeek, lastKline)
 	}

@@ -155,7 +155,7 @@ func (p *TencentStock) formatTime(openTime float64) string {
 
 func (p *TencentStock) GetMultipleLast(code string) map[string]KlineValue {
 	url := strings.Join([]string{TencentLatestPrefix, code}, "")
-	log.Printf("URL:%v", url)
+	// log.Printf("URL:%v", url)
 	err, rsp := p.marketRequest(url)
 	if err != nil {
 		logger.Errorf("Error:%v", err)
