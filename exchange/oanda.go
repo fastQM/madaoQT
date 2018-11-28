@@ -7,13 +7,17 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"golang.org/x/net/proxy"
 )
 
 const OandaURL = "https://api-fxtrade.oanda.com"
+const OandaStreamURL = "https://stream-fxtrade.oanda.com/"
 const NameOdanda = "Oanda"
 
 //REST API
@@ -22,10 +26,13 @@ const NameOdanda = "Oanda"
 type OandaAPI struct {
 	event  chan EventType
 	config Config
+
+	tickers map[string]*TickerValue
+	lock    *sync.RWMutex
 }
 
 func (p *OandaAPI) GetExchangeName() string {
-	return NameBinance
+	return NameOdanda
 }
 
 // SetConfigure()
@@ -61,6 +68,7 @@ func (h *OandaAPI) marketRequest(method, path string, params map[string]string) 
 	// logger.Debugf("Params:%s auth[%s]", bodystr, "Bearer "+h.config.Custom["token"].(string))
 
 	var request *http.Request
+
 	var err error
 	if method == "GET" {
 		request, err = http.NewRequest(method, OandaURL+path+"?"+string(bodystr), nil)
@@ -135,6 +143,116 @@ func (h *OandaAPI) marketRequest(method, path string, params map[string]string) 
 
 }
 
+func (p *OandaAPI) marketStreamRequest(method, path string, params map[string]string) (chan string, error) {
+
+	// log.Printf("Path:%s", path)
+	bodystr := url.Values{}
+	for k, v := range params {
+		bodystr.Add(k, v)
+	}
+	// logger.Debugf("Params:%s auth[%s]", bodystr.Encode(), "Bearer "+p.config.Custom["token"].(string))
+
+	var request *http.Request
+
+	var err error
+	if method == "GET" {
+		request, err = http.NewRequest(method, OandaStreamURL+path+"?"+bodystr.Encode(), nil)
+		if err != nil {
+			return nil, err
+		}
+	} else if method == "POST" || method == "PUT" {
+		request, err = http.NewRequest(method, OandaStreamURL+path, strings.NewReader(params["data"]))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	request.Header.Add("Content-Type", "application/json")
+	request.Header.Add("Accept-Datetime-Format", "UNIX")
+	request.Header.Add("Authorization", "Bearer "+p.config.Custom["token"].(string))
+
+	// setup a http client
+	httpTransport := &http.Transport{}
+	httpClient := &http.Client{Transport: httpTransport}
+
+	if p.config.Proxy != "" {
+		values := strings.Split(p.config.Proxy, ":")
+		if values[0] == "SOCKS5" {
+			dialer, err := proxy.SOCKS5("tcp", values[1]+":"+values[2], nil, proxy.Direct)
+			if err != nil {
+				return nil, err
+			}
+
+			httpTransport.Dial = dialer.Dial
+		}
+
+	}
+
+	channel := make(chan string)
+	go func() {
+		var resp *http.Response
+		resp, err = httpClient.Do(request)
+		if err != nil {
+			logger.Errorf("Fail to read from stream:%v", err)
+			channel <- "Fail to call do()"
+			return
+		}
+		defer resp.Body.Close()
+		defer close(channel)
+		buffer := make([]byte, 2048)
+		for {
+
+			size, err := resp.Body.Read(buffer)
+			if err != nil {
+				logger.Errorf("Fail to read from stream:%v", err)
+				channel <- "fail to read stream"
+				return
+			}
+
+			body := buffer[0:size]
+
+			// logger.Infof("Body:%v Time:%v", string(body), time.Now())
+
+			lines := strings.Split(string(body), "\n")
+
+			for _, line := range lines {
+				if len(line) == 0 {
+					continue
+				}
+				var value map[string]interface{}
+				if err = json.Unmarshal([]byte(line), &value); err != nil {
+					logger.Errorf("Fail to Unmarshal,%v", err)
+					continue
+				}
+
+				if value["type"].(string) == "HEARTBEAT" {
+					continue
+				} else if value["type"].(string) == "PRICE" {
+					instrument := value["instrument"].(string)
+					// if
+					asks := value["asks"].([]interface{})
+					bids := value["bids"].([]interface{})
+					// updateTime, _ := strconv.ParseFloat(price["time"].(string), 64)
+					askPrice, _ := strconv.ParseFloat(asks[0].(map[string]interface{})["price"].(string), 64)
+					bidPrice, _ := strconv.ParseFloat(bids[0].(map[string]interface{})["price"].(string), 64)
+
+					p.lock.Lock()
+					p.tickers[instrument] = &TickerValue{
+						High: askPrice,
+						Low:  bidPrice,
+						Last: (askPrice + bidPrice) / 2,
+						Time: value["time"].(string),
+					}
+					p.lock.Unlock()
+				}
+			}
+		}
+	}()
+
+	return channel, nil
+
+}
+
 // Close() close the connection to the exchange and other handles
 func (p *OandaAPI) Close() {
 
@@ -180,6 +298,44 @@ func (p *OandaAPI) GetTicker(pair string) *TickerValue {
 				}
 			}
 		}
+	}
+
+	return nil
+}
+
+func (p *OandaAPI) GetStreamTicker(instrument string) *TickerValue {
+
+	coins := ParsePair(instrument)
+	symbol := strings.ToUpper(coins[0] + "_" + coins[1])
+	p.lock.RLock()
+	value := p.tickers[symbol]
+	p.lock.RUnlock()
+	return value
+}
+
+func (p *OandaAPI) StartSteamTicker(pairs []string) chan string {
+	var instruments string
+
+	p.tickers = make(map[string]*TickerValue)
+	p.lock = new(sync.RWMutex)
+
+	for _, pair := range pairs {
+		coins := ParsePair(pair)
+		symbol := strings.ToUpper(coins[0] + "_" + coins[1])
+		if instruments == "" {
+			instruments = symbol
+		} else {
+			instruments = instruments + "," + symbol
+		}
+	}
+	if channel, err := p.marketStreamRequest("GET", "/v3/accounts/"+p.config.Custom["account"].(string)+"/pricing/stream", map[string]string{
+		"instruments": instruments,
+	}); err != nil {
+		logger.Errorf("Fail to get ticker info:%v", err)
+		return nil
+	} else {
+		// logger.Infof("Success start the stream")
+		return channel
 	}
 
 	return nil
@@ -426,7 +582,7 @@ func (p *OandaAPI) GetOrderInfo(filter OrderInfo) *OrderInfo {
 	return nil
 }
 
-func (p *OandaAPI) GetKline(pair string, period int, limit int) []KlineValue {
+func (p *OandaAPI) GetKline(pair string, period int, limit int, year int) []KlineValue {
 	var symbol string
 	var coins []string
 	if strings.Contains(pair, "/") {
@@ -468,12 +624,25 @@ func (p *OandaAPI) GetKline(pair string, period int, limit int) []KlineValue {
 	// as the time range combined with the graularity will determine the number of candlesticks to return.
 	// [default=500, maximum=5000]
 
-	if err, response := p.marketRequest("GET", "/v3/instruments/"+symbol+"/candles", map[string]string{
+	params := map[string]string{
 		"granularity": interval,
-		"count":       strconv.Itoa(limit),
-		// "from": strconv.Itoa(int(time.Date(2007, 1, 1, 0, 0, 0, 0, time.Local).Unix())),
-		// "to":   strconv.Itoa(int(time.Date(2009, 1, 1, 0, 0, 0, 0, time.Local).Unix())),
-	}); err != nil {
+	}
+
+	if limit != 0 {
+		params["count"] = strconv.Itoa(limit)
+	} else {
+		params["from"] = strconv.Itoa(int(time.Date(year, 1, 1, 0, 0, 0, 0, time.Local).Unix()))
+
+		now := time.Now()
+		if year == now.Year() {
+			params["to"] = strconv.Itoa(int(time.Date(year, now.Month(), now.Day(), 0, 0, 0, 0, time.Local).Unix()))
+		} else {
+			params["to"] = strconv.Itoa(int(time.Date(year, 12, 31, 0, 0, 0, 0, time.Local).Unix()))
+		}
+
+	}
+
+	if err, response := p.marketRequest("GET", "/v3/instruments/"+symbol+"/candles", params); err != nil {
 		logger.Errorf("Invalid klines:%v", err)
 		return nil
 	} else {
