@@ -29,6 +29,8 @@ type OandaAPI struct {
 
 	tickers map[string]*TickerValue
 	lock    *sync.RWMutex
+
+	streamResponse *http.Response
 }
 
 func (p *OandaAPI) GetExchangeName() string {
@@ -190,22 +192,20 @@ func (p *OandaAPI) marketStreamRequest(method, path string, params map[string]st
 
 	channel := make(chan string)
 	go func() {
-		var resp *http.Response
-		resp, err = httpClient.Do(request)
+		p.streamResponse, err = httpClient.Do(request)
 		if err != nil {
 			logger.Errorf("Fail to read from stream:%v", err)
-			channel <- "Fail to call do()"
+			// channel <- "Fail to call do()"
 			return
 		}
-		defer resp.Body.Close()
+		defer p.streamResponse.Body.Close()
 		defer close(channel)
 		buffer := make([]byte, 2048)
 		for {
-
-			size, err := resp.Body.Read(buffer)
+			size, err := p.streamResponse.Body.Read(buffer)
 			if err != nil {
 				logger.Errorf("Fail to read from stream:%v", err)
-				channel <- "fail to read stream"
+				// channel <- "fail to read stream"
 				return
 			}
 
@@ -255,7 +255,9 @@ func (p *OandaAPI) marketStreamRequest(method, path string, params map[string]st
 
 // Close() close the connection to the exchange and other handles
 func (p *OandaAPI) Close() {
-
+	if p.streamResponse != nil {
+		p.streamResponse.Body.Close()
+	}
 }
 
 // StartTicker() send message to the exchange to start the ticker of the given pairs
