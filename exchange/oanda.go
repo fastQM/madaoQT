@@ -194,7 +194,7 @@ func (p *OandaAPI) marketStreamRequest(method, path string, params map[string]st
 	go func() {
 		p.streamResponse, err = httpClient.Do(request)
 		if err != nil {
-			logger.Errorf("Fail to read from stream:%v", err)
+			logger.Errorf("1. Fail to read from stream:%v", err)
 			// channel <- "Fail to call do()"
 			return
 		}
@@ -204,7 +204,7 @@ func (p *OandaAPI) marketStreamRequest(method, path string, params map[string]st
 		for {
 			size, err := p.streamResponse.Body.Read(buffer)
 			if err != nil {
-				logger.Errorf("Fail to read from stream:%v", err)
+				logger.Errorf("2. Fail to read from stream:%v", err)
 				// channel <- "fail to read stream"
 				return
 			}

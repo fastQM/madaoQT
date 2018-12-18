@@ -8,6 +8,7 @@ const (
 	TrendTradeCollectionFXCM             = "TrendTradeCollectionFXCM"
 	TrendTradeCollectionCTP              = "TrendTradeCollectionCTP"
 	TrendTradeCollectionOanda            = "TrendTradeCollectionOanda"
+	TrendTradeCollectionOanda2           = "TrendTradeCollectionOanda2"
 	TrendTradeCollectionCryptoFacilities = "TrendTradeCollectionCryptoFacilities"
 
 	TrendBalanceOKEX             = "TrendBalanceOKEX"
@@ -16,6 +17,7 @@ const (
 	TrendBalanceBitmex           = "TrendBalanceBitmex"
 	TrendBalanceFXCM             = "TrendBalanceFXCM"
 	TrendBalanceOanda            = "TrendBalanceOanda"
+	TrendBalanceOanda2           = "TrendBalanceOanda2"
 	TrendBalanceCTP              = "TrendBalanceCTP"
 	TrendBalanceCryptoFacilities = "TrendBalanceCryptoFacilities"
 

@@ -612,6 +612,7 @@ const (
 	FxcmPairNAS100 = "NAS100"
 	FxcmPairJPN225 = "JPN225"
 	FxcmPairXAGUSD = "XAG/USD"
+	FxcmPairXAUUSD = "XAU/USD"
 )
 
 var MapOfferID = map[string]string{
@@ -624,7 +625,7 @@ var MapOfferID = map[string]string{
 	"HKG33":        "1005",
 	FxcmPairUS30:   "1013",
 	FxcmPairUSOil:  "2001",
-	"XAU/USD":      "4001",
+	FxcmPairXAUUSD: "4001",
 	FxcmPairXAGUSD: "4002",
 	FxcmPairCHN50:  "1020",
 	FxcmPairUK100:  "1012",
