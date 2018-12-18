@@ -216,7 +216,7 @@ func (p *CTPDll) MarketOpenPosition(instrument string, volume int, price int, is
 		var values map[string]interface{}
 
 		if err = json.Unmarshal(buffer[:result], &values); err != nil {
-			logger.Errorf("Fail to Unmarshal:%v", err)
+			logger.Errorf("Fail to Unmarshal:%v buffer:%v", err, string(buffer[:result]))
 			return nil
 		}
 		logger.Infof("MarketOpenPosition:%v", values)
@@ -244,7 +244,7 @@ func (p *CTPDll) MarketClosePosition(instrument string, volume int, price int, i
 		var values map[string]interface{}
 
 		if err = json.Unmarshal(buffer[:result], &values); err != nil {
-			logger.Errorf("Fail to Unmarshal:%v", err)
+			logger.Errorf("Fail to Unmarshal:%v, buffer:%v", err, string(buffer[:result]))
 			return nil
 		}
 		logger.Infof("MarketClosePosition:%v", values)
