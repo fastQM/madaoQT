@@ -20,7 +20,7 @@ var instruments = []string{
 	// "FG1809",
 	// "hc1810",
 
-	"rb0",
+	"rb1901",
 	// "RM0", //波动不活跃不操作
 	"AP0",
 	"CF0",
@@ -56,46 +56,60 @@ type InstrumentInfo struct {
 	name      string
 	lossLimit float64
 	strategy  int
+	base      float64
+	costUnit  float64
 }
 
 func TestSinaCtp(t *testing.T) {
 	var klines []KlineValue
 	var logs []string
 
-	instrument := InstrumentInfo{
-		name:      "rb0",
-		lossLimit: 0.1,
-		strategy:  StrategyAreaBreak,
-	}
+	// instrument := InstrumentInfo{
+	// 	name:      "rb1901",
+	// 	lossLimit: 0.1,
+	// 	base:      15000,
+	// 	costUnit:  10,
+	// 	strategy:  StrategyIntervalBreak,
+	// }
 
 	// instrument := InstrumentInfo{
 	// 	name:      "hc0",
 	// 	lossLimit: 0.1,
 	// 	strategy:  StrategyAreaBreak,
+	// 	base:      15000,
+	// 	costUnit:  10,
 	// }
 
 	// instrument := InstrumentInfo{
 	// 	name:      "cf0",
 	// 	lossLimit: 0.06,
-	// 	strategy:  StrategyIntervalBreak,
-	// }
-
-	// instrument := InstrumentInfo{
-	// 	name:      "ma0",
-	// 	lossLimit: 0.1,
+	// 	base:      90000,
+	// 	costUnit:  25,
 	// 	strategy:  StrategyAreaBreak,
 	// }
 
 	// instrument := InstrumentInfo{
-	// 	name:      "ta0",
+	// 	name:      "ma1901",
+	// 	lossLimit: 0.1,
+	// 	strategy:  StrategyAreaBreak,
+	// 	base:      10000,
+	// 	costUnit:  10,
+	// }
+
+	// instrument := InstrumentInfo{
+	// 	name:      "ta1901",
 	// 	lossLimit: 0.08,
+	// 	base:      16000,
+	// 	costUnit:  5,
 	// 	strategy:  StrategyAreaBreak,
 	// }
 
 	// instrument := InstrumentInfo{
 	// 	name:      "sr0",
-	// 	lossLimit: 0.03,
+	// 	lossLimit: 0.1,
 	// 	strategy:  StrategyAreaBreak,
+	// 	base:      20000,
+	// 	costUnit:  20,
 	// }
 
 	// instrument := InstrumentInfo{
@@ -110,25 +124,30 @@ func TestSinaCtp(t *testing.T) {
 	// 	strategy:  StrategyAreaBreak,
 	// }
 
-	// instrument := InstrumentInfo{
-	// 	name:      "j0",
-	// 	lossLimit: 0.05,
-	// 	strategy:  StrategyAreaBreak,
-	// }
+	instrument := InstrumentInfo{
+		name:      "j1901",
+		lossLimit: 0.05,
+		base:      80000,
+		strategy:  StrategyAreaBreak,
+		costUnit:  50,
+	}
 
 	// instrument := InstrumentInfo{
 	// 	name:      "ag0",
 	// 	lossLimit: 0.09,
 	// 	strategy:  StrategyAreaBreak,
+	// 	base:      20000,
+	// 	costUnit:  15,
 	// }
 
 	// instrument := InstrumentInfo{
-	// 	name:      "rb0",
+	// 	name:      "pp0",
 	// 	lossLimit: 0.1,
 	// 	strategy:  StrategyAreaBreak,
+	// 	base:      10000,
+	// 	costUnit:  10,
 	// }
 
-	// for _, instrument := range instruments {
 	log.Printf("当前种类:%v", instrument.name)
 	filename := instrument.name + "-1day"
 	sina := new(SinaCTP)
@@ -138,9 +157,6 @@ func TestSinaCtp(t *testing.T) {
 		log.Printf("Init Done!!!")
 	} else {
 		klines = LoadHistory(filename)
-
-		// ChangeOffset(0)
-		// StrategyTrendTest(klines, true, true)
 	}
 
 	var checkedKlines []KlineValue
@@ -149,7 +165,7 @@ func TestSinaCtp(t *testing.T) {
 			continue
 		}
 		checkedKlines = append(checkedKlines, kline)
-		// log.Printf("Time:%s value:%v", kline.Time, kline)
+		log.Printf("Time:%s value:%v", kline.Time, kline)
 	}
 
 	klines = checkedKlines
@@ -168,14 +184,22 @@ func TestSinaCtp(t *testing.T) {
 	// }
 	// return
 
-	interval = 10
+	interval = 30
 	lossLimit = instrument.lossLimit
+	SetBaseAmount(instrument.base)
+	SetUnitCost(instrument.costUnit)
 	// for lossLimit = 0.01; lossLimit < 0.20; lossLimit += 0.01 {
-	// for interval = 6; interval < 20; interval++ {
+	// for interval = 15; interval < 50; interval++ {
 	// SpliteSetWaveLimit(0.2)
 
 	// for _, klines := range klinesByYears {
-	result := CTPStrategyTrendSplit(klines, true, true, true, instrument.strategy)
+	var result string
+	if instrument.strategy == StrategyAreaBreak {
+		result = CTPStrategyTrendAreaBreak(klines, true, true, true)
+	} else if instrument.strategy == StrategyIntervalBreak {
+		result = CTPStrategyTrendIntervalBreak(klines, true, true, true)
+	}
+
 	msg := fmt.Sprintf("[%v][%s]Result:%s", klines[0].Time, instrument.name, result)
 	logs = append(logs, msg)
 	// }

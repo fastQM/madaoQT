@@ -23,7 +23,7 @@ type TradeInfo struct {
 	FutureClose  float64 `json:"futureclose"`
 	FutureAmount float64 `json:"futureamount"`
 
-	Interval int `json:"interval"`
+	Type int `json:"type"`
 }
 
 type Trades struct {
