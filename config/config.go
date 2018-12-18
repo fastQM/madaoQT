@@ -18,4 +18,4 @@ const Version = "0.9.2"
 */
 
 // ServerPort indication the port of the server
-var ServerPort = "8080"
+var ServerPort = "80"
