@@ -527,6 +527,17 @@ func (p *CryptoFacilities) GetPositions(pair string) []map[string]interface{} {
 		positions := values["openPositions"].([]interface{})
 		var results []map[string]interface{}
 		log.Printf("Position:%v", positions)
+
+		if len(positions) == 0 {
+			value := map[string]interface{}{
+				"symbol": pair,
+				"size":   0.0,
+				"price":  0.0,
+			}
+			results = append(results, value)
+			return results
+		}
+
 		for _, position := range positions {
 			value := position.(map[string]interface{})
 			if value["symbol"].(string) == symbol {
