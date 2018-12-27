@@ -584,7 +584,15 @@ func (p *OandaAPI) GetOrderInfo(filter OrderInfo) *OrderInfo {
 	return nil
 }
 
-func (p *OandaAPI) GetKline(pair string, period int, limit int, year int) []KlineValue {
+const (
+	DirectionAsk = 0
+	DirectionBid = 1
+	DirectionMid = 2
+	DirectionAll = 3
+)
+
+// GetKline return mid klines/ask klines/bid klines
+func (p *OandaAPI) GetKline(pair string, period int, limit int, year int, direction int) ([]KlineValue, []KlineValue, []KlineValue) {
 	var symbol string
 	var coins []string
 	if strings.Contains(pair, "/") {
@@ -626,8 +634,23 @@ func (p *OandaAPI) GetKline(pair string, period int, limit int, year int) []Klin
 	// as the time range combined with the graularity will determine the number of candlesticks to return.
 	// [default=500, maximum=5000]
 
+	var paramDirection, paramKey string
+	if direction == DirectionAsk {
+		paramDirection = "A"
+		paramKey = "ask"
+	} else if direction == DirectionBid {
+		paramDirection = "B"
+		paramKey = "bid"
+	} else if direction == DirectionMid {
+		paramDirection = "M"
+		paramKey = "mid"
+	} else if direction == DirectionAll {
+		paramDirection = "ABM"
+	}
+
 	params := map[string]string{
 		"granularity": interval,
+		"price":       paramDirection,
 	}
 
 	if limit != 0 {
@@ -646,40 +669,76 @@ func (p *OandaAPI) GetKline(pair string, period int, limit int, year int) []Klin
 
 	if err, response := p.marketRequest("GET", "/v3/instruments/"+symbol+"/candles", params); err != nil {
 		logger.Errorf("Invalid klines:%v", err)
-		return nil
+		return nil, nil, nil
 	} else {
 		if response != nil {
 			var values map[string]interface{}
 			if err = json.Unmarshal(response, &values); err != nil {
 				logger.Errorf("Fail to Unmarshal:%v", err)
-				return nil
+				return nil, nil, nil
 			}
 
 			if values["candles"] == nil {
 				logger.Errorf("Invalid kline datas")
-				return nil
+				return nil, nil, nil
 			}
 
 			datas := values["candles"].([]interface{})
 
-			kline := make([]KlineValue, len(datas))
-			for i, data := range datas {
-				// 	// kline[i].OpenTime = time.Unix((int64)(value[0].(float64)/1000), 0).Format(Global.TimeFormat)
-				kline[i].OpenTime, _ = strconv.ParseFloat(data.(map[string]interface{})["time"].(string), 64)
-				prices := data.(map[string]interface{})["mid"].(map[string]interface{})
-				kline[i].Open, _ = strconv.ParseFloat(prices["o"].(string), 64)
-				kline[i].High, _ = strconv.ParseFloat(prices["h"].(string), 64)
-				kline[i].Low, _ = strconv.ParseFloat(prices["l"].(string), 64)
-				kline[i].Close, _ = strconv.ParseFloat(prices["c"].(string), 64)
-				kline[i].Volumn = data.(map[string]interface{})["volume"].(float64)
-				// 	// kline[i].CloseTime = time.Unix((int64)(value[6].(float64)/1000), 0).Format(Global.TimeFormat)
+			if direction == DirectionAll {
+				kline := make([]KlineValue, len(datas))
+				askkline := make([]KlineValue, len(datas))
+				bidkline := make([]KlineValue, len(datas))
 
+				for i, data := range datas {
+					kline[i].OpenTime, _ = strconv.ParseFloat(data.(map[string]interface{})["time"].(string), 64)
+					prices := data.(map[string]interface{})["mid"].(map[string]interface{})
+					kline[i].Open, _ = strconv.ParseFloat(prices["o"].(string), 64)
+					kline[i].High, _ = strconv.ParseFloat(prices["h"].(string), 64)
+					kline[i].Low, _ = strconv.ParseFloat(prices["l"].(string), 64)
+					kline[i].Close, _ = strconv.ParseFloat(prices["c"].(string), 64)
+					kline[i].Volumn = data.(map[string]interface{})["volume"].(float64)
+
+					askkline[i].OpenTime = kline[i].OpenTime
+					prices = data.(map[string]interface{})["ask"].(map[string]interface{})
+					askkline[i].Open, _ = strconv.ParseFloat(prices["o"].(string), 64)
+					askkline[i].High, _ = strconv.ParseFloat(prices["h"].(string), 64)
+					askkline[i].Low, _ = strconv.ParseFloat(prices["l"].(string), 64)
+					askkline[i].Close, _ = strconv.ParseFloat(prices["c"].(string), 64)
+					askkline[i].Volumn = data.(map[string]interface{})["volume"].(float64)
+
+					bidkline[i].OpenTime = kline[i].OpenTime
+					prices = data.(map[string]interface{})["bid"].(map[string]interface{})
+					bidkline[i].Open, _ = strconv.ParseFloat(prices["o"].(string), 64)
+					bidkline[i].High, _ = strconv.ParseFloat(prices["h"].(string), 64)
+					bidkline[i].Low, _ = strconv.ParseFloat(prices["l"].(string), 64)
+					bidkline[i].Close, _ = strconv.ParseFloat(prices["c"].(string), 64)
+					bidkline[i].Volumn = data.(map[string]interface{})["volume"].(float64)
+				}
+
+				return kline, askkline, bidkline
+			} else {
+				kline := make([]KlineValue, len(datas))
+
+				for i, data := range datas {
+					// 	// kline[i].OpenTime = time.Unix((int64)(value[0].(float64)/1000), 0).Format(Global.TimeFormat)
+					kline[i].OpenTime, _ = strconv.ParseFloat(data.(map[string]interface{})["time"].(string), 64)
+					prices := data.(map[string]interface{})[paramKey].(map[string]interface{})
+					kline[i].Open, _ = strconv.ParseFloat(prices["o"].(string), 64)
+					kline[i].High, _ = strconv.ParseFloat(prices["h"].(string), 64)
+					kline[i].Low, _ = strconv.ParseFloat(prices["l"].(string), 64)
+					kline[i].Close, _ = strconv.ParseFloat(prices["c"].(string), 64)
+					kline[i].Volumn = data.(map[string]interface{})["volume"].(float64)
+					// 	// kline[i].CloseTime = time.Unix((int64)(value[6].(float64)/1000), 0).Format(Global.TimeFormat)
+
+				}
+
+				return kline, nil, nil
 			}
 
-			return kline
 		}
 
-		return nil
+		return nil, nil, nil
 	}
 }
 
