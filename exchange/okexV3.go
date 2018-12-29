@@ -3,15 +3,16 @@ package exchange
 import (
 	"bytes"
 	"compress/flate"
-	"crypto/md5"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
 	"io/ioutil"
-	"log"
-	"sort"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,12 +24,14 @@ import (
 
 const NameOKEXV3 = "OkexV3"
 
+const OKEXV3RestAPIPath = "https://www.okex.com"
 const OKEXV3WebsocketPath = "wss://real.okex.com:10442/ws/v3"
 
 // event
 const OKEXV3OpSubscribe = "subscribe"
 
 const OKEXV3TableSpotDepthPrefix = "spot/depth"
+const OKEXV3TableSwapDepthPrefix = "swap/depth"
 const OKEXV3KeyTimestamp = "timestamp"
 
 type InstrumentType int8
@@ -39,54 +42,22 @@ const (
 )
 
 type OKEXV3API struct {
-	instrumentType InstrumentType
+	InstrumentType InstrumentType
+	Proxy          string
+	ApiKey         string
+	SecretKey      string
+	Passphare      string
 
-	conn      *Websocket.Conn
-	apiKey    string
-	secretKey string
-	proxy     string
-
+	conn         *Websocket.Conn
 	klines       map[string][]KlineValue
 	ticker       int64
 	lastTicker   int64
 	errorCounter int
 
-	event chan EventType
-
 	/* Each channel has a depth */
 	messageChannels sync.Map
 
 	depthValues map[string]*sync.Map
-}
-
-func (o *OKEXV3API) WatchEvent() chan EventType {
-	return o.event
-}
-
-func (o *OKEXV3API) triggerEvent(event EventType) {
-	o.event <- event
-}
-
-func (o *OKEXV3API) SetConfigure(config Config) {
-
-	o.event = make(chan EventType)
-	o.apiKey = config.API
-	o.secretKey = config.Secret
-	o.proxy = config.Proxy
-
-	if o.apiKey == "" || o.secretKey == "" {
-		logger.Debug("The current connection doesn`t support trading without API")
-	}
-
-	go func() {
-		for {
-			select {
-			case <-time.After(30 * time.Second):
-				o.ping()
-			}
-		}
-	}()
-
 }
 
 func (o *OKEXV3API) mergeDepth(oldList [][]DepthPrice, updateList [][]DepthPrice) [][]DepthPrice {
@@ -142,14 +113,16 @@ func (o *OKEXV3API) mergeDepth(oldList [][]DepthPrice, updateList [][]DepthPrice
 		newList[DepthTypeAsks] = append(newList[DepthTypeAsks], oldAsks[lastPosition:]...)
 	}
 
-	newList[DepthTypeAsks] = newList[DepthTypeAsks][:200]
+	if len(newList[DepthTypeAsks]) > 200 {
+		newList[DepthTypeAsks] = newList[DepthTypeAsks][:200]
+	}
 
 	lastPosition = 0
 
 	quit = false
 	for current, updateBid := range updateBids {
 		for i := lastPosition; i < len(oldBids); i++ {
-			// log.Printf("BID:Update:%v OldIndex[%v]%v", updateBid, i, oldBids[i])
+			// log.Printf("BID[%d]Update:%v OldIndex[%v]%v", len(oldBids), updateBid, i, oldBids[i])
 			if updateBid.Price == oldBids[i].Price && updateBid.Quantity != 0 {
 				// 非0替换
 				newBid := DepthPrice{
@@ -188,12 +161,18 @@ func (o *OKEXV3API) mergeDepth(oldList [][]DepthPrice, updateList [][]DepthPrice
 		newList[DepthTypeBids] = append(newList[DepthTypeBids], oldBids[lastPosition:]...)
 	}
 
-	newList[DepthTypeBids] = newList[DepthTypeBids][:200]
+	if len(newList[DepthTypeBids]) > 200 {
+		newList[DepthTypeBids] = newList[DepthTypeBids][:200]
+	}
 
 	return newList
 }
 
 func (o *OKEXV3API) Start() error {
+	return nil
+}
+
+func (o *OKEXV3API) Start2(errChan chan EventType) error {
 
 	o.klines = make(map[string][]KlineValue)
 	// force to restart the command
@@ -201,9 +180,9 @@ func (o *OKEXV3API) Start() error {
 
 	dialer := Websocket.DefaultDialer
 
-	if o.proxy != "" {
-		logger.Infof("Proxy:%s", o.proxy)
-		values := strings.Split(o.proxy, ":")
+	if o.Proxy != "" {
+		logger.Infof("Proxy:%s", o.Proxy)
+		values := strings.Split(o.Proxy, ":")
 		if values[0] == "SOCKS5" {
 			proxy, err := proxy.SOCKS5("tcp", values[1]+":"+values[2], nil, proxy.Direct)
 			if err != nil {
@@ -215,20 +194,38 @@ func (o *OKEXV3API) Start() error {
 
 	}
 
-	c, _, err := dialer.Dial(OKEXV3WebsocketPath, nil)
+	connection, _, err := dialer.Dial(OKEXV3WebsocketPath, nil)
 	if err != nil {
 		logger.Errorf("Fail to dial:%v", err)
-		go o.triggerEvent(EventLostConnection)
+		// go o.triggerEvent(EventLostConnection)
+		errChan <- EventLostConnection
 		return err
 	}
 
 	go func() {
+		counter := 0
+
+		cancle := make(chan struct{})
+		go func() {
+			for {
+				select {
+				case <-time.After(30 * time.Second):
+					o.ping()
+				case <-cancle:
+					return
+				}
+			}
+		}()
+
+		defer close(cancle)
+
 		for {
-			_, message, err := c.ReadMessage()
+			_, message, err := connection.ReadMessage()
 			if err != nil {
-				c.Close()
+				connection.Close()
 				logger.Errorf("Fail to read:%v", err)
-				go o.triggerEvent(EventLostConnection)
+				// go o.triggerEvent(EventLostConnection)
+				errChan <- EventLostConnection
 				return
 			}
 
@@ -293,7 +290,7 @@ func (o *OKEXV3API) Start() error {
 				table = response["table"].(string)
 			}
 
-			if table == OKEXV3TableSpotDepthPrefix {
+			if table == OKEXV3TableSpotDepthPrefix || table == OKEXV3TableSwapDepthPrefix {
 				action := response["action"].(string)
 				datas := response["data"].([]interface{})
 				for _, tmp := range datas {
@@ -307,8 +304,13 @@ func (o *OKEXV3API) Start() error {
 
 							compare := o.checkCRC32(asks, bids, uint32(data["checksum"].(float64)))
 							if !compare {
-								logger.Error("The crc32 is NOT the same")
-								o.triggerEvent(EventLostConnection)
+
+								logger.Error("1. The crc32 is NOT the same")
+								// o.triggerEvent(EventLostConnection)
+
+								connection.Close()
+								errChan <- EventLostConnection
+
 								return
 							}
 
@@ -394,11 +396,20 @@ func (o *OKEXV3API) Start() error {
 								valueCalc := fmt.Sprintf("%x", crc32Value)
 								valueOriginal := fmt.Sprintf("%x", uint32(data["checksum"].(float64)))
 								if valueCalc != valueOriginal {
-									logger.Error("The crc32 is NOT the same")
-									o.triggerEvent(EventLostConnection)
-									return
+
+									logger.Error("2.The crc32 is NOT the same")
+									// o.triggerEvent(EventLostConnection)
+									if counter > 5 {
+										connection.Close()
+										errChan <- EventLostConnection
+										return
+									} else {
+										counter++
+									}
+
 								} else {
-									// logger.Infof("Update the depths")
+									counter = 0
+									logger.Infof("Update the depths")
 								}
 
 								o.depthValues[channel].Store("data", newList)
@@ -413,11 +424,89 @@ func (o *OKEXV3API) Start() error {
 		}
 	}()
 
-	o.conn = c
+	o.conn = connection
 
-	go o.triggerEvent(EventConnected)
+	// go o.triggerEvent(EventConnected)
+	errChan <- EventConnected
 
 	return nil
+}
+
+func (p *OKEXV3API) orderRequest(method string, path string, params map[string]string) (error, []byte) {
+
+	logger.Infof("Path:%v", path)
+	timestamp := time.Now().UTC().Format(time.RFC3339)
+	var input string
+	var request *http.Request
+	var err error
+
+	if method == "GET" {
+		input = timestamp + method + path
+		request, err = http.NewRequest(method, OKEXV3RestAPIPath+path, nil)
+	} else { // POST
+
+		if params != nil {
+			body, _ := json.Marshal(params)
+			input = timestamp + method + path + string(body)
+			logger.Infof("Input:%v", input)
+			// reader = strings.NewReader(string(body))
+			request, err = http.NewRequest(method, OKEXV3RestAPIPath+path, strings.NewReader(string(body)))
+		} else {
+			input = timestamp + method + path
+			logger.Infof("Input:%v", input)
+			// reader = strings.NewReader(string(body))
+			request, err = http.NewRequest(method, OKEXV3RestAPIPath+path, nil)
+		}
+
+	}
+
+	h := hmac.New(sha256.New, []byte(p.SecretKey))
+	io.WriteString(h, input)
+	// signature := fmt.Sprintf("%x", h.Sum(nil))
+	// log.Printf("Sign:%v", timestamp+method+path)
+	base64signature := base64.StdEncoding.EncodeToString(h.Sum(nil))
+
+	if err != nil {
+		return err, nil
+	}
+
+	request.Header.Add("Content-Type", "application/json")
+	request.Header.Add("OK-ACCESS-KEY", p.ApiKey)
+	request.Header.Add("OK-ACCESS-SIGN", base64signature)
+	request.Header.Add("OK-ACCESS-TIMESTAMP", timestamp)
+	request.Header.Add("OK-ACCESS-PASSPHRASE", p.Passphare)
+
+	// setup a http client
+	httpTransport := &http.Transport{}
+	httpClient := &http.Client{Transport: httpTransport}
+
+	if p.Proxy != "" {
+		values := strings.Split(p.Proxy, ":")
+		if values[0] == "SOCKS5" {
+			dialer, err := proxy.SOCKS5("tcp", values[1]+":"+values[2], nil, proxy.Direct)
+			if err != nil {
+				return err, nil
+			}
+
+			httpTransport.Dial = dialer.Dial
+		}
+
+	}
+
+	var resp *http.Response
+	resp, err = httpClient.Do(request)
+	if err != nil {
+		return err, nil
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err, nil
+	}
+
+	logger.Debugf("RSP:%s", string(body))
+	return nil, body
 
 }
 
@@ -438,10 +527,7 @@ func (o *OKEXV3API) SubKlines(pair string, period int, number int) {
 }
 
 func (o *OKEXV3API) ping() error {
-	data := map[string]interface{}{
-		"event": "ping",
-	}
-	return o.command(data, nil)
+	return o.conn.WriteMessage(Websocket.TextMessage, []byte("ping"))
 }
 
 // GetExchangeName get the name of the exchanges
@@ -457,7 +543,7 @@ func (o *OKEXV3API) StartDepth(channel string) {
 			channel,
 		},
 	}
-	o.command(data, nil)
+	o.command(data)
 
 }
 
@@ -480,7 +566,7 @@ func (o *OKEXV3API) checkCRC32(asks []interface{}, bids []interface{}, crc32Orig
 	io.WriteString(ieee, input)
 	valueCalc := fmt.Sprintf("%x", ieee.Sum32())
 	valueOriginal := fmt.Sprintf("%x", crc32Original)
-	log.Printf("Values:%v value2:%v", valueCalc, valueOriginal)
+	// log.Printf("Values:%v value2:%v", valueCalc, valueOriginal)
 	return (valueCalc == valueOriginal)
 }
 
@@ -493,12 +579,18 @@ func (o *OKEXV3API) getCRC32Value(input string) uint32 {
 
 func (o *OKEXV3API) GetDepthValue(coin string) [][]DepthPrice {
 
+	var channel string
 	coins := ParsePair(coin)
-	channel := strings.ToUpper(coins[0]) + "-" + strings.ToUpper(coins[1])
 
-	if o.instrumentType == InstrumentTypeSwap {
+	if o.InstrumentType == InstrumentTypeSwap {
 		// channel = o.StartDepth()
-	} else if o.instrumentType == InstrumentTypeSpot {
+		channel = strings.ToUpper(coins[0]) + "-USD-SWAP"
+		if o.depthValues[channel] == nil {
+			o.depthValues[channel] = new(sync.Map)
+			o.StartDepth(OKEXV3TableSwapDepthPrefix + ":" + channel)
+		}
+	} else if o.InstrumentType == InstrumentTypeSpot {
+		channel = strings.ToUpper(coins[0]) + "-" + strings.ToUpper(coins[1])
 		if o.depthValues[channel] == nil {
 			o.depthValues[channel] = new(sync.Map)
 			o.StartDepth(OKEXV3TableSpotDepthPrefix + ":" + channel)
@@ -519,34 +611,6 @@ func (o *OKEXV3API) GetDepthValue(coin string) [][]DepthPrice {
 
 		if recv, ok := o.depthValues[channel].Load("data"); ok {
 			list := recv.([][]DepthPrice)
-			if o.instrumentType == InstrumentTypeSwap {
-
-				// if asks != nil && len(asks) > 0 {
-				// 	askList := make([]DepthPrice, len(asks))
-				// 	for i, ask := range asks {
-				// 		values := ask.([]interface{})
-				// 		askList[i].Price = values[UsdPriceIndex].(float64)
-				// 		askList[i].Quantity = values[CoinQuantity].(float64)
-				// 	}
-
-				// 	list[DepthTypeAsks] = revertDepthArray(askList)
-				// }
-
-				// if bids != nil && len(bids) > 0 {
-				// 	bidList := make([]DepthPrice, len(bids))
-				// 	for i, bid := range bids {
-				// 		values := bid.([]interface{})
-				// 		bidList[i].Price = values[UsdPriceIndex].(float64)
-				// 		bidList[i].Quantity = values[CoinQuantity].(float64)
-				// 	}
-
-				// 	list[DepthTypeBids] = bidList
-				// }
-
-			} else if o.instrumentType == InstrumentTypeSpot {
-				// list[DepthTypeAsks] = revertDepthArray(list[DepthTypeAsks])
-			}
-
 			return list
 		}
 	}
@@ -554,7 +618,7 @@ func (o *OKEXV3API) GetDepthValue(coin string) [][]DepthPrice {
 	return nil
 }
 
-func (o *OKEXV3API) command(data map[string]interface{}, parameters map[string]string) error {
+func (o *OKEXV3API) command(data map[string]interface{}) error {
 	if o.conn == nil {
 		return errors.New("Connection is lost")
 	}
@@ -562,33 +626,6 @@ func (o *OKEXV3API) command(data map[string]interface{}, parameters map[string]s
 	command := make(map[string]interface{})
 	for k, v := range data {
 		command[k] = v
-	}
-
-	if parameters != nil {
-		var keys []string
-		var signPlain string
-
-		for k := range parameters {
-			keys = append(keys, k)
-		}
-
-		sort.Strings(keys)
-
-		for _, key := range keys {
-			if key == "sign" {
-				continue
-			}
-			signPlain += (key + "=" + parameters[key])
-			signPlain += "&"
-		}
-
-		signPlain += ("secret_key=" + o.secretKey)
-
-		// log.Printf("Plain:%v", signPlain)
-		md5Value := fmt.Sprintf("%x", md5.Sum([]byte(signPlain)))
-		// log.Printf("MD5:%v", md5Value)
-		parameters["sign"] = strings.ToUpper(md5Value)
-		command["parameters"] = parameters
 	}
 
 	cmd, err := json.Marshal(command)
@@ -621,54 +658,30 @@ func (o *OKEXV3API) command(data map[string]interface{}, parameters map[string]s
 	return nil
 }
 
-/*
-
-1. 【合约参数】
-api_key: 用户申请的apiKey
-sign: 请求参数的签名
-symbol:btc_usd   ltc_usd
-contract_type: 合约类型: this_week:当周 next_week:下周 quarter:季度
-price: 价格
-amount: 委托数量
-type 1:开多 2:开空 3:平多 4:平空
-match_price 是否为对手价： 0:不是 1:是 当取值为1时,price无效
-lever_rate 杠杆倍数 value:10\20 默认10
-
-【现货参数】
-
-2. 返回：
-
-错误或者order ID
-
-*/
 func (o *OKEXV3API) Trade(configs TradeConfig) *TradeResult {
 
-	var channel string
+	var path string
 	var parameters map[string]string
 
 	coins := ParsePair(configs.Pair)
 
-	if o.instrumentType == InstrumentTypeSwap {
+	if o.InstrumentType == InstrumentTypeSwap {
 
-		channel = ChannelFutureTrade
+		path = "/api/swap/v3/order"
 
 		parameters = map[string]string{
-			"api_key": o.apiKey,
-			"symbol":  coins[0] + "_usd",
-			"price":   strconv.FormatFloat(configs.Price, 'f', 2, 64),
+			"instrument_id": strings.ToUpper(coins[0]) + "-USD-SWAP",
+			"price":         strconv.FormatFloat(configs.Price, 'f', 2, 64),
 			// the exact amount orders is amount/level_rate
-			"amount":      strconv.FormatFloat(configs.Amount, 'f', 2, 64),
-			"type":        OkexGetTradeTypeString(configs.Type),
-			"match_price": "0",
-			"lever_rate":  "10",
+			"size": strconv.FormatFloat(configs.Amount, 'f', 0, 64),
+			"type": OkexGetTradeTypeString(configs.Type),
+			// "match_price": "0",
 		}
 
-	} else if o.instrumentType == InstrumentTypeSpot {
-
-		channel = ChannelSpotOrder
+	} else if o.InstrumentType == InstrumentTypeSpot {
 
 		parameters = map[string]string{
-			"api_key": o.apiKey,
+			"api_key": o.ApiKey,
 			"symbol":  coins[0] + "_" + coins[1],
 			"type":    OkexGetTradeTypeString(configs.Type),
 			"price":   strconv.FormatFloat(configs.Price, 'f', 4, 64),
@@ -676,308 +689,223 @@ func (o *OKEXV3API) Trade(configs TradeConfig) *TradeResult {
 		}
 	}
 
-	data := map[string]interface{}{
-		"event":   EventAddChannel,
-		"channel": channel,
-	}
-
-	recvChan := make(chan interface{})
-	o.messageChannels.Store(channel, recvChan)
-
-	if err := o.command(data, parameters); err != nil {
-		return &TradeResult{
-			Error: err,
+	if err, response := o.orderRequest("POST", path, parameters); err != nil {
+		logger.Errorf("无法获取余额:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("解析错误:%v", err)
+			return nil
 		}
-	}
 
-	select {
-	case <-time.After(DefaultTimeoutSec * time.Second):
-		go o.triggerEvent(EventLostConnection)
-		return &TradeResult{
-			Error: errors.New("Timeout to trade"),
-		}
-	case recv := <-recvChan:
-		// log.Printf("message:%v", message)
-		if recv != nil {
-			result := recv.(map[string]interface{})["result"]
-			if result != nil && result.(bool) {
-				orderId := strconv.FormatFloat(recv.(map[string]interface{})["order_id"].(float64), 'f', 0, 64)
-				return &TradeResult{
-					Error:   nil,
-					OrderID: orderId,
-				}
-			} else {
-				errorCode := strconv.FormatFloat(recv.(map[string]interface{})["error_code"].(float64), 'f', 0, 64)
-				return &TradeResult{
-					Error: errors.New("errorCode:" + errorCode),
-				}
+		if values["error_code"] != "0" {
+			return &TradeResult{
+				Error: errors.New(values["error_message"].(string)),
+			}
+		} else {
+			return &TradeResult{
+				Error:   nil,
+				OrderID: values["order_id"].(string),
 			}
 		}
 
-		return &TradeResult{
-			Error: errors.New("Invalid response"),
-		}
+		return nil
 	}
+
+	return nil
 
 }
 
 func (o *OKEXV3API) CancelOrder(order OrderInfo) *TradeResult {
 
-	var channel string
-	var parameters map[string]string
+	var path string
+	// var parameters map[string]string
 
-	coins := ParsePair(order.Pair)
+	pair := ParsePair(order.Pair)
 
-	if o.instrumentType == InstrumentTypeSwap {
+	if o.InstrumentType == InstrumentTypeSwap {
 
-		channel = ChannelFutureCancelOrder
+		path = "/api/swap/v3/cancel_order/" + strings.ToUpper(pair[0]) + "-USD-SWAP/" + order.OrderID
 
-		parameters = map[string]string{
-			"api_key":  o.apiKey,
-			"order_id": order.OrderID,
-			"symbol":   coins[0] + "_" + coins[1],
-		}
+		// parameters = map[string]string{
+		// 	"api_key":  o.ApiKey,
+		// 	"order_id": order.OrderID,
+		// 	"symbol":   coins[0] + "_" + coins[1],
+		// }
 
-	} else if o.instrumentType == InstrumentTypeSpot {
-		channel = ChannelSpotCancelOrder
+	} else if o.InstrumentType == InstrumentTypeSpot {
 
-		parameters = map[string]string{
-			"api_key":  o.apiKey,
-			"order_id": order.OrderID,
-			"symbol":   coins[0] + "_" + coins[1],
-		}
+		// parameters = map[string]string{
+		// 	"api_key":  o.ApiKey,
+		// 	"order_id": order.OrderID,
+		// 	"symbol":   coins[0] + "_" + coins[1],
+		// }
 
 	}
 
-	data := map[string]interface{}{
-		"event":   EventAddChannel,
-		"channel": channel,
-	}
-
-	recvChan := make(chan interface{})
-	o.messageChannels.Store(channel, recvChan)
-
-	o.command(data, parameters)
-
-	select {
-	case <-time.After(DefaultTimeoutSec * time.Second):
-		go o.triggerEvent(EventLostConnection)
+	if err, response := o.orderRequest("POST", path, nil); err != nil {
+		logger.Errorf("无法获取余额:%v", err)
 		return nil
-	case recv := <-recvChan:
-		if recv != nil {
-			result := recv.(map[string]interface{})["result"]
-			if result != nil && result.(bool) {
-				orderId := recv.(map[string]interface{})["order_id"].(string)
-				return &TradeResult{
-					Error:   nil,
-					OrderID: orderId,
-				}
-			} else {
-				errorCode := strconv.FormatFloat(recv.(map[string]interface{})["error_code"].(float64), 'f', 0, 64)
-				return &TradeResult{
-					Error: errors.New("errorCode:" + errorCode),
-				}
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("解析错误:%v", err)
+			return nil
+		}
+
+		if values["result"] != "true" {
+			logger.Errorf("Fail to cancle the order:%v", values)
+			return nil
+		} else {
+			return &TradeResult{
+				Error:   nil,
+				OrderID: values["order_id"].(string),
 			}
 		}
-
-		return &TradeResult{
-			Error: errors.New("Invalid response"),
-		}
 	}
+
+	return nil
 
 }
 
 func (o *OKEXV3API) GetOrderInfo(filter OrderInfo) []OrderInfo {
 
-	var channel string
-	var parameters map[string]string
+	var path string
 
 	pair := ParsePair(filter.Pair)
 
-	if o.instrumentType == InstrumentTypeSwap {
+	if o.InstrumentType == InstrumentTypeSwap {
 
-		channel = ChannelFutureOrderInfo
+		path = "/api/swap/v3/orders/" + strings.ToUpper(pair[0]) + "-USD-SWAP/" + filter.OrderID
 
-		parameters = map[string]string{
-			"api_key": o.apiKey,
-			// "secret_key": constSecretKey,
-			// "status":        "1",
-			"current_page": "1",
-			"page_length":  "1",
-			"order_id":     filter.OrderID,
-			"symbol":       pair[0] + "_" + pair[1],
-		}
+	} else if o.InstrumentType == InstrumentTypeSpot {
 
-	} else if o.instrumentType == InstrumentTypeSpot {
-
-		channel = ChannelSpotOrderInfo
-
-		parameters = map[string]string{
-			"api_key": o.apiKey,
-			// "secret_key": constSecretKey,
-			"order_id": filter.OrderID,
-			"symbol":   pair[0] + "_" + pair[1],
-		}
+		// parameters = map[string]string{
+		// 	"api_key": o.ApiKey,
+		// 	// "secret_key": constSecretKey,
+		// 	"order_id": filter.OrderID,
+		// 	"symbol":   pair[0] + "_" + pair[1],
+		// }
 
 	}
 
-	data := map[string]interface{}{
-		"event":   EventAddChannel,
-		"channel": channel,
-	}
-
-	recvChan := make(chan interface{})
-	o.messageChannels.Store(channel, recvChan)
-
-	o.command(data, parameters)
-
-	select {
-	case recv := <-recvChan:
-		if recv != nil {
-			result := recv.(map[string]interface{})["result"]
-			if result != nil && result.(bool) {
-				orders := recv.(map[string]interface{})["orders"].([]interface{})
-
-				if len(orders) == 0 {
-					return nil
-				}
-
-				result := make([]OrderInfo, len(orders))
-
-				for i, tmp := range orders {
-					order := tmp.(map[string]interface{})
-
-					var orderType TradeType
-					var avgPrice float64
-					if o.instrumentType == InstrumentTypeSwap {
-						orderType = OkexGetTradeTypeByFloat(order["type"].(float64))
-						avgPrice = order["price_avg"].(float64)
-					} else if o.instrumentType == InstrumentTypeSpot {
-						orderType = o.getTradeTypeByString(order["type"].(string))
-						avgPrice = order["avg_price"].(float64)
-					}
-					item := OrderInfo{
-						Pair:    order["symbol"].(string),
-						OrderID: strconv.FormatFloat(order["order_id"].(float64), 'f', 0, 64),
-						// OrderID: strconv.FormatInt(order["order_id"].(int64), 64),
-						Price:      order["price"].(float64),
-						Amount:     order["amount"].(float64),
-						Type:       orderType,
-						Status:     OkexGetTradeStatus(order["status"].(float64)),
-						DealAmount: order["deal_amount"].(float64),
-						AvgPrice:   avgPrice,
-					}
-					result[i] = item
-				}
-
-				return result
-			}
-		}
-
-		log.Printf("Fail to get Order Info")
+	if err, response := o.orderRequest("GET", path, nil); err != nil {
+		logger.Errorf("无法获取余额:%v", err)
 		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("解析错误:%v", err)
+			return nil
+		}
 
-	case <-time.After(DefaultTimeoutSec * time.Second):
-		log.Printf("Timeout to get user info")
-		go o.triggerEvent(EventLostConnection)
-		return nil
+		result := make([]OrderInfo, 1)
+
+		orderType, _ := strconv.ParseFloat(values["type"].(string), 64)
+		placePrice, _ := strconv.ParseFloat(values["price"].(string), 64)
+		avgPrice, _ := strconv.ParseFloat(values["price_avg"].(string), 64)
+		amount, _ := strconv.ParseFloat(values["size"].(string), 64)
+		dealAmount, _ := strconv.ParseFloat(values["filled_qty"].(string), 64)
+		status, _ := strconv.ParseFloat(values["status"].(string), 64)
+
+		item := OrderInfo{
+			Pair:    values["instrument_id"].(string),
+			OrderID: values["order_id"].(string),
+			// OrderID: strconv.FormatInt(order["order_id"].(int64), 64),
+			Price:      placePrice,
+			Amount:     amount,
+			Type:       OkexGetTradeTypeByFloat(orderType),
+			Status:     OkexGetTradeStatus(status),
+			DealAmount: dealAmount,
+			AvgPrice:   avgPrice,
+		}
+
+		result[0] = item
+
+		return result
 	}
+
+	return nil
+}
+
+func (o *OKEXV3API) WatchEvent() chan EventType {
+	return nil
+}
+
+func (o *OKEXV3API) SetConfigure(config Config) {
+
+}
+
+func (o *OKEXV3API) GetTicker(pair string) *TickerValue {
+	return nil
 }
 
 func (o *OKEXV3API) GetBalance() map[string]interface{} {
 
-	var channel string
-	var parameters map[string]string
+	var path string
 
-	if o.instrumentType == InstrumentTypeSwap {
-		channel = ChannelFutureUserInfo
+	if o.InstrumentType == InstrumentTypeSwap {
+		path = "/api/swap/v3/accounts"
 
-	} else if o.instrumentType == InstrumentTypeSpot {
-		channel = ChannelSpotUserInfo
+	} else if o.InstrumentType == InstrumentTypeSpot {
+		// channel = ChannelSpotUserInfo
 	}
 
-	parameters = map[string]string{
-		"api_key": o.apiKey,
-		// "secret_key": constSecretKey,
-	}
-
-	data := map[string]interface{}{
-		"event":   EventAddChannel,
-		"channel": channel,
-	}
-
-	recvChan := make(chan interface{})
-	o.messageChannels.Store(channel, recvChan)
-
-	o.command(data, parameters)
-
-	select {
-	case recv := <-recvChan:
-		if o.instrumentType == InstrumentTypeSwap {
-			if recv != nil {
-				// values := recv.(map[string]interface{})[coin]
-				// if values != nil {
-				// 	balance := values.(map[string]interface{})["balance"]
-				// 	contracts := values.(map[string]interface{})["contracts"]
-				// 	var bond float64
-				// 	if contracts != nil && len(contracts.([]interface{})) > 0 {
-				// 		for _, contract := range contracts.([]interface{}) {
-				// 			bond += contract.(map[string]interface{})["bond"].(float64)
-				// 		}
-				// 	}
-
-				// 	if balance != nil {
-				// 		return balance.(float64), bond
-				// 	}
-				// }
-				result := make(map[string]interface{})
-				balances := recv.(map[string]interface{})
-				log.Printf("Balance:%v", balances)
-				for coin, value := range balances {
-					var bond float64
-					balance := value.(map[string]interface{})["rights"]
-					contracts := value.(map[string]interface{})["contracts"]
-					if contracts != nil && len(contracts.([]interface{})) > 0 {
-						for _, contract := range contracts.([]interface{}) {
-							bond += contract.(map[string]interface{})["bond"].(float64)
-						}
-					}
-					result[coin] = map[string]interface{}{
-						"balance": balance,
-						"bond":    bond,
-					}
-				}
-
-				return result
-			}
-
+	if err, response := o.orderRequest("GET", path, map[string]string{}); err != nil {
+		logger.Errorf("无法获取余额:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("解析错误:%v", err)
 			return nil
-
-		} else if o.instrumentType == InstrumentTypeSpot {
-			if recv != nil {
-				funds := recv.(map[string]interface{})["funds"]
-				if funds != nil {
-					balances := funds.(map[string]interface{})["free"].(map[string]interface{})
-					// if balance != nil {
-					// 	result, _ := strconv.ParseFloat(balance.(map[string]interface{})[coin].(string), 64)
-					// 	return result, -1
-					// }
-					result := make(map[string]interface{})
-					for coin, balance := range balances {
-						value, _ := strconv.ParseFloat(balance.(string), 64)
-						result[coin] = map[string]interface{}{
-							"balance": value,
-						}
-					}
-					return result
-				}
-			}
 		}
 
+		if values["info"] != nil {
+			balance := values["info"].([]interface{})
+
+			result := map[string]interface{}{}
+
+			for _, temp := range balance {
+				instrument := temp.(map[string]interface{})["instrument_id"].(string)
+				key := strings.Split(instrument, "-")[0]
+				value := temp.(map[string]interface{})["total_avail_balance"].(string)
+				if value == "" {
+					result[key] = 0
+				} else {
+					result[key], _ = strconv.ParseFloat(value, 4)
+				}
+			}
+
+			return result
+		}
+	}
+	return nil
+}
+func (o *OKEXV3API) GetBalance2(instrument string) map[string]interface{} {
+
+	var path string
+	pair := ParsePair(instrument)
+	instrument = strings.ToUpper(pair[0]) + "-" + strings.ToUpper(pair[1]) + "-SWAP"
+
+	if o.InstrumentType == InstrumentTypeSwap {
+		path = "/api/swap/v3/" + instrument + "/accounts"
+
+	} else if o.InstrumentType == InstrumentTypeSpot {
+		// channel = ChannelSpotUserInfo
+	}
+
+	if err, response := o.orderRequest("GET", path, map[string]string{}); err != nil {
+		logger.Errorf("无法获取余额:%v", err)
 		return nil
-	case <-time.After(DefaultTimeoutSec * time.Second):
-		log.Printf("Timeout to get user info")
-		go o.triggerEvent(EventLostConnection)
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("解析错误:%v", err)
+			return nil
+		}
+
 		return nil
 	}
 
