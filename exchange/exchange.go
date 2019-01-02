@@ -58,10 +58,13 @@ const (
 )
 
 const (
-	// EventConnected the event that the exchange is connected
-	EventConnected EventType = iota
+
 	// EventLostConnection the event that the connection is in lost
-	EventLostConnection
+	EventLostConnection EventType = iota
+
+	// EventConnected the event that the exchange is connected
+	EventConnected
+
 	// EventNum the common error
 	EventNum
 )
@@ -206,9 +209,10 @@ type OrderInfo struct {
 }
 
 type TradeResult struct {
-	Error   error
-	OrderID string
-	Info    *OrderInfo
+	Error     error
+	ErrorCode int
+	OrderID   string
+	Info      *OrderInfo
 }
 
 // DepthTypeBids in which the prices should be from high to low
@@ -763,6 +767,7 @@ func GetLastPeriodArea(kline []KlineValue) (high float64, low float64, err error
 			// 	time.Unix(int64(kline[i].OpenTime), 0), kline[i].High, kline[i].Low, kline[i].Close)
 			// tmp := (kline[i].Close*0.8 + kline[i].High*0.2)
 			tmp := (kline[i].High*0.9 + kline[i].Close*0.1)
+			// tmp := kline[i].Close
 			// tmp := kline[i].High
 			if high == 0 {
 				high = tmp
@@ -772,6 +777,7 @@ func GetLastPeriodArea(kline []KlineValue) (high float64, low float64, err error
 
 			// tmp = (kline[i].Close*0.8 + kline[i].Low*0.2)
 			tmp = (kline[i].Low*0.9 + kline[i].Close*0.1)
+			// tmp = kline[i].Close
 			// tmp = kline[i].Low
 			if low == 0 {
 				low = tmp
