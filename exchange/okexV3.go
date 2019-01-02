@@ -409,14 +409,12 @@ func (o *OKEXV3API) Start2(errChan chan EventType) error {
 
 								} else {
 									counter = 0
-									logger.Infof("Update the depths")
+									// logger.Infof("Update the depths")
 								}
 
 								o.depthValues[channel].Store("data", newList)
 								o.depthValues[channel].Store(OKEXV3KeyTimestamp, data["timestamp"].(string))
 							}
-
-							// os.Exit(1)
 						}
 					}
 				}
@@ -426,7 +424,6 @@ func (o *OKEXV3API) Start2(errChan chan EventType) error {
 
 	o.conn = connection
 
-	// go o.triggerEvent(EventConnected)
 	errChan <- EventConnected
 
 	return nil
@@ -600,9 +597,9 @@ func (o *OKEXV3API) GetDepthValue(coin string) [][]DepthPrice {
 	if o.depthValues[channel] != nil {
 		now := time.Now()
 		if timestamp, ok := o.depthValues[channel].Load(OKEXV3KeyTimestamp); ok {
-			location, _ := time.LoadLocation("Asia/Shanghai")
+			// location, _ := time.LoadLocation("Asia/Shanghai")
 			updateTime, _ := time.Parse(time.RFC3339Nano, timestamp.(string))
-			logger.Infof("Now:%v Update:%v", now.String(), updateTime.In(location).String())
+			// logger.Infof("Now:%v Update:%v", now.String(), updateTime.In(location).String())
 			if updateTime.Add(10 * time.Second).Before(now) {
 				logger.Error("Invalid timestamp")
 				return nil
@@ -700,9 +697,13 @@ func (o *OKEXV3API) Trade(configs TradeConfig) *TradeResult {
 		}
 
 		if values["error_code"] != "0" {
+
+			errorCode, _ := strconv.ParseInt(values["error_code"].(string), 10, 64)
 			return &TradeResult{
-				Error: errors.New(values["error_message"].(string)),
+				Error:     errors.New(values["error_message"].(string)),
+				ErrorCode: int(errorCode),
 			}
+
 		} else {
 			return &TradeResult{
 				Error:   nil,
@@ -872,7 +873,7 @@ func (o *OKEXV3API) GetBalance() map[string]interface{} {
 				key := strings.Split(instrument, "-")[0]
 				value := temp.(map[string]interface{})["total_avail_balance"].(string)
 				if value == "" {
-					result[key] = 0
+					result[key] = 0.0
 				} else {
 					result[key], _ = strconv.ParseFloat(value, 4)
 				}
@@ -930,6 +931,48 @@ func (o *OKEXV3API) getTradeTypeByString(orderType string) TradeType {
 	return TradeTypeUnknown
 }
 
-func (p *OKEXV3API) GetKline(pair string, period int, limit int) []KlineValue {
+func (o *OKEXV3API) GetKline(instrument string, period int, limit int) []KlineValue {
+	var path string
+	pair := ParsePair(instrument)
+	instrument = strings.ToUpper(pair[0]) + "-USD-SWAP"
+
+	granularity := period * 60
+
+	if o.InstrumentType == InstrumentTypeSwap {
+		path = "/api/swap/v3/instruments/" + instrument + "/candles?granularity=" + strconv.Itoa(granularity)
+
+	} else if o.InstrumentType == InstrumentTypeSpot {
+		// channel = ChannelSpotUserInfo
+	}
+
+	if err, response := o.orderRequest("GET", path, map[string]string{}); err != nil {
+		logger.Errorf("无法获取余额:%v", err)
+		return nil
+	} else {
+		var values []interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("解析错误:%v", err)
+			return nil
+		}
+
+		if values != nil && len(values) > 0 {
+			klines := make([]KlineValue, len(values))
+			for i, temp := range values {
+				value := temp.([]interface{})
+				updateTime, _ := time.Parse(time.RFC3339Nano, value[0].(string))
+				klines[i].OpenTime = float64(updateTime.Unix())
+				klines[i].Open, _ = strconv.ParseFloat(value[1].(string), 64)
+				klines[i].High, _ = strconv.ParseFloat(value[2].(string), 64)
+				klines[i].Low, _ = strconv.ParseFloat(value[3].(string), 64)
+				klines[i].Close, _ = strconv.ParseFloat(value[4].(string), 64)
+				klines[i].Volumn, _ = strconv.ParseFloat(value[5].(string), 64)
+			}
+
+			klines = RevertArray(klines)
+			return klines
+		}
+
+	}
+
 	return nil
 }
