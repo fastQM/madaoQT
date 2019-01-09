@@ -3,10 +3,16 @@ package exchange
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/ioutil"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,16 +21,16 @@ import (
 	"golang.org/x/net/proxy"
 )
 
-const HuobiMarketUrl = "https://api.huobi.pro/market"
-const HuobiTradeUrl = "https://api.huobi.pro/v1"
+const HuobiMarketUrl = "https://api.huobi.pro/market "
+const HuobiTradeUrl = "https://api.huobi.pro"
 
 const HuobiWebsocketSpot = "wss://api.huobi.pro/ws"
 const HuobiWebsocketFuture = "wss://www.hbdm.com/ws"
 const HuobiTimestamp = "ts"
 
-const HuobiExchangeName = "Huobi"
+const ExchangeHuobi = "Huobi"
 
-const TickerDelaySecond = 1
+const HuobiUID = "514981"
 
 type Huobi struct {
 	event chan EventType
@@ -42,7 +48,7 @@ type Huobi struct {
 }
 
 func (p *Huobi) GetExchangeName() string {
-	return HuobiExchangeName
+	return ExchangeHuobi
 }
 
 // SetConfigure()
@@ -57,14 +63,6 @@ func (p *Huobi) WatchEvent() chan EventType {
 
 // Start() prepare the connection to the exchange
 func (p *Huobi) Start() error {
-	go func() {
-		for {
-			select {
-			case <-time.After(TickerDelaySecond * time.Second):
-			}
-		}
-	}()
-
 	return nil
 }
 
@@ -242,25 +240,87 @@ func (p *Huobi) Start2(errChan chan EventType) error {
 	return nil
 }
 
-func (p *Huobi) marketRequest(path string, params map[string]string) (error, map[string]interface{}) {
+func (p *Huobi) orderRequest(method string, path string, params map[string]string) (error, map[string]interface{}) {
+
+	var postBody []byte
+	if method == "POST" {
+		postBody, _ = json.Marshal(params)
+		params = make(map[string]string)
+	}
+
+	params["AccessKeyId"] = p.ApiKey
+	params["SignatureMethod"] = "HmacSHA256"
+	params["SignatureVersion"] = "2"
+	params["Timestamp"] = time.Now().UTC().Format("2006-01-02T15:04:05")
 
 	var req http.Request
 	req.ParseForm()
-	for k, v := range params {
-		req.Form.Add(k, v)
+	// for k, v := range params {
+	// 	req.Form.Add(k, v)
+	// }
+	// bodystr := strings.TrimSpace(req.Form.Encode())
+
+	var keys []string
+
+	for k, _ := range params {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		req.Form.Add(k, params[k])
 	}
 	bodystr := strings.TrimSpace(req.Form.Encode())
-	logger.Debugf("Params:%v", bodystr)
-	request, err := http.NewRequest("GET", HuobiMarketUrl+path, strings.NewReader(bodystr))
-	if err != nil {
-		return err, nil
+
+	plain := method + "\napi.huobi.pro\n" + path + "\n" + bodystr
+
+	h := hmac.New(sha256.New, []byte(p.SecretKey))
+	io.WriteString(h, plain)
+	base64signature := base64.StdEncoding.EncodeToString(h.Sum(nil))
+	// log.Printf("Plain:%v", plain)
+
+	req.Form.Add("Signature", base64signature)
+	bodystr = strings.TrimSpace(req.Form.Encode())
+
+	logger.Debugf("Params:%v Path:%v", bodystr, path)
+
+	var request *http.Request
+	var err error
+
+	if method == "GET" {
+		request, err = http.NewRequest(method, HuobiTradeUrl+path+"?"+bodystr, nil)
+		if err != nil {
+			return err, nil
+		}
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36")
+	} else {
+		request, err = http.NewRequest(method, HuobiTradeUrl+path+"?"+bodystr, bytes.NewReader(postBody))
+		if err != nil {
+			return err, nil
+		}
+		request.Header.Set("Content-Type", "application/json")
 	}
 
-	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36")
+	httpTransport := &http.Transport{}
+	httpClient := &http.Client{Transport: httpTransport}
+
+	if p.Proxy != "" {
+		values := strings.Split(p.Proxy, ":")
+		if values[0] == "SOCKS5" {
+			dialer, err := proxy.SOCKS5("tcp", values[1]+":"+values[2], nil, proxy.Direct)
+			if err != nil {
+				return err, nil
+			}
+
+			httpTransport.Dial = dialer.Dial
+		}
+
+	}
 
 	var resp *http.Response
-	resp, err = http.DefaultClient.Do(request)
+	resp, err = httpClient.Do(request)
 	if err != nil {
 		return err, nil
 	}
@@ -270,6 +330,81 @@ func (p *Huobi) marketRequest(path string, params map[string]string) (error, map
 	if err != nil {
 		return err, nil
 	}
+
+	logger.Infof("response:%v", string(body))
+
+	var value map[string]interface{}
+	if err = json.Unmarshal(body, &value); err != nil {
+		return err, nil
+	}
+
+	return nil, value
+
+}
+
+func (p *Huobi) marketRequest(path string, params map[string]string) (error, map[string]interface{}) {
+
+	params["AccessKeyId"] = p.ApiKey
+
+	var req http.Request
+	req.ParseForm()
+	// for k, v := range params {
+	// 	req.Form.Add(k, v)
+	// }
+	// bodystr := strings.TrimSpace(req.Form.Encode())
+
+	var keys []string
+
+	for k, _ := range params {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		req.Form.Add(k, params[k])
+	}
+	bodystr := strings.TrimSpace(req.Form.Encode())
+
+	var request *http.Request
+	var err error
+
+	request, err = http.NewRequest("GET", HuobiTradeUrl+path+"?"+bodystr, nil)
+	if err != nil {
+		return err, nil
+	}
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36")
+
+	httpTransport := &http.Transport{}
+	httpClient := &http.Client{Transport: httpTransport}
+
+	if p.Proxy != "" {
+		values := strings.Split(p.Proxy, ":")
+		if values[0] == "SOCKS5" {
+			dialer, err := proxy.SOCKS5("tcp", values[1]+":"+values[2], nil, proxy.Direct)
+			if err != nil {
+				return err, nil
+			}
+
+			httpTransport.Dial = dialer.Dial
+		}
+
+	}
+
+	var resp *http.Response
+	resp, err = httpClient.Do(request)
+	if err != nil {
+		return err, nil
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err, nil
+	}
+
+	logger.Infof("response:%v", string(body))
 
 	var value map[string]interface{}
 	if err = json.Unmarshal(body, &value); err != nil {
@@ -311,16 +446,17 @@ func (p *Huobi) GetDepthValue(pair string) [][]DepthPrice {
 
 	var channel string
 	coins := ParsePair(pair)
+	instrument := coins[0] + coins[1]
 
 	if p.InstrumentType == InstrumentTypeSwap {
 		// channel = o.StartDepth()
-		channel = "market." + coins[0] + coins[1] + ".depth.step0"
+		channel = "market." + instrument + ".depth.step0"
 		if p.depthValues[channel] == nil {
 			p.depthValues[channel] = new(sync.Map)
 			p.StartDepth(channel)
 		}
 	} else if p.InstrumentType == InstrumentTypeSpot {
-		channel = "market." + coins[0] + coins[1] + ".depth.step0"
+		channel = "market." + instrument + ".depth.step0"
 		if p.depthValues[channel] == nil {
 			p.depthValues[channel] = new(sync.Map)
 			p.StartDepth(channel)
@@ -390,13 +526,76 @@ func (p *Huobi) command(data map[string]interface{}) error {
 
 // GetBalance() get the balances of all the coins
 func (p *Huobi) GetBalance() map[string]interface{} {
-	return map[string]interface{}{
-		"helo": "wolrd",
+	var path string
+	if p.InstrumentType == InstrumentTypeSpot {
+		path = "/v1/account/accounts/" + HuobiUID + "/balance"
+		// path = "/v1/account/accounts"
 	}
+
+	if err, response := p.orderRequest("GET", path, map[string]string{}); err != nil {
+		logger.Errorf("无法获取余额:%v", err)
+		return nil
+	} else {
+		balance := make(map[string]interface{})
+
+		if response["status"] != nil {
+			if response["status"].(string) == "ok" {
+				data := response["data"].(map[string]interface{})
+				list := data["list"].([]interface{})
+				for _, item := range list {
+					values := item.(map[string]interface{})
+					if values["type"].(string) == "trade" {
+						key := values["currency"].(string)
+						balance[key], _ = strconv.ParseFloat(values["balance"].(string), 64)
+					}
+				}
+
+				return balance
+			} else {
+				logger.Errorf("Fail to get balance:%v", response["err-msg"].(string))
+			}
+
+		}
+
+	}
+
+	return nil
 }
 
 // Trade() trade as the configs
 func (p *Huobi) Trade(configs TradeConfig) *TradeResult {
+
+	var path string
+	if p.InstrumentType == InstrumentTypeSpot {
+		path = "/v1/order/orders/place"
+	}
+
+	coins := ParsePair(configs.Pair)
+	instrument := coins[0] + coins[1]
+
+	if err, response := p.orderRequest("POST", path, map[string]string{
+		"account-id": HuobiUID,
+		"amount":     strconv.FormatFloat(configs.Amount, 'f', 2, 64),
+		"symbol":     instrument,
+		"type":       OkexGetTradeTypeString(configs.Type) + "-market",
+	}); err != nil {
+		logger.Errorf("Fail to trade:%v", err)
+		return nil
+	} else {
+		if response["status"] != nil {
+			if response["status"].(string) == "ok" {
+				return &TradeResult{
+					Error:   nil,
+					OrderID: response["data"].(string),
+				}
+			} else {
+				return &TradeResult{
+					Error: errors.New(response["err-msg"].(string)),
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -407,9 +606,132 @@ func (p *Huobi) CancelOrder(order OrderInfo) *TradeResult {
 
 // GetOrderInfo() get the information with order filter
 func (p *Huobi) GetOrderInfo(filter OrderInfo) []OrderInfo {
+	var path string
+	if p.InstrumentType == InstrumentTypeSpot {
+		path = "/v1/order/orders/" + filter.OrderID
+	}
+
+	if err, response := p.orderRequest("GET", path, map[string]string{}); err != nil {
+		logger.Errorf("Fail to trade:%v", err)
+		return nil
+	} else {
+		if response["status"] != nil {
+			if response["status"].(string) == "ok" {
+
+				values := response["data"].(map[string]interface{})
+				result := make([]OrderInfo, 1)
+
+				orderType := values["type"].(string)
+				placePrice, _ := strconv.ParseFloat(values["price"].(string), 64)
+				amount, _ := strconv.ParseFloat(values["field-cash-amount"].(string), 64)
+				dealAmount, _ := strconv.ParseFloat(values["field-amount"].(string), 64)
+				avgPrice := amount / dealAmount
+				status := values["state"].(string)
+
+				item := OrderInfo{
+					Pair:       values["symbol"].(string),
+					OrderID:    filter.OrderID,
+					Price:      placePrice,
+					Amount:     amount,
+					Type:       p.GetTradeType(orderType),
+					Status:     p.GetOrderStatus(status),
+					DealAmount: dealAmount,
+					AvgPrice:   avgPrice,
+				}
+
+				result[0] = item
+
+				return result
+			} else {
+				logger.Errorf("Fail to get order info:%v", response["err-msg"].(string))
+			}
+		}
+	}
+
 	return nil
 }
 
 func (p *Huobi) GetKline(pair string, period int, limit int) []KlineValue {
+	var path, interval string
+	if p.InstrumentType == InstrumentTypeSpot {
+		path = "/market/history/kline"
+		// path = "/v1/account/accounts"
+	}
+
+	coins := ParsePair(pair)
+	instrument := coins[0] + coins[1]
+
+	switch period {
+	case KlinePeriod5Min:
+		interval = "5min"
+	case KlinePeriod15Min:
+		interval = "15min"
+	case KlinePeriod1Hour:
+		interval = "60min"
+	case KlinePeriod2Hour:
+		interval = "120min"
+	case KlinePeriod1Day:
+		interval = "1d"
+	}
+
+	if err, response := p.marketRequest(path, map[string]string{
+		"symbol": instrument,
+		"period": interval,
+		"size":   strconv.Itoa(limit),
+	}); err != nil {
+		logger.Errorf("Fail to get klines:%v", err)
+		return nil
+	} else {
+		if response["status"] != nil {
+			if response["status"].(string) == "ok" {
+				values := response["data"].([]interface{})
+				klines := make([]KlineValue, len(values))
+				for i, temp := range values {
+					value := temp.(map[string]interface{})
+					klines[i].OpenTime = value["id"].(float64)
+					klines[i].Open = value["open"].(float64)
+					klines[i].High = value["high"].(float64)
+					klines[i].Low = value["low"].(float64)
+					klines[i].Close = value["close"].(float64)
+					klines[i].Volumn = value["amount"].(float64)
+				}
+
+				klines = RevertArray(klines)
+				return klines
+			} else {
+				logger.Errorf("Fail to get balance:%v", response["err-msg"].(string))
+			}
+
+		}
+
+	}
+
 	return nil
+}
+
+func (p *Huobi) GetTradeType(tradeType string) TradeType {
+	if strings.Contains(tradeType, "buy") {
+		return TradeTypeBuy
+	} else {
+		return TradeTypeSell
+	}
+
+}
+
+func (p *Huobi) GetOrderStatus(status string) OrderStatusType {
+	switch status {
+	case "submitting":
+		return OrderStatusOpen
+	case "submitted":
+		return OrderStatusOpen
+	case "partial-filled":
+		return OrderStatusPartDone
+	case "filled":
+		return OrderStatusDone
+	case "canceled":
+		return OrderStatusCanceled
+	default:
+		return OrderStatusUnknown
+	}
+
 }
