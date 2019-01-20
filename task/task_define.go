@@ -10,6 +10,9 @@ const (
 	TrendTradeCollectionOanda            = "TrendTradeCollectionOanda"
 	TrendTradeCollectionOanda2           = "TrendTradeCollectionOanda2"
 	TrendTradeCollectionCryptoFacilities = "TrendTradeCollectionCryptoFacilities"
+	TrendTradeOkexV3                     = "TrendTradeOkexV3"
+	TrendTradeOkexV3Spot                 = "TrendTradeOkexV3Spot"
+	TrendTradeHuobiSpot                  = "TrendTradeHuobiSpot"
 
 	TrendBalanceOKEX             = "TrendBalanceOKEX"
 	TrendBalanceOKEXWithSteps    = "TrendBalanceOKEXSteps"
@@ -20,6 +23,9 @@ const (
 	TrendBalanceOanda2           = "TrendBalanceOanda2"
 	TrendBalanceCTP              = "TrendBalanceCTP"
 	TrendBalanceCryptoFacilities = "TrendBalanceCryptoFacilities"
+	TrendBalanceOkexV3           = "TrendBalanceOkexV3"
+	TrendBalanceOkexV3Spot       = "TrendBalanceOkexV3Spot"
+	TrendBalanceHuobiSpot        = "TrendBalanceHuobiSpot"
 
 	TrendFundOKEX             = "TrendFundStructOKEX"
 	TrendFundOKEXWithSteps    = "TrendFundOKEXWithSteps"

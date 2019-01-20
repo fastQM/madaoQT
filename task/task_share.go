@@ -63,6 +63,7 @@ var TaskErrorMsg = map[TaskErrorType]string{
 
 type TradeResult struct {
 	Error      TaskErrorType
+	ErrorCode  int
 	DealAmount float64 // 已成交金额，如果部分成交，需要将该部分平仓
 	AvgPrice   float64
 	OrderID    string
@@ -224,8 +225,9 @@ func CalcDepthPrice(isFuture bool, ratios map[string]float64, exchange Exchange.
 	// amount *= 2
 
 	if isFuture {
-		quantity = amount / ratios[Exchange.ParsePair(pair)[0]]
+		// quantity = amount / ratios[Exchange.ParsePair(pair)[0]]
 		// Logger.Debugf("Quantity:%f", quantity)
+		quantity = amount
 	}
 
 	// Logger.Debugf("Asks:%v", asks)
