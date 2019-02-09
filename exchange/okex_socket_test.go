@@ -278,8 +278,7 @@ func TestSpotGetUserInfo(t *testing.T) {
 }
 
 func _TestGetTradeType(t *testing.T) {
-	okex := new(OKExAPI)
-	log.Printf("Type:%d", okex.getTradeTypeByString("buy"))
+	log.Printf("Type:%d", OkexGetTradeTypeByString("buy"))
 }
 
 func _TestGetOrderStatus(t *testing.T) {
