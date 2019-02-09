@@ -2,8 +2,6 @@ package exchange
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -124,6 +122,7 @@ const (
 	OrderStatusCanceled
 	OrderStatusRejected
 	OrderStatusExpired
+	OrderStatusOrdering
 	// OrderStatusUnknown the error status
 	OrderStatusUnknown
 )
