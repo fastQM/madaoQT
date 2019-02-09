@@ -48,14 +48,7 @@ type OKEXV3API struct {
 	SecretKey      string
 	Passphare      string
 
-	conn         *Websocket.Conn
-	klines       map[string][]KlineValue
-	ticker       int64
-	lastTicker   int64
-	errorCounter int
-
-	/* Each channel has a depth */
-	messageChannels sync.Map
+	conn *Websocket.Conn
 
 	depthValues map[string]*sync.Map
 }
@@ -174,8 +167,6 @@ func (o *OKEXV3API) Start() error {
 
 func (o *OKEXV3API) Start2(errChan chan EventType) error {
 
-	o.klines = make(map[string][]KlineValue)
-	// force to restart the command
 	o.depthValues = make(map[string]*sync.Map)
 
 	dialer := Websocket.DefaultDialer
@@ -677,13 +668,29 @@ func (o *OKEXV3API) Trade(configs TradeConfig) *TradeResult {
 
 	} else if o.InstrumentType == InstrumentTypeSpot {
 
-		parameters = map[string]string{
-			"api_key": o.ApiKey,
-			"symbol":  coins[0] + "_" + coins[1],
-			"type":    OkexGetTradeTypeString(configs.Type),
-			"price":   strconv.FormatFloat(configs.Price, 'f', 4, 64),
-			"amount":  strconv.FormatFloat(configs.Amount, 'f', 4, 64),
+		path = "/api/spot/v3/orders"
+
+		if configs.Type == TradeTypeBuy {
+			parameters = map[string]string{
+				"instrument_id": strings.ToUpper(coins[0]) + "-" + strings.ToUpper(coins[1]),
+				// "size":           strconv.FormatFloat(configs.Amount, 'f', 4, 64),
+				"side":           OkexGetTradeTypeString(configs.Type),
+				"margin_trading": "1",
+
+				"type":     "market",
+				"notional": strconv.FormatFloat(configs.Amount, 'f', 4, 64),
+			}
+		} else { // TradeTypeSell
+			parameters = map[string]string{
+				"instrument_id":  strings.ToUpper(coins[0]) + "-" + strings.ToUpper(coins[1]),
+				"size":           strconv.FormatFloat(configs.Amount, 'f', 4, 64),
+				"side":           OkexGetTradeTypeString(configs.Type),
+				"margin_trading": "1",
+				"type":           "market",
+				// "notional": strconv.FormatFloat(configs.Price, 'f', 4, 64),
+			}
 		}
+
 	}
 
 	if err, response := o.orderRequest("POST", path, parameters); err != nil {
@@ -696,22 +703,41 @@ func (o *OKEXV3API) Trade(configs TradeConfig) *TradeResult {
 			return nil
 		}
 
-		if values["error_code"] != "0" {
+		if o.InstrumentType == InstrumentTypeSwap {
+			if values["error_code"].(string) != "0" {
 
-			errorCode, _ := strconv.ParseInt(values["error_code"].(string), 10, 64)
-			return &TradeResult{
-				Error:     errors.New(values["error_message"].(string)),
-				ErrorCode: int(errorCode),
+				errorCode, _ := strconv.ParseInt(values["error_code"].(string), 10, 64)
+				return &TradeResult{
+					Error:     errors.New(values["error_message"].(string)),
+					ErrorCode: int(errorCode),
+				}
+
+			} else {
+				return &TradeResult{
+					Error:   nil,
+					OrderID: values["order_id"].(string),
+				}
 			}
 
+			return nil
 		} else {
-			return &TradeResult{
-				Error:   nil,
-				OrderID: values["order_id"].(string),
+
+			if values["result"] == nil || !values["result"].(bool) {
+
+				errorCode := values["code"].(float64)
+				return &TradeResult{
+					Error:     errors.New(values["message"].(string)),
+					ErrorCode: int(errorCode),
+				}
+
+			} else {
+				return &TradeResult{
+					Error:   nil,
+					OrderID: values["order_id"].(string),
+				}
 			}
 		}
 
-		return nil
 	}
 
 	return nil
@@ -788,6 +814,7 @@ func (o *OKEXV3API) GetOrderInfo(filter OrderInfo) []OrderInfo {
 		// 	"order_id": filter.OrderID,
 		// 	"symbol":   pair[0] + "_" + pair[1],
 		// }
+		path = "/api/spot/v3/orders/" + filter.OrderID + "?" + "instrument_id=" + strings.ToUpper(pair[0]) + "-" + strings.ToUpper(pair[1])
 
 	}
 
@@ -801,30 +828,75 @@ func (o *OKEXV3API) GetOrderInfo(filter OrderInfo) []OrderInfo {
 			return nil
 		}
 
-		result := make([]OrderInfo, 1)
+		if o.InstrumentType == InstrumentTypeSwap {
 
-		orderType, _ := strconv.ParseFloat(values["type"].(string), 64)
-		placePrice, _ := strconv.ParseFloat(values["price"].(string), 64)
-		avgPrice, _ := strconv.ParseFloat(values["price_avg"].(string), 64)
-		amount, _ := strconv.ParseFloat(values["size"].(string), 64)
-		dealAmount, _ := strconv.ParseFloat(values["filled_qty"].(string), 64)
-		status, _ := strconv.ParseFloat(values["status"].(string), 64)
+			if values["code"] != nil {
+				logger.Errorf("Fail to get the order info:%v", values["message"].(string))
+				return nil
+			}
 
-		item := OrderInfo{
-			Pair:    values["instrument_id"].(string),
-			OrderID: values["order_id"].(string),
-			// OrderID: strconv.FormatInt(order["order_id"].(int64), 64),
-			Price:      placePrice,
-			Amount:     amount,
-			Type:       OkexGetTradeTypeByFloat(orderType),
-			Status:     OkexGetTradeStatus(status),
-			DealAmount: dealAmount,
-			AvgPrice:   avgPrice,
+			result := make([]OrderInfo, 1)
+
+			orderType, _ := strconv.ParseFloat(values["type"].(string), 64)
+			placePrice, _ := strconv.ParseFloat(values["price"].(string), 64)
+			avgPrice, _ := strconv.ParseFloat(values["price_avg"].(string), 64)
+			amount, _ := strconv.ParseFloat(values["size"].(string), 64)
+			dealAmount, _ := strconv.ParseFloat(values["filled_qty"].(string), 64)
+			status, _ := strconv.ParseFloat(values["status"].(string), 64)
+
+			item := OrderInfo{
+				Pair:    values["instrument_id"].(string),
+				OrderID: values["order_id"].(string),
+				// OrderID: strconv.FormatInt(order["order_id"].(int64), 64),
+				Price:      placePrice,
+				Amount:     amount,
+				Type:       OkexGetTradeTypeByFloat(orderType),
+				Status:     OkexGetTradeStatus(status),
+				DealAmount: dealAmount,
+				AvgPrice:   avgPrice,
+			}
+
+			result[0] = item
+
+			return result
+		} else {
+
+			result := make([]OrderInfo, 1)
+
+			orderType := OkexGetTradeTypeByString(values["side"].(string))
+			placePrice, _ := strconv.ParseFloat(values["price"].(string), 64)
+			amount, _ := strconv.ParseFloat(values["size"].(string), 64)
+			// all units are the base currency
+			var dealAmount float64
+			if orderType == TradeTypeBuy {
+				// when buy, we need to know the size of the target
+				dealAmount, _ = strconv.ParseFloat(values["filled_size"].(string), 64)
+			} else {
+				// when sell, we need to know the size of the base
+				dealAmount, _ = strconv.ParseFloat(values["filled_notional"].(string), 64)
+			}
+
+			filledNotional, _ := strconv.ParseFloat(values["filled_notional"].(string), 64)
+			avgPrice := filledNotional / dealAmount
+			status := values["status"].(string)
+
+			item := OrderInfo{
+				Pair:    values["instrument_id"].(string),
+				OrderID: values["order_id"].(string),
+				// OrderID: strconv.FormatInt(order["order_id"].(int64), 64),
+				Price:      placePrice,
+				Amount:     amount,
+				Type:       orderType,
+				Status:     o.GetOrderStatus(status),
+				DealAmount: dealAmount,
+				AvgPrice:   avgPrice,
+			}
+
+			result[0] = item
+
+			return result
 		}
 
-		result[0] = item
-
-		return result
 	}
 
 	return nil
@@ -849,29 +921,59 @@ func (o *OKEXV3API) GetBalance() map[string]interface{} {
 	if o.InstrumentType == InstrumentTypeSwap {
 		path = "/api/swap/v3/accounts"
 
-	} else if o.InstrumentType == InstrumentTypeSpot {
-		// channel = ChannelSpotUserInfo
-	}
-
-	if err, response := o.orderRequest("GET", path, map[string]string{}); err != nil {
-		logger.Errorf("无法获取余额:%v", err)
-		return nil
-	} else {
-		var values map[string]interface{}
-		if err = json.Unmarshal(response, &values); err != nil {
-			logger.Errorf("解析错误:%v", err)
+		if err, response := o.orderRequest("GET", path, map[string]string{}); err != nil {
+			logger.Errorf("无法获取余额:%v", err)
 			return nil
+		} else {
+			var values map[string]interface{}
+			if err = json.Unmarshal(response, &values); err != nil {
+				logger.Errorf("解析错误:%v", err)
+				return nil
+			}
+
+			if values["info"] != nil {
+				balance := values["info"].([]interface{})
+
+				result := map[string]interface{}{}
+
+				for _, temp := range balance {
+					instrument := temp.(map[string]interface{})["instrument_id"].(string)
+					key := strings.Split(instrument, "-")[0]
+					value := temp.(map[string]interface{})["equity"].(string)
+					if value == "" {
+						result[key] = 0.0
+					} else {
+						result[key], _ = strconv.ParseFloat(value, 64)
+					}
+				}
+
+				return result
+			}
 		}
 
-		if values["info"] != nil {
-			balance := values["info"].([]interface{})
+	} else if o.InstrumentType == InstrumentTypeSpot {
+		// channel = ChannelSpotUserInfo
+		path = "/api/spot/v3/accounts"
 
-			result := map[string]interface{}{}
+		if err, response := o.orderRequest("GET", path, map[string]string{}); err != nil {
+			logger.Errorf("无法获取余额:%v", err)
+			return nil
+		} else {
+			var values []interface{}
+			if err = json.Unmarshal(response, &values); err != nil {
+				logger.Errorf("解析错误:%v", err)
+				return nil
+			}
 
-			for _, temp := range balance {
-				instrument := temp.(map[string]interface{})["instrument_id"].(string)
-				key := strings.Split(instrument, "-")[0]
-				value := temp.(map[string]interface{})["total_avail_balance"].(string)
+			if len(values) == 0 {
+				return nil
+			}
+
+			result := make(map[string]interface{})
+			for _, temp := range values {
+				instrument := temp.(map[string]interface{})
+				key := instrument["currency"].(string)
+				value := temp.(map[string]interface{})["available"].(string)
 				if value == "" {
 					result[key] = 0.0
 				} else {
@@ -880,8 +982,10 @@ func (o *OKEXV3API) GetBalance() map[string]interface{} {
 			}
 
 			return result
+
 		}
 	}
+
 	return nil
 }
 func (o *OKEXV3API) GetBalance2(instrument string) map[string]interface{} {
@@ -934,15 +1038,17 @@ func (o *OKEXV3API) getTradeTypeByString(orderType string) TradeType {
 func (o *OKEXV3API) GetKline(instrument string, period int, limit int) []KlineValue {
 	var path string
 	pair := ParsePair(instrument)
-	instrument = strings.ToUpper(pair[0]) + "-USD-SWAP"
 
 	granularity := period * 60
 
 	if o.InstrumentType == InstrumentTypeSwap {
+		instrument = strings.ToUpper(pair[0]) + "-USD-SWAP"
 		path = "/api/swap/v3/instruments/" + instrument + "/candles?granularity=" + strconv.Itoa(granularity)
 
 	} else if o.InstrumentType == InstrumentTypeSpot {
 		// channel = ChannelSpotUserInfo
+		instrument = strings.ToUpper(pair[0]) + "-" + strings.ToUpper(pair[1])
+		path = "/api/spot/v3/instruments/" + instrument + "/candles?granularity=" + strconv.Itoa(granularity)
 	}
 
 	if err, response := o.orderRequest("GET", path, map[string]string{}); err != nil {
@@ -955,6 +1061,7 @@ func (o *OKEXV3API) GetKline(instrument string, period int, limit int) []KlineVa
 			return nil
 		}
 
+		// if o.InstrumentType == InstrumentTypeSwap {
 		if values != nil && len(values) > 0 {
 			klines := make([]KlineValue, len(values))
 			for i, temp := range values {
@@ -971,8 +1078,46 @@ func (o *OKEXV3API) GetKline(instrument string, period int, limit int) []KlineVa
 			klines = RevertArray(klines)
 			return klines
 		}
+		// } else {
+		// 	if values != nil && len(values) > 0 {
+		// 		klines := make([]KlineValue, len(values))
+		// 		for i, temp := range values {
+		// 			value := temp.(map[string]interface{})
+		// 			updateTime, _ := time.Parse(time.RFC3339Nano, value["time"].(string))
+		// 			klines[i].OpenTime = float64(updateTime.Unix())
+		// 			klines[i].Open, _ = strconv.ParseFloat(value["open"].(string), 64)
+		// 			klines[i].High, _ = strconv.ParseFloat(value["high"].(string), 64)
+		// 			klines[i].Low, _ = strconv.ParseFloat(value["low"].(string), 64)
+		// 			klines[i].Close, _ = strconv.ParseFloat(value["close"].(string), 64)
+		// 			klines[i].Volumn, _ = strconv.ParseFloat(value["volume"].(string), 64)
+		// 		}
+
+		// 		klines = RevertArray(klines)
+		// 		return klines
+		// 	}
+		// }
 
 	}
 
 	return nil
+}
+
+var OkexV3OrderStatusString = map[OrderStatusType]string{
+	OrderStatusOpen:      "open",
+	OrderStatusPartDone:  "part_filled",
+	OrderStatusDone:      "filled",
+	OrderStatusCanceling: "canceling",
+	OrderStatusCanceled:  "cancelled",
+	OrderStatusRejected:  "failure",
+	OrderStatusOrdering:  "ordering",
+}
+
+func (o *OKEXV3API) GetOrderStatus(status string) OrderStatusType {
+	for k, v := range OkexV3OrderStatusString {
+		if v == status {
+			return k
+		}
+	}
+
+	return OrderStatusUnknown
 }
