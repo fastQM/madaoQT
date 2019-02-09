@@ -959,7 +959,7 @@ func (o *OKExAPI) GetOrderInfo(filter OrderInfo) []OrderInfo {
 						orderType = OkexGetTradeTypeByFloat(order["type"].(float64))
 						avgPrice = order["price_avg"].(float64)
 					} else if o.exchangeType == ExchangeTypeSpot {
-						orderType = o.getTradeTypeByString(order["type"].(string))
+						orderType = OkexGetTradeTypeByString(order["type"].(string))
 						avgPrice = order["avg_price"].(float64)
 					}
 					item := OrderInfo{
@@ -1106,7 +1106,7 @@ func OkexGetTradeStatus(status float64) OrderStatusType {
 	return OrderStatusUnknown
 }
 
-func (o *OKExAPI) getTradeTypeByString(orderType string) TradeType {
+func OkexGetTradeTypeByString(orderType string) TradeType {
 	switch orderType {
 	case "1":
 		return TradeTypeOpenLong
