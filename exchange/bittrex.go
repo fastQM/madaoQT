@@ -44,14 +44,6 @@ func (p *Bittrex) WatchEvent() chan EventType {
 
 // Start() prepare the connection to the exchange
 func (p *Bittrex) Start() error {
-	go func() {
-		for {
-			select {
-			case <-time.After(TickerDelaySecond * time.Second):
-			}
-		}
-	}()
-
 	return nil
 }
 
