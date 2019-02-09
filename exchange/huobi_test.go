@@ -3,26 +3,89 @@ package exchange
 import (
 	"log"
 	"testing"
+	"time"
 )
 
-func TestHttpRequest(t *testing.T) {
-	huobi := new(Huobi)
-	err, result := huobi.marketRequest("/depth", map[string]string{
-		"symbol": "ethusdt",
-		"type":   "step0",
+const HuobiAPI = ""
+const HuobiSecret = ""
+
+func TestHuobiGetBalance(t *testing.T) {
+	huobi := Huobi{
+		InstrumentType: InstrumentTypeSpot,
+		Proxy:          "SOCKS5:127.0.0.1:1080",
+		ApiKey:         HuobiAPI,
+		SecretKey:      HuobiSecret,
+	}
+
+	log.Printf("Balance:%v", huobi.GetBalance())
+}
+
+func TestHuobiTrade(t *testing.T) {
+	huobi := Huobi{
+		InstrumentType: InstrumentTypeSpot,
+		Proxy:          "SOCKS5:127.0.0.1:1080",
+		ApiKey:         HuobiAPI,
+		SecretKey:      HuobiSecret,
+	}
+
+	result := huobi.Trade(TradeConfig{
+		Amount: 0.1,
+		Pair:   "eth/usdt",
+		Type:   TradeTypeSell,
 	})
 
-	if err != nil {
-		log.Printf("Error:%v", err)
-	} else {
-		log.Printf("Rsp:%v", result)
+	log.Printf("Result:%v", result)
+}
+
+func TestHuobiGetOrderInfo(t *testing.T) {
+	huobi := Huobi{
+		InstrumentType: InstrumentTypeSpot,
+		Proxy:          "SOCKS5:127.0.0.1:1080",
+		ApiKey:         HuobiAPI,
+		SecretKey:      HuobiSecret,
+	}
+
+	log.Printf("result:%v", huobi.GetOrderInfo(OrderInfo{
+		OrderID: "21620207770",
+	}))
+}
+
+func TestHuobiGetKlines(t *testing.T) {
+	huobi := Huobi{
+		InstrumentType: InstrumentTypeSpot,
+		Proxy:          "SOCKS5:127.0.0.1:1080",
+		ApiKey:         HuobiAPI,
+		SecretKey:      HuobiSecret,
+	}
+	location, _ := time.LoadLocation("Asia/Shanghai")
+	klines := huobi.GetKline("eth/usdt", KlinePeriod1Hour, 200)
+	for _, kline := range klines {
+		log.Printf("TIme:%v %v", time.Unix(int64(kline.OpenTime), 0).In(location), kline)
 	}
 }
 
-func TestGetDepth(t *testing.T) {
-	huobi := new(Huobi)
-	result := huobi.GetDepthValue("eth/usdt")
-	if result != nil {
-		log.Printf("Depth:%v", result)
+func TestHuobiGetDepth(t *testing.T) {
+
+	huobi := Huobi{
+		InstrumentType: InstrumentTypeSpot,
+		Proxy:          "SOCKS5:127.0.0.1:1080",
+	}
+
+	eventChan := make(chan EventType)
+	huobi.Start2(eventChan)
+
+	counter := 5
+
+	for {
+		select {
+		case <-time.After(1 * time.Second):
+			value := huobi.GetDepthValue("eth/usdt")
+			log.Printf("Value:%v", value)
+			if counter > 0 {
+				counter--
+			} else {
+				return
+			}
+		}
 	}
 }
