@@ -150,6 +150,7 @@ func (p *Huobi) Start2(errChan chan EventType) error {
 					"pong",
 					"userinfo",
 					"ping",
+					"vol",
 				}
 
 				var filtered = false
