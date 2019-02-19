@@ -23,6 +23,7 @@ import (
 
 const HuobiMarketUrl = "https://api.huobi.pro/market "
 const HuobiTradeUrl = "https://api.huobi.pro"
+const HuobiDM = "https://api.hbdm.com"
 
 const HuobiWebsocketSpot = "wss://api.huobi.pro/ws"
 const HuobiWebsocketFuture = "wss://www.hbdm.com/ws"
@@ -145,7 +146,7 @@ func (p *Huobi) Start2(errChan chan EventType) error {
 			// to log the trade command
 			if Debug {
 				filters := []string{
-					"depth",
+					// "depth",
 					"ticker",
 					"pong",
 					"userinfo",
@@ -369,8 +370,15 @@ func (p *Huobi) marketRequest(path string, params map[string]string) (error, map
 
 	var request *http.Request
 	var err error
+	var root string
 
-	request, err = http.NewRequest("GET", HuobiTradeUrl+path+"?"+bodystr, nil)
+	if p.InstrumentType == InstrumentTypeSpot {
+		root = HuobiTradeUrl
+	} else if p.InstrumentType == InstrumentTypeSwap {
+		root = HuobiDM
+	}
+
+	request, err = http.NewRequest("GET", root+path+"?"+bodystr, nil)
 	if err != nil {
 		return err, nil
 	}
@@ -446,17 +454,18 @@ func (p *Huobi) StartDepth(subject string) {
 func (p *Huobi) GetDepthValue(pair string) [][]DepthPrice {
 
 	var channel string
-	coins := ParsePair(pair)
-	instrument := coins[0] + coins[1]
 
 	if p.InstrumentType == InstrumentTypeSwap {
 		// channel = o.StartDepth()
+		instrument := pair
 		channel = "market." + instrument + ".depth.step0"
 		if p.depthValues[channel] == nil {
 			p.depthValues[channel] = new(sync.Map)
 			p.StartDepth(channel)
 		}
 	} else if p.InstrumentType == InstrumentTypeSpot {
+		coins := ParsePair(pair)
+		instrument := coins[0] + coins[1]
 		channel = "market." + instrument + ".depth.step0"
 		if p.depthValues[channel] == nil {
 			p.depthValues[channel] = new(sync.Map)
@@ -569,29 +578,58 @@ func (p *Huobi) Trade(configs TradeConfig) *TradeResult {
 	var path string
 	if p.InstrumentType == InstrumentTypeSpot {
 		path = "/v1/order/orders/place"
-	}
 
-	coins := ParsePair(configs.Pair)
-	instrument := coins[0] + coins[1]
+		coins := ParsePair(configs.Pair)
+		instrument := coins[0] + coins[1]
 
-	if err, response := p.orderRequest("POST", path, map[string]string{
-		"account-id": HuobiUID,
-		"amount":     strconv.FormatFloat(configs.Amount, 'f', 2, 64),
-		"symbol":     instrument,
-		"type":       OkexGetTradeTypeString(configs.Type) + "-market",
-	}); err != nil {
-		logger.Errorf("Fail to trade:%v", err)
-		return nil
-	} else {
-		if response["status"] != nil {
-			if response["status"].(string) == "ok" {
-				return &TradeResult{
-					Error:   nil,
-					OrderID: response["data"].(string),
+		if err, response := p.orderRequest("POST", path, map[string]string{
+			"account-id": HuobiUID,
+			"amount":     strconv.FormatFloat(configs.Amount, 'f', 2, 64),
+			"symbol":     instrument,
+			"type":       OkexGetTradeTypeString(configs.Type) + "-market",
+		}); err != nil {
+			logger.Errorf("Fail to trade:%v", err)
+			return nil
+		} else {
+			if response["status"] != nil {
+				if response["status"].(string) == "ok" {
+					return &TradeResult{
+						Error:   nil,
+						OrderID: response["data"].(string),
+					}
+				} else {
+					return &TradeResult{
+						Error: errors.New(response["err-msg"].(string)),
+					}
 				}
-			} else {
-				return &TradeResult{
-					Error: errors.New(response["err-msg"].(string)),
+			}
+		}
+	} else if p.InstrumentType == InstrumentTypeSwap {
+
+		path = "api/v1/contract_order"
+
+		coins := ParsePair(configs.Pair)
+		instrument := strings.ToUpper(coins[0])
+
+		if err, response := p.orderRequest("POST", path, map[string]string{
+			"account-id": HuobiUID,
+			"amount":     strconv.FormatFloat(configs.Amount, 'f', 2, 64),
+			"symbol":     instrument,
+			"type":       OkexGetTradeTypeString(configs.Type) + "-market",
+		}); err != nil {
+			logger.Errorf("Fail to trade:%v", err)
+			return nil
+		} else {
+			if response["status"] != nil {
+				if response["status"].(string) == "ok" {
+					return &TradeResult{
+						Error:   nil,
+						OrderID: response["data"].(string),
+					}
+				} else {
+					return &TradeResult{
+						Error: errors.New(response["err-msg"].(string)),
+					}
 				}
 			}
 		}
@@ -654,13 +692,17 @@ func (p *Huobi) GetOrderInfo(filter OrderInfo) []OrderInfo {
 
 func (p *Huobi) GetKline(pair string, period int, limit int) []KlineValue {
 	var path, interval string
+	var instrument string
 	if p.InstrumentType == InstrumentTypeSpot {
+		coins := ParsePair(pair)
+		instrument = coins[0] + coins[1]
+
 		path = "/market/history/kline"
 		// path = "/v1/account/accounts"
+	} else if p.InstrumentType == InstrumentTypeSwap {
+		instrument = pair
+		path = "/market/history/kline"
 	}
-
-	coins := ParsePair(pair)
-	instrument := coins[0] + coins[1]
 
 	switch period {
 	case KlinePeriod5Min:
