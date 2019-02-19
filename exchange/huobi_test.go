@@ -72,20 +72,84 @@ func TestHuobiGetDepth(t *testing.T) {
 	}
 
 	eventChan := make(chan EventType)
-	huobi.Start2(eventChan)
+	go func() {
+		huobi.Start2(eventChan)
+	}()
 
 	counter := 5
+	status := false
 
 	for {
 		select {
-		case <-time.After(1 * time.Second):
-			value := huobi.GetDepthValue("eth/usdt")
-			log.Printf("Value:%v", value)
-			if counter > 0 {
-				counter--
-			} else {
-				return
+		case event := <-eventChan:
+			if event == EventConnected {
+				log.Printf("connected")
+				status = true
+			} else if event == EventLostConnection {
+				log.Printf("The connection lost")
 			}
+		case <-time.After(1 * time.Second):
+			if status {
+				value := huobi.GetDepthValue("eth/usdt")
+				log.Printf("Value:%v", value)
+				if counter > 0 {
+					counter--
+				} else {
+					return
+				}
+			}
+
 		}
+	}
+}
+
+func TestHuobiDMGetDepth(t *testing.T) {
+
+	huobi := Huobi{
+		InstrumentType: InstrumentTypeSwap,
+		Proxy:          "SOCKS5:127.0.0.1:1080",
+	}
+
+	eventChan := make(chan EventType)
+	go func() {
+		huobi.Start2(eventChan)
+	}()
+
+	counter := 5
+	status := false
+
+	for {
+		select {
+		case event := <-eventChan:
+			if event == EventConnected {
+				log.Printf("connected")
+				status = true
+			} else if event == EventLostConnection {
+				log.Printf("The connection lost")
+			}
+		case <-time.After(1 * time.Second):
+			if status {
+				value := huobi.GetDepthValue("BTC_CQ")
+				log.Printf("Value:%v", value)
+				if counter > 0 {
+					counter--
+				} else {
+					return
+				}
+			}
+
+		}
+	}
+}
+
+func TestHuobiDMGetKlines(t *testing.T) {
+	huobi := Huobi{
+		InstrumentType: InstrumentTypeSwap,
+		Proxy:          "SOCKS5:127.0.0.1:1080",
+	}
+	location, _ := time.LoadLocation("Asia/Shanghai")
+	klines := huobi.GetKline("BTC_CQ", KlinePeriod1Hour, 200)
+	for _, kline := range klines {
+		log.Printf("TIme:%v %v", time.Unix(int64(kline.OpenTime), 0).In(location), kline)
 	}
 }
