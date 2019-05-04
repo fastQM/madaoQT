@@ -93,10 +93,11 @@ func FormatTime(timestamp_ms int64) string {
 
 func GetRandomHexString(length int) string {
 	characters := []byte("abcdef0123456789")
-	// rand.Seed(time.Now().UnixNano())
-	rand.New(rand.NewSource(time.Now().UnixNano()))
+	rand.Seed(time.Now().UnixNano())
+	// rand.New(rand.NewSource(time.Now().UnixNano()))
 	b := make([]byte, length)
 	for i := range b {
+		time.Sleep(1 * time.Microsecond)
 		b[i] = characters[rand.Intn(len(characters))]
 	}
 	return string(b)
