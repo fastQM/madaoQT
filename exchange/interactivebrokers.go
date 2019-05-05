@@ -1,17 +1,15 @@
 package exchange
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
+	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	Websocket "github.com/gorilla/websocket"
 	"golang.org/x/net/proxy"
@@ -21,9 +19,12 @@ const NameInteractiveBrokers = "InteractiveBrokers"
 const InteractiveBrokersURL = "https://localhost:5000/v1/portal"
 
 type InteractiveBrokers struct {
+	Proxy     string
 	websocket *Websocket.Conn
 	event     chan EventType
 	config    Config
+
+	uid string
 }
 
 func (p *InteractiveBrokers) GetExchangeName() string {
@@ -55,18 +56,20 @@ func (p *InteractiveBrokers) marketRequest(path string, params map[string]string
 		req.Form.Add(k, v)
 	}
 	bodystr := strings.TrimSpace(req.Form.Encode())
-	// logger.Debugf("Params:%v", bodystr)
+	logger.Debugf("Params:%v", bodystr)
 	request, err := http.NewRequest("GET", InteractiveBrokersURL+path+"?"+bodystr, nil)
 	if err != nil {
 		return err, nil
 	}
 
 	// setup a http client
-	httpTransport := &http.Transport{}
+	httpTransport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
 	httpClient := &http.Client{Transport: httpTransport}
 
-	if p.config.Proxy != "" {
-		values := strings.Split(p.config.Proxy, ":")
+	if p.Proxy != "" {
+		values := strings.Split(p.Proxy, ":")
 		if values[0] == "SOCKS5" {
 			dialer, err := proxy.SOCKS5("tcp", values[1]+":"+values[2], nil, proxy.Direct)
 			if err != nil {
@@ -89,7 +92,7 @@ func (p *InteractiveBrokers) marketRequest(path string, params map[string]string
 	if err != nil {
 		return err, nil
 	}
-	// log.Printf("Body:%v", string(body))
+	log.Printf("Body:%v", string(body))
 	// var value map[string]interface{}
 	// if err = json.Unmarshal(body, &value); err != nil {
 	// 	return err, nil
@@ -99,36 +102,23 @@ func (p *InteractiveBrokers) marketRequest(path string, params map[string]string
 
 }
 
-func (p *InteractiveBrokers) orderRequest(method string, path string, params map[string]string) (error, []byte) {
+func (p *InteractiveBrokers) orderRequest(path string, params map[string]interface{}) (error, []byte) {
 
-	// add the common parameters
-	params["timestamp"] = strconv.FormatInt(time.Now().Unix()*1000, 10)
-
-	var req http.Request
-
-	req.ParseForm()
-	for k, v := range params {
-		req.Form.Add(k, v)
-	}
-	bodystr := strings.TrimSpace(req.Form.Encode())
-
-	h := hmac.New(sha256.New, []byte(p.config.Secret))
-	io.WriteString(h, bodystr)
-	signature := "&signature=" + fmt.Sprintf("%x", h.Sum(nil))
-	logger.Debugf("Path:%s", InteractiveBrokersURL+path+"?"+bodystr+signature)
-
-	request, err := http.NewRequest(method, InteractiveBrokersURL+path+"?"+bodystr+signature, nil)
+	postBody, _ := json.Marshal(params)
+	request, err := http.NewRequest("POST", InteractiveBrokersURL+path, bytes.NewReader(postBody))
 	if err != nil {
 		return err, nil
 	}
-	request.Header.Add("X-MBX-APIKEY", p.config.API)
 
-	// setup a http client
-	httpTransport := &http.Transport{}
+	request.Header.Add("Content-Type", "application/json")
+
+	httpTransport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
 	httpClient := &http.Client{Transport: httpTransport}
 
-	if p.config.Proxy != "" {
-		values := strings.Split(p.config.Proxy, ":")
+	if p.Proxy != "" {
+		values := strings.Split(p.Proxy, ":")
 		if values[0] == "SOCKS5" {
 			dialer, err := proxy.SOCKS5("tcp", values[1]+":"+values[2], nil, proxy.Direct)
 			if err != nil {
@@ -176,160 +166,98 @@ func (p *InteractiveBrokers) getSymbol(pair string) string {
 	return strings.ToUpper(coins[0] + coins[1])
 }
 
-// GetDepthValue() get the depth of the assigned price area and quantity
-// GetDepthValue(pair string, price float64, limit float64, orderQuantity float64, tradeType TradeType) []DepthPrice
 func (p *InteractiveBrokers) GetDepthValue(pair string) [][]DepthPrice {
-	//ethusdt@depth20
-	symbol := p.getSymbol(pair)
-	if err, response := p.marketRequest("/api/v1/depth", map[string]string{
-		"symbol": symbol,
-		// "limit":  "100",
-	}); err != nil {
-		logger.Errorf("无效深度:%v", err)
-		return nil
-	} else {
-
-		var value map[string]interface{}
-		if err = json.Unmarshal(response, &value); err != nil {
-			logger.Errorf("解析错误:%v", err)
-			return nil
-		}
-
-		if value["code"] == nil {
-			list := make([][]DepthPrice, 2)
-
-			asks := value["asks"].([]interface{})
-			bids := value["bids"].([]interface{})
-
-			if asks != nil && len(asks) > 0 {
-				askList := make([]DepthPrice, len(asks))
-				for i, ask := range asks {
-					values := ask.([]interface{})
-					askList[i].Price, _ = strconv.ParseFloat(values[0].(string), 64)
-					askList[i].Quantity, _ = strconv.ParseFloat(values[1].(string), 64)
-				}
-
-				list[DepthTypeAsks] = askList
-			}
-
-			if bids != nil && len(bids) > 0 {
-				bidList := make([]DepthPrice, len(bids))
-				for i, bid := range bids {
-					values := bid.([]interface{})
-					bidList[i].Price, _ = strconv.ParseFloat(values[0].(string), 64)
-					bidList[i].Quantity, _ = strconv.ParseFloat(values[1].(string), 64)
-				}
-
-				list[DepthTypeBids] = bidList
-			}
-
-			return list
-		}
-	}
-
 	return nil
 }
 
 // GetBalance() get the balances of all the coins
 func (p *InteractiveBrokers) GetBalance() map[string]interface{} {
+	return p.GetPortfolio(p.uid)
+}
 
-	if err, response := p.orderRequest("GET", "/api/v3/account", map[string]string{}); err != nil {
+// Trade() trade as the configs
+func (p *InteractiveBrokers) Trade(configs TradeConfig, conType string) *TradeResult {
+
+	path := "/iserver/account/" + p.uid + "/order"
+	// ticker := time.Now().Unix()
+
+	conid, _ := strconv.ParseInt(configs.Pair, 10, 64)
+	parameters := map[string]interface{}{
+		// "acctId":    "",
+		"conid":     conid,
+		"secType":   configs.Pair + ":" + conType,
+		"cOID":      configs.Batch,
+		"orderType": "MKT",
+		// "listingExchange", "",
+		"outsideRTH": false,
+		// "price":      "",
+		"side":     OkexGetTradeTypeString(configs.Type),
+		"ticker":   "",
+		"tif":      "DAY",
+		"referrer": "QuickTrade",
+		"quantity": configs.Amount,
+	}
+
+	if err, response := p.orderRequest(path, parameters); err != nil {
 		logger.Errorf("无法获取余额:%v", err)
 		return nil
 	} else {
-		var values map[string]interface{}
+
+		var errMessage map[string]interface{}
+		if err = json.Unmarshal(response, &errMessage); err == nil { // 有错误才会被成功解析
+			logger.Errorf("订单错误:%v", errMessage["error"].(string))
+			return nil
+		}
+
+		var values []interface{}
 		if err = json.Unmarshal(response, &values); err != nil {
 			logger.Errorf("解析错误:%v", err)
 			return nil
 		}
 
-		if values["code"] == nil {
-			// log.Printf("Val:%v", values)
-			balances := make(map[string]interface{})
-			assets := values["balances"].([]interface{})
-			for _, asset := range assets {
-				key := asset.(map[string]interface{})["asset"].(string)
-				value := asset.(map[string]interface{})["free"].(string)
-				balances[key], _ = strconv.ParseFloat(value, 64)
-			}
-
-			return balances
+		return &TradeResult{
+			Error:   nil,
+			OrderID: values[0].(map[string]interface{})["id"].(string),
 		}
-
 	}
 
 	return nil
 }
 
-// Trade() trade as the configs
-func (p *InteractiveBrokers) Trade(configs TradeConfig) *TradeResult {
-	symbol := p.getSymbol(configs.Pair)
+func (p *InteractiveBrokers) TradeConfirm(replyID string, confirm bool) *OrderInfo {
 
-	if err, response := p.orderRequest("POST", "/api/v3/order", map[string]string{
-		"symbol":           symbol,
-		"side":             InteractiveBrokersTradeTypeMap[configs.Type],
-		"type":             "LIMIT",
-		"quantity":         strconv.FormatFloat(configs.Amount, 'f', 4, 64),
-		"price":            strconv.FormatFloat(configs.Price, 'f', 2, 64),
-		"timeInForce":      "IOC",
-		"newOrderRespType": "FULL",
-	}); err != nil {
-		logger.Errorf("下单失败:%v", err)
-		return &TradeResult{
-			Error: err,
-		}
+	path := "/iserver/reply/" + replyID
+	// ticker := time.Now().Unix()
+
+	parameters := map[string]interface{}{
+		"confirmed": confirm,
+	}
+
+	if err, response := p.orderRequest(path, parameters); err != nil {
+		logger.Errorf("无法获取余额:%v", err)
+		return nil
 	} else {
-		var values map[string]interface{}
+
+		var errMessage map[string]interface{}
+		if err = json.Unmarshal(response, &errMessage); err == nil { // 有错误才会被成功解析
+			logger.Errorf("订单错误:%v", errMessage["error"].(string))
+			return nil
+		}
+
+		var values []interface{}
 		if err = json.Unmarshal(response, &values); err != nil {
 			logger.Errorf("解析错误:%v", err)
-			return &TradeResult{
-				Error: err,
-			}
+			return nil
 		}
 
-		if values["code"] != nil || values["msg"] != nil {
-			return &TradeResult{
-				Error: errors.New(values["msg"].(string)),
-			}
-		}
-
-		if p.getStatusType(values["status"].(string)) != OrderStatusDone {
-			return &TradeResult{
-				Error: nil,
-				Info:  nil,
-			}
-
-		} else {
-
-			fills := values["fills"].([]interface{})
-
-			var avgPrice, totalCost float64
-
-			for _, fill := range fills {
-				price, _ := strconv.ParseFloat(fill.(map[string]interface{})["price"].(string), 64)
-				qty, _ := strconv.ParseFloat(fill.(map[string]interface{})["qty"].(string), 64)
-				totalCost += (price * qty)
-			}
-
-			executedQty, _ := strconv.ParseFloat(values["executedQty"].(string), 64)
-			avgPrice = totalCost / executedQty
-
-			info := &OrderInfo{
-				OrderID:    values["clientOrderId"].(string),
-				Pair:       symbol,
-				Price:      configs.Price,
-				Amount:     configs.Amount,
-				AvgPrice:   avgPrice,
-				DealAmount: executedQty,
-			}
-
-			return &TradeResult{
-				Error:   nil,
-				OrderID: values["clientOrderId"].(string),
-				Info:    info,
-			}
+		// logger.Infof("Result:%v", values)
+		return &OrderInfo{
+			OrderID: values[0].(map[string]interface{})["order_id"].(string),
+			Status:  p.getStatusType(values[0].(map[string]interface{})["order_status"].(string)),
 		}
 	}
+
+	return nil
 }
 
 // CancelOrder() cancel the order as the order information
@@ -339,111 +267,46 @@ func (p *InteractiveBrokers) CancelOrder(order OrderInfo) *TradeResult {
 
 // GetOrderInfo() get the information with order filter
 func (p *InteractiveBrokers) GetOrderInfo(filter OrderInfo) []OrderInfo {
-	symbol := p.getSymbol(filter.Pair)
-	if err, response := p.orderRequest("GET", "/api/v3/order", map[string]string{
-		"symbol":            symbol,
-		"origClientOrderId": filter.OrderID,
-	}); err != nil {
-		logger.Errorf("无法获取订单信息:%v", err)
-		return nil
-	} else {
-		var values map[string]interface{}
-		if err = json.Unmarshal(response, &values); err != nil {
-			logger.Errorf("解析错误:%v", err)
-			return nil
+	positions := p.GetPositionByConid(filter.Pair)
+	if positions != nil {
+		result := make([]OrderInfo, 1)
+
+		// orderType := values["type"].(string)
+		// placePrice, _ := strconv.ParseFloat(values["price"].(string), 64)
+		// amount, _ := strconv.ParseFloat(values["field-cash-amount"].(string), 64)
+		dealAmount := positions[0].(map[string]interface{})["position"].(float64)
+		avgPrice := positions[0].(map[string]interface{})["avgPrice"].(float64)
+		// status := values["state"].(string)
+
+		item := OrderInfo{
+			// Pair:       values["symbol"].(string),
+			// OrderID:    filter.OrderID,
+			// Price:      placePrice,
+			// Amount:     amount,
+			// Type:       p.GetTradeType(orderType),
+			// Status:     p.GetOrderStatus(status),
+			DealAmount: dealAmount,
+			AvgPrice:   avgPrice,
 		}
 
-		if values["code"] != nil || values["msg"] != nil {
-			logger.Errorf("命令错误:%v", values["msg"])
-			return nil
-		}
-
-		info := make([]OrderInfo, 1)
-		info[0].Amount, _ = strconv.ParseFloat(values["origQty"].(string), 64)
-		info[0].Pair = symbol
-		info[0].DealAmount, _ = strconv.ParseFloat(values["executedQty"].(string), 64)
-		info[0].Status = p.getStatusType(values["status"].(string))
-		info[0].OrderID = filter.OrderID
-		info[0].AvgPrice, _ = strconv.ParseFloat(values["stopPrice"].(string), 64)
-
-		return info
-
+		result[0] = item
+		return result
 	}
+	return nil
 }
 
 func (p *InteractiveBrokers) GetKline(pair string, period int, limit int) []KlineValue {
-	coins := ParsePair(pair)
-	symbol := strings.ToUpper(coins[0] + coins[1])
-
-	var interval string
-	// if period == KlinePeriod5Min {
-	// 	interval = "5m"
-	// } else if period == KlinePeriod15Min {
-	// 	interval = "15m"
-	// } else if period == KlinePeriod1Day {
-	// 	interval = "1d"
-	// }
-	switch period {
-	case KlinePeriod5Min:
-		interval = "5m"
-	case KlinePeriod15Min:
-		interval = "15m"
-	case KlinePeriod1Hour:
-		interval = "1h"
-	case KlinePeriod2Hour:
-		interval = "2h"
-	case KlinePeriod4Hour:
-		interval = "4h"
-	case KlinePeriod6Hour:
-		interval = "6h"
-	case KlinePeriod1Day:
-		interval = "1d"
-	}
-
-	if err, response := p.marketRequest("/api/v1/klines", map[string]string{
-		"symbol":   symbol,
-		"interval": interval,
-		"limit":    strconv.Itoa(limit),
-	}); err != nil {
-		logger.Errorf("无效数据:%v", err)
-		return nil
-	} else {
-		var values [][]interface{}
-		if response != nil {
-			if err = json.Unmarshal(response, &values); err != nil {
-				logger.Errorf("Fail to Unmarshal:%v", err)
-				return nil
-			}
-
-			kline := make([]KlineValue, len(values))
-			for i, value := range values {
-				// kline[i].OpenTime = time.Unix((int64)(value[0].(float64)/1000), 0).Format(Global.TimeFormat)
-				kline[i].OpenTime = value[0].(float64) / 1000
-				kline[i].Open, _ = strconv.ParseFloat(value[1].(string), 64)
-				kline[i].High, _ = strconv.ParseFloat(value[2].(string), 64)
-				kline[i].Low, _ = strconv.ParseFloat(value[3].(string), 64)
-				kline[i].Close, _ = strconv.ParseFloat(value[4].(string), 64)
-				kline[i].Volumn, _ = strconv.ParseFloat(value[5].(string), 64)
-				// kline[i].CloseTime = time.Unix((int64)(value[6].(float64)/1000), 0).Format(Global.TimeFormat)
-				kline[i].CloseTime = value[6].(float64) / 1000
-
-			}
-
-			return kline
-		}
-
-		return nil
-	}
+	return nil
 }
 
 var InteractiveBrokersOrderStatusMap = map[OrderStatusType]string{
-	OrderStatusOpen:      "NEW",
-	OrderStatusPartDone:  "PARTIALLY_FILLED",
-	OrderStatusDone:      "FILLED",
-	OrderStatusCanceling: "PENDING_CANCEL",
-	OrderStatusCanceled:  "CANCELED",
-	OrderStatusRejected:  "REJECTED",
-	OrderStatusExpired:   "EXPIRED",
+	OrderStatusOpen: "Submitted",
+	// OrderStatusPartDone:  "PARTIALLY_FILLED",
+	OrderStatusDone:      "Filled",
+	OrderStatusCanceling: "PendingCancel",
+	OrderStatusCanceled:  "Cancelled",
+	// OrderStatusRejected:  "REJECTED",
+	// OrderStatusExpired:   "EXPIRED",
 }
 
 func (p *InteractiveBrokers) getStatusType(key string) OrderStatusType {
@@ -458,4 +321,238 @@ func (p *InteractiveBrokers) getStatusType(key string) OrderStatusType {
 var InteractiveBrokersTradeTypeMap = map[TradeType]string{
 	TradeTypeBuy:  "BUY",
 	TradeTypeSell: "SELL",
+}
+
+func (p *InteractiveBrokers) GetAccountUID() (error, string) {
+	if err, response := p.marketRequest("/iserver/accounts", map[string]string{}); err != nil {
+		logger.Errorf("Invalid request:%v", err)
+		return err, ""
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse:%v", err)
+			return err, ""
+		}
+
+		if values["accounts"] != nil {
+			accounts := values["accounts"].([]interface{})
+			if len(accounts) > 0 {
+				p.uid = accounts[0].(string)
+				return nil, accounts[0].(string)
+			}
+
+		}
+
+		return errors.New("Invalid account"), ""
+
+	}
+}
+
+func (p *InteractiveBrokers) GetPortfolio(uid string) map[string]interface{} {
+	if err, response := p.marketRequest("/portfolio/"+uid+"/ledger", map[string]string{}); err != nil {
+		logger.Errorf("Invalid request:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse:%v", err)
+			return nil
+		}
+
+		return values
+	}
+}
+
+func (p *InteractiveBrokers) GetAccountInformation(uid string) map[string]interface{} {
+	if err, response := p.marketRequest("/portfolio/"+uid+"/meta", map[string]string{}); err != nil {
+		logger.Errorf("Invalid request:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse:%v", err)
+			return nil
+		}
+
+		return values
+	}
+}
+
+func (p *InteractiveBrokers) GetAccountSummary(uid string) map[string]interface{} {
+	if err, response := p.marketRequest("/portfolio/"+uid+"/summary", map[string]string{}); err != nil {
+		logger.Errorf("Invalid request:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse:%v", err)
+			return nil
+		}
+
+		return values
+	}
+}
+
+func (p *InteractiveBrokers) GetAccountLedger(uid string) map[string]interface{} {
+	if err, response := p.marketRequest("/portfolio/"+uid+"/ledger", map[string]string{}); err != nil {
+		logger.Errorf("Invalid request:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse:%v", err)
+			return nil
+		}
+
+		return values
+	}
+}
+
+func (p *InteractiveBrokers) GetMarketData(conids []string) []interface{} {
+
+	var list string
+	for _, conid := range conids {
+		if list == "" {
+			list = conid
+		} else {
+			list += ("," + conid)
+		}
+	}
+
+	if err, response := p.marketRequest("/iserver/marketdata/snapshot", map[string]string{
+		"conids": list,
+	}); err != nil {
+		logger.Errorf("Invalid request:%v", err)
+		return nil
+	} else {
+		var values []interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse:%v", err)
+			return nil
+		}
+
+		return values
+	}
+}
+
+func (p *InteractiveBrokers) GetLiveOrders() map[string]interface{} {
+	if err, response := p.marketRequest("/iserver/account/orders", map[string]string{}); err != nil {
+		logger.Errorf("Invalid request:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse:%v", err)
+			return nil
+		}
+
+		return values
+	}
+}
+
+func (p *InteractiveBrokers) SearchBySymbol(symbol string) []interface{} {
+	if err, response := p.marketRequest("/iserver/secdef/search", map[string]string{
+		"symbol": symbol,
+	}); err != nil {
+		logger.Errorf("Invalid request:%v", err)
+		return nil
+	} else {
+		var values []interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse:%v", err)
+			return nil
+		}
+
+		return values
+	}
+}
+
+func (p *InteractiveBrokers) GetPositionByConid(conid string) []interface{} {
+	if err, response := p.marketRequest("/portfolio/"+p.uid+"/position/"+conid, map[string]string{}); err != nil {
+		logger.Errorf("Invalid request:%v", err)
+		return nil
+	} else {
+		var values []interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse:%v", err)
+			return nil
+		}
+
+		return values
+	}
+}
+
+func (p *InteractiveBrokers) GetAllPositions() []interface{} {
+	if err, response := p.marketRequest("/portfolio/"+p.uid+"/positions/0", map[string]string{}); err != nil {
+		logger.Errorf("Invalid request:%v", err)
+		return nil
+	} else {
+		var values []interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse:%v", err)
+			return nil
+		}
+
+		return values
+	}
+}
+
+func (p *InteractiveBrokers) Validate() map[string]interface{} {
+	if err, response := p.marketRequest("/sso/validate", map[string]string{}); err != nil {
+		logger.Errorf("Invalid request:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse:%v", err)
+			return nil
+		}
+
+		return values
+	}
+}
+
+func (p *InteractiveBrokers) OneUser() map[string]interface{} {
+	if err, response := p.marketRequest("/one/user", map[string]string{}); err != nil {
+		logger.Errorf("Invalid request:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse:%v", err)
+			return nil
+		}
+
+		return values
+	}
+}
+
+func (p *InteractiveBrokers) PortfolioAccounts() []interface{} {
+	if err, response := p.marketRequest("/portfolio/accounts", map[string]string{}); err != nil {
+		logger.Errorf("Invalid request:%v", err)
+		return nil
+	} else {
+		var values []interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse:%v", err)
+			return nil
+		}
+
+		return values
+	}
+}
+
+func (p *InteractiveBrokers) GetStatus() map[string]interface{} {
+	if err, response := p.marketRequest("/iserver/auth/status", map[string]string{}); err != nil {
+		logger.Errorf("Invalid request:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse:%v", err)
+			return nil
+		}
+
+		return values
+	}
 }
