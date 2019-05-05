@@ -64,7 +64,11 @@ func (p *Binance) marketRequest(path string, params map[string]string) (error, [
 
 	// setup a http client
 	httpTransport := &http.Transport{}
-	httpClient := &http.Client{Transport: httpTransport}
+
+	httpClient := &http.Client{
+		Transport: httpTransport,
+		Timeout:   10 * time.Second,
+	}
 
 	if p.config.Proxy != "" {
 		values := strings.Split(p.config.Proxy, ":")
@@ -95,6 +99,9 @@ func (p *Binance) marketRequest(path string, params map[string]string) (error, [
 	// if err = json.Unmarshal(body, &value); err != nil {
 	// 	return err, nil
 	// }
+	if resp.StatusCode != 200 {
+		logger.Infof("Header:%v", resp.StatusCode)
+	}
 
 	return nil, body
 
