@@ -174,9 +174,18 @@ func (p *OkexRestAPI) GetPosition(pair string, contract_type string) map[string]
 			}
 		}
 
-		if !values["result"].(bool) || values["holding"] == nil || len(values["holding"].([]interface{})) == 0 {
+		if !values["result"].(bool) || values["holding"] == nil {
 			logger.Error("Fail to get position")
 			return nil
+		}
+
+		if len(values["holding"].([]interface{})) == 0 {
+			return map[string]float64{
+				"long":     0,
+				"short":    0,
+				"buy_avg":  0,
+				"sell_avg": 0,
+			}
 		}
 
 		return map[string]float64{
