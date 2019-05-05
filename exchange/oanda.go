@@ -470,8 +470,8 @@ func (p *OandaAPI) closeTrade(configs TradeConfig) *TradeResult {
 
 		if values["orderFillTransaction"] != nil {
 			result := values["orderFillTransaction"].(map[string]interface{})
-			price, _ := strconv.ParseFloat(result["units"].(string), 64)
-			amount, _ := strconv.ParseFloat(result["price"].(string), 64)
+			amount, _ := strconv.ParseFloat(result["units"].(string), 64)
+			price, _ := strconv.ParseFloat(result["price"].(string), 64)
 			info := &OrderInfo{
 				Pair:       result["instrument"].(string),
 				OrderID:    result["orderID"].(string),
@@ -623,6 +623,8 @@ func (p *OandaAPI) GetKline(pair string, period int, limit int, year int, direct
 		interval = "H6"
 	case KlinePeriod1Day:
 		interval = "D"
+	case KlinePeriod1Week:
+		interval = "W"
 	}
 
 	// The Price component(s) to get candlestick data for.
