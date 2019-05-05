@@ -13,6 +13,7 @@ const TencentPrefix = "http://data.gtimg.cn/flashdata/hushen/daily/"
 const TencentLatestPrefix = "http://qt.gtimg.cn/q="
 const TencentURL = "http://data.gtimg.cn/flashdata/hushen/daily/[year]/[stock].js"
 const TencentHongkongPrefix = "http://data.gtimg.cn/flashdata/hk/daily/"
+const TencentUSPrefix = "http://web.ifzq.gtimg.cn/appstock/app/usfqkline/get?_var=kline_dayqfq&param=usAAPL.OQ,day,,,5320,qfq&r=0.8056583750635791"
 
 type TencentStock struct {
 }
