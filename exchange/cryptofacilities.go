@@ -393,7 +393,7 @@ func (p *CryptoFacilities) CancelOrder(order OrderInfo) *TradeResult {
 
 // GetOrderInfo() get the information with order filter
 func (p *CryptoFacilities) GetOrderInfo(filter OrderInfo) []OrderInfo {
-	if err, response := p.orderRequest("GET", "/api/v3/openorders", map[string]string{}); err != nil {
+	if err, response := p.orderRequest("GET", "/api/v3/fills", map[string]string{}); err != nil {
 		logger.Errorf("Fail to get open Orders:%v", err)
 		return nil
 	} else {
@@ -408,13 +408,32 @@ func (p *CryptoFacilities) GetOrderInfo(filter OrderInfo) []OrderInfo {
 			return nil
 		}
 
-		orders := values["openOrders"].([]interface{})
+		orders := values["fills"].([]interface{})
+		var info []OrderInfo
+
 		if orders != nil {
-			infos := make([]OrderInfo, len(orders))
-			for i, order := range orders {
+			// infos := make([]OrderInfo, len(orders))
+			for _, order := range orders {
 				// infos[i].Status = order.(map[string]string)["status"]
-				infos[i].OrderID = order.(map[string]string)["order_id"]
+				values := order.(map[string]interface{})
+
+				if values["order_id"].(string) == filter.OrderID {
+
+					if info == nil {
+						info = make([]OrderInfo, 1)
+						info[0].Amount = filter.Amount
+						info[0].Pair = filter.Pair
+						info[0].DealAmount = values["size"].(float64)
+						info[0].Status = OrderStatusDone
+						info[0].OrderID = filter.OrderID
+						info[0].AvgPrice = values["price"].(float64)
+					} else {
+						info[0].DealAmount += values["size"].(float64)
+					}
+				}
 			}
+
+			return info
 		}
 
 		return nil
@@ -507,7 +526,7 @@ func (p *CryptoFacilities) GetInstruments() []interface{} {
 	}
 }
 
-func (p *CryptoFacilities) GetPositions(pair string) []map[string]interface{} {
+func (p *CryptoFacilities) GetPositions(pair string) map[string]interface{} {
 	symbol := p.getSymbol(pair)
 	if err, response := p.orderRequest("GET", "/api/v3/openpositions", map[string]string{}); err != nil {
 		logger.Errorf("Fail to get instruments info:%v", err)
@@ -520,12 +539,11 @@ func (p *CryptoFacilities) GetPositions(pair string) []map[string]interface{} {
 		}
 
 		if values["result"].(string) != "success" {
-			logger.Errorf("Fail to get the result:%v", values["error"].(string))
+			// logger.Errorf("Fail to get the result:%v", values["errors"])
 			return nil
 		}
 
 		positions := values["openPositions"].([]interface{})
-		var results []map[string]interface{}
 		log.Printf("Position:%v", positions)
 
 		if len(positions) == 0 {
@@ -534,19 +552,18 @@ func (p *CryptoFacilities) GetPositions(pair string) []map[string]interface{} {
 				"size":   0.0,
 				"price":  0.0,
 			}
-			results = append(results, value)
-			return results
+			return value
 		}
 
 		for _, position := range positions {
 			value := position.(map[string]interface{})
 			if value["symbol"].(string) == symbol {
 				value["symbol"] = pair
-				results = append(results, value)
+				return value
 			}
 		}
 
-		return results
+		return nil
 
 	}
 }
