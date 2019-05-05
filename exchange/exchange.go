@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"log"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -272,7 +273,7 @@ const KlinePeriod4Hour = 240
 const KlinePeriod6Hour = 6 * 60
 const KlinePeriod12Hour = 12 * 60
 const KlinePeriod1Day = 1 * 24 * 60
-const KlinePeriodWeek = 0
+const KlinePeriod1Week = 30 * 24 * 60
 
 // RevertTradeType the "close" operation of the original trading
 func RevertTradeType(tradeType TradeType) TradeType {
@@ -655,4 +656,33 @@ func CTPDailyKlinesSplitToYears(klines []KlineValue) [][]KlineValue {
 
 	return KlinesByYear
 
+}
+
+func KlinesFilter(klines []KlineValue, amp float64, showMax bool) []KlineValue {
+	var last KlineValue
+	var newKlines []KlineValue
+	location, _ := time.LoadLocation("Asia/Shanghai")
+	var max float64
+	for _, kline := range klines {
+
+		if last.Close != 0 {
+			if showMax {
+				value := math.Abs((kline.Close - last.Close) * 100.0 / last.Close)
+				if max < value {
+					max = value
+					log.Printf("Values:%v(%s)", value, time.Unix(int64(kline.OpenTime), 0).In(location))
+				}
+			}
+
+			if math.Abs((kline.Close-last.Close)*100.0/last.Close) > amp {
+				log.Printf("Ignore Time:%v High:%v Low:%v Close:%v for impossible change", time.Unix(int64(kline.OpenTime), 0).In(location), kline.High, kline.Low, kline.Close)
+				continue
+			}
+		}
+
+		last = kline
+		newKlines = append(newKlines, kline)
+	}
+
+	return newKlines
 }
