@@ -609,7 +609,7 @@ func (o *OKExAPI) GetDepthValue(coin string) [][]DepthPrice {
 					for i, ask := range asks {
 						values := ask.([]interface{})
 						askList[i].Price = values[UsdPriceIndex].(float64)
-						askList[i].Quantity = values[CoinQuantity].(float64)
+						askList[i].Quantity = values[ContractQuantity].(float64)
 					}
 
 					list[DepthTypeAsks] = revertDepthArray(askList)
@@ -620,7 +620,7 @@ func (o *OKExAPI) GetDepthValue(coin string) [][]DepthPrice {
 					for i, bid := range bids {
 						values := bid.([]interface{})
 						bidList[i].Price = values[UsdPriceIndex].(float64)
-						bidList[i].Quantity = values[CoinQuantity].(float64)
+						bidList[i].Quantity = values[ContractQuantity].(float64)
 					}
 
 					list[DepthTypeBids] = bidList
