@@ -12,6 +12,7 @@ import (
 	"hash/crc32"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -375,6 +376,12 @@ func (o *OKEXV3API) Start2(errChan chan EventType) error {
 								var input string
 								askList := newList[DepthTypeAsks]
 								bidList := newList[DepthTypeBids]
+
+								if len(bidList) < 25 || len(askList) < 25 {
+									log.Printf("Invalid length of asklist/bidlist")
+									continue
+								}
+
 								for i := 0; i < 25; i++ {
 									if i != 24 {
 										input += fmt.Sprintf("%v:%v:%v:%v:", bidList[i].Price, bidList[i].Quantity, askList[i].Price, askList[i].Quantity)
