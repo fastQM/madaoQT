@@ -46,6 +46,8 @@ type Huobi struct {
 	klines map[string][]KlineValue
 
 	depthValues map[string]*sync.Map
+
+	invalidTimestampCounter int
 }
 
 func (p *Huobi) GetExchangeName() string {
@@ -81,6 +83,8 @@ func (p *Huobi) Start2(errChan chan EventType) error {
 	p.klines = make(map[string][]KlineValue)
 	// force to restart the command
 	p.depthValues = make(map[string]*sync.Map)
+	p.event = errChan
+	p.invalidTimestampCounter = 0
 
 	dialer := Websocket.DefaultDialer
 
@@ -146,7 +150,7 @@ func (p *Huobi) Start2(errChan chan EventType) error {
 			// to log the trade command
 			if Debug {
 				filters := []string{
-					// "depth",
+					"depth",
 					"ticker",
 					"pong",
 					"userinfo",
@@ -199,7 +203,7 @@ func (p *Huobi) Start2(errChan chan EventType) error {
 				channel := response["ch"].(string)
 				timestamp := response["ts"].(float64)
 				data := response["tick"].(map[string]interface{})
-				if p.depthValues[channel] != nil {
+				if p.depthValues[channel] != nil && data["asks"] != nil && data["bids"] != nil {
 					asks := data["asks"].([]interface{})
 					bids := data["bids"].([]interface{})
 
@@ -230,6 +234,8 @@ func (p *Huobi) Start2(errChan chan EventType) error {
 
 					p.depthValues[channel].Store("data", list)
 					p.depthValues[channel].Store(HuobiTimestamp, timestamp)
+				} else {
+					logger.Error("Invalid depth values")
 				}
 			}
 		}
@@ -243,6 +249,18 @@ func (p *Huobi) Start2(errChan chan EventType) error {
 }
 
 func (p *Huobi) orderRequest(method string, path string, params map[string]string) (error, map[string]interface{}) {
+
+	var root, address string
+
+	// logger.Debugf("Params:%v", params)
+
+	if p.InstrumentType == InstrumentTypeSpot {
+		root = HuobiTradeUrl
+		address = "api.huobi.pro"
+	} else if p.InstrumentType == InstrumentTypeSwap {
+		root = HuobiDM
+		address = "api.hbdm.com"
+	}
 
 	var postBody []byte
 	if method == "POST" {
@@ -275,7 +293,7 @@ func (p *Huobi) orderRequest(method string, path string, params map[string]strin
 	}
 	bodystr := strings.TrimSpace(req.Form.Encode())
 
-	plain := method + "\napi.huobi.pro\n" + path + "\n" + bodystr
+	plain := method + "\n" + address + "\n" + path + "\n" + bodystr
 
 	h := hmac.New(sha256.New, []byte(p.SecretKey))
 	io.WriteString(h, plain)
@@ -291,14 +309,14 @@ func (p *Huobi) orderRequest(method string, path string, params map[string]strin
 	var err error
 
 	if method == "GET" {
-		request, err = http.NewRequest(method, HuobiTradeUrl+path+"?"+bodystr, nil)
+		request, err = http.NewRequest(method, root+path+"?"+bodystr, nil)
 		if err != nil {
 			return err, nil
 		}
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36")
 	} else {
-		request, err = http.NewRequest(method, HuobiTradeUrl+path+"?"+bodystr, bytes.NewReader(postBody))
+		request, err = http.NewRequest(method, root+path+"?"+bodystr, bytes.NewReader(postBody))
 		if err != nil {
 			return err, nil
 		}
@@ -413,7 +431,7 @@ func (p *Huobi) marketRequest(path string, params map[string]string) (error, map
 		return err, nil
 	}
 
-	logger.Infof("response:%v", string(body))
+	// logger.Infof("response:%v", string(body))
 
 	var value map[string]interface{}
 	if err = json.Unmarshal(body, &value); err != nil {
@@ -481,6 +499,15 @@ func (p *Huobi) GetDepthValue(pair string) [][]DepthPrice {
 			// logger.Infof("Now:%v Update:%v", now.String(), updateTime.In(location).String())
 			if updateTime.Add(10 * time.Second).Before(now) {
 				logger.Error("Invalid timestamp")
+				// about 5min
+				if p.invalidTimestampCounter < 1500 {
+					p.invalidTimestampCounter++
+				} else {
+					p.invalidTimestampCounter = 0
+					// p.event <- EventLostConnection
+					logger.Info("RESET connection")
+					p.conn.Close()
+				}
 				return nil
 			}
 		}
@@ -512,7 +539,7 @@ func (p *Huobi) command(data map[string]interface{}) error {
 	if Debug {
 
 		filters := []string{
-			"ping",
+		// "ping",
 		}
 
 		found := false
@@ -537,39 +564,88 @@ func (p *Huobi) command(data map[string]interface{}) error {
 // GetBalance() get the balances of all the coins
 func (p *Huobi) GetBalance() map[string]interface{} {
 	var path string
+	var method string
 	if p.InstrumentType == InstrumentTypeSpot {
 		path = "/v1/account/accounts/" + HuobiUID + "/balance"
 		// path = "/v1/account/accounts"
-	}
+		method = "GET"
 
-	if err, response := p.orderRequest("GET", path, map[string]string{}); err != nil {
-		logger.Errorf("无法获取余额:%v", err)
-		return nil
-	} else {
-		balance := make(map[string]interface{})
+		if err, response := p.orderRequest(method, path, map[string]string{}); err != nil {
+			logger.Errorf("无法获取余额:%v", err)
+			return nil
+		} else {
+			balance := make(map[string]interface{})
 
-		if response["status"] != nil {
-			if response["status"].(string) == "ok" {
-				data := response["data"].(map[string]interface{})
-				list := data["list"].([]interface{})
-				for _, item := range list {
-					values := item.(map[string]interface{})
-					if values["type"].(string) == "trade" {
+			if response["status"] != nil {
+				if response["status"].(string) == "ok" {
+					list := response["data"].(map[string]interface{})["list"].([]interface{})
+					for _, item := range list {
+						values := item.(map[string]interface{})
+
+						if values["type"].(string) == "frozen" {
+							continue
+						}
+
 						key := values["currency"].(string)
 						balance[key], _ = strconv.ParseFloat(values["balance"].(string), 64)
+
 					}
+
+					return balance
+				} else {
+					logger.Errorf("Fail to get balance:%v", response["err-msg"].(string))
 				}
 
-				return balance
-			} else {
-				logger.Errorf("Fail to get balance:%v", response["err-msg"].(string))
 			}
 
 		}
+	} else if p.InstrumentType == InstrumentTypeSwap {
+		path = "/api/v1/contract_account_info"
+		method = "POST"
 
+		if err, response := p.orderRequest(method, path, map[string]string{}); err != nil {
+			logger.Errorf("无法获取余额:%v", err)
+			return nil
+		} else {
+			balance := make(map[string]interface{})
+
+			if response["status"] != nil {
+				if response["status"].(string) == "ok" {
+					list := response["data"].([]interface{})
+					for _, item := range list {
+						values := item.(map[string]interface{})
+
+						key := values["symbol"].(string)
+						balance[key] = values["margin_available"].(float64)
+
+					}
+
+					return balance
+				} else {
+					logger.Errorf("Fail to get balance:%v", response["err_msg"].(string))
+				}
+
+			}
+
+		}
 	}
 
 	return nil
+}
+
+func (p *Huobi) getTradeType(tradeType TradeType) (string, string) {
+	switch tradeType {
+	case TradeTypeOpenLong:
+		return "open", "buy"
+	case TradeTypeOpenShort:
+		return "open", "sell"
+	case TradeTypeCloseLong:
+		return "close", "sell"
+	case TradeTypeCloseShort:
+		return "close", "buy"
+	}
+
+	return "", ""
 }
 
 // Trade() trade as the configs
@@ -606,29 +682,37 @@ func (p *Huobi) Trade(configs TradeConfig) *TradeResult {
 		}
 	} else if p.InstrumentType == InstrumentTypeSwap {
 
-		path = "api/v1/contract_order"
+		path = "/api/v1/contract_order"
 
 		coins := ParsePair(configs.Pair)
 		instrument := strings.ToUpper(coins[0])
 
+		offset, direction := p.getTradeType(configs.Type)
+
 		if err, response := p.orderRequest("POST", path, map[string]string{
-			"account-id": HuobiUID,
-			"amount":     strconv.FormatFloat(configs.Amount, 'f', 2, 64),
-			"symbol":     instrument,
-			"type":       OkexGetTradeTypeString(configs.Type) + "-market",
+			"symbol":           instrument,
+			"contract_type":    "quarter",
+			"price":            strconv.FormatFloat(configs.Price, 'f', 2, 64),
+			"direction":        direction,
+			"offset":           offset,
+			"volume":           strconv.FormatInt(int64(configs.Amount), 10),
+			"lever_rate":       "10",
+			"order_price_type": "limit",
 		}); err != nil {
 			logger.Errorf("Fail to trade:%v", err)
 			return nil
 		} else {
 			if response["status"] != nil {
 				if response["status"].(string) == "ok" {
+					orderID := response["data"].(map[string]interface{})["order_id"].(float64)
+					strOrderID := strconv.FormatInt(int64(orderID), 10)
 					return &TradeResult{
 						Error:   nil,
-						OrderID: response["data"].(string),
+						OrderID: strOrderID,
 					}
 				} else {
 					return &TradeResult{
-						Error: errors.New(response["err-msg"].(string)),
+						Error: errors.New(response["err_msg"].(string)),
 					}
 				}
 			}
@@ -640,7 +724,51 @@ func (p *Huobi) Trade(configs TradeConfig) *TradeResult {
 
 // CancelOrder() cancel the order as the order information
 func (p *Huobi) CancelOrder(order OrderInfo) *TradeResult {
-	return nil
+	if p.InstrumentType == InstrumentTypeSwap {
+
+		path := "/api/v1/contract_cancel"
+
+		coins := ParsePair(order.Pair)
+		instrument := strings.ToUpper(coins[0])
+
+		if err, response := p.orderRequest("POST", path, map[string]string{
+			"symbol":   instrument,
+			"order_id": order.OrderID,
+		}); err != nil {
+			logger.Errorf("Fail to cancel:%v", err)
+			return nil
+		} else {
+			if response["status"] != nil {
+				if response["status"].(string) == "ok" {
+
+					values := response["data"].(map[string]interface{})
+					orderID := values["successes"].(string)
+
+					if orderID == order.OrderID {
+						return &TradeResult{
+							Error:   nil,
+							OrderID: order.OrderID,
+						}
+					} else {
+						err := values["errors"].([]interface{})[0].(map[string]interface{})
+						return &TradeResult{
+							Error: errors.New(err["err_msg"].(string)),
+						}
+					}
+
+				} else {
+					logger.Errorf("Fail to get order info:%v", response["err_msg"].(string))
+					return &TradeResult{
+						Error: errors.New(response["err_msg"].(string)),
+					}
+				}
+			}
+		}
+	}
+
+	return &TradeResult{
+		Error: errors.New("Unknown reason"),
+	}
 }
 
 // GetOrderInfo() get the information with order filter
@@ -648,41 +776,101 @@ func (p *Huobi) GetOrderInfo(filter OrderInfo) []OrderInfo {
 	var path string
 	if p.InstrumentType == InstrumentTypeSpot {
 		path = "/v1/order/orders/" + filter.OrderID
-	}
 
-	if err, response := p.orderRequest("GET", path, map[string]string{}); err != nil {
-		logger.Errorf("Fail to trade:%v", err)
-		return nil
-	} else {
-		if response["status"] != nil {
-			if response["status"].(string) == "ok" {
+		if err, response := p.orderRequest("GET", path, map[string]string{}); err != nil {
+			logger.Errorf("Fail to trade:%v", err)
+			return nil
+		} else {
+			if response["status"] != nil {
+				if response["status"].(string) == "ok" {
 
-				values := response["data"].(map[string]interface{})
-				result := make([]OrderInfo, 1)
+					values := response["data"].(map[string]interface{})
+					result := make([]OrderInfo, 1)
 
-				orderType := values["type"].(string)
-				placePrice, _ := strconv.ParseFloat(values["price"].(string), 64)
-				amount, _ := strconv.ParseFloat(values["field-cash-amount"].(string), 64)
-				dealAmount, _ := strconv.ParseFloat(values["field-amount"].(string), 64)
-				avgPrice := amount / dealAmount
-				status := values["state"].(string)
+					orderType := values["type"].(string)
+					placePrice, _ := strconv.ParseFloat(values["price"].(string), 64)
+					amount, _ := strconv.ParseFloat(values["field-cash-amount"].(string), 64)
+					dealAmount, _ := strconv.ParseFloat(values["field-amount"].(string), 64)
+					avgPrice := amount / dealAmount
+					status := values["state"].(string)
 
-				item := OrderInfo{
-					Pair:       values["symbol"].(string),
-					OrderID:    filter.OrderID,
-					Price:      placePrice,
-					Amount:     amount,
-					Type:       p.GetTradeType(orderType),
-					Status:     p.GetOrderStatus(status),
-					DealAmount: dealAmount,
-					AvgPrice:   avgPrice,
+					item := OrderInfo{
+						Pair:       values["symbol"].(string),
+						OrderID:    filter.OrderID,
+						Price:      placePrice,
+						Amount:     amount,
+						Type:       p.GetTradeType(orderType),
+						Status:     p.GetOrderStatus(status),
+						DealAmount: dealAmount,
+						AvgPrice:   avgPrice,
+					}
+
+					result[0] = item
+
+					return result
+				} else {
+					logger.Errorf("Fail to get order info:%v", response["err-msg"].(string))
 				}
+			}
+		}
+	} else if p.InstrumentType == InstrumentTypeSwap {
 
-				result[0] = item
+		path = "/api/v1/contract_order_info"
 
-				return result
-			} else {
-				logger.Errorf("Fail to get order info:%v", response["err-msg"].(string))
+		coins := ParsePair(filter.Pair)
+		instrument := strings.ToUpper(coins[0])
+
+		if err, response := p.orderRequest("POST", path, map[string]string{
+			"symbol":   instrument,
+			"order_id": filter.OrderID,
+		}); err != nil {
+			logger.Errorf("Fail to trade:%v", err)
+			return nil
+		} else {
+			if response["status"] != nil {
+				if response["status"].(string) == "ok" {
+
+					values := response["data"].([]interface{})[0].(map[string]interface{})
+					result := make([]OrderInfo, 1)
+
+					status := p.GetDMOrderStatus(int(values["status"].(float64)))
+					if status == OrderStatusDone {
+						direction := values["direction"].(string)
+						offset := values["offset"].(string)
+						placePrice := values["price"].(float64)
+						amount := values["volume"].(float64)
+						dealAmount := values["trade_volume"].(float64)
+						avgPrice := values["trade_avg_price"].(float64)
+
+						item := OrderInfo{
+							Pair:       values["symbol"].(string),
+							OrderID:    filter.OrderID,
+							Price:      placePrice,
+							Amount:     amount,
+							Type:       p.GetDMTradeType(direction, offset),
+							Status:     status,
+							DealAmount: dealAmount,
+							AvgPrice:   avgPrice,
+						}
+
+						result[0] = item
+
+						return result
+					} else {
+						item := OrderInfo{
+							Pair:    values["symbol"].(string),
+							OrderID: filter.OrderID,
+							Status:  status,
+						}
+
+						result[0] = item
+
+						return result
+					}
+
+				} else {
+					logger.Errorf("Fail to get order info:%v", response["err-msg"].(string))
+				}
 			}
 		}
 	}
@@ -739,7 +927,10 @@ func (p *Huobi) GetKline(pair string, period int, limit int) []KlineValue {
 					klines[i].Volumn = value["amount"].(float64)
 				}
 
-				klines = RevertArray(klines)
+				if p.InstrumentType == InstrumentTypeSpot {
+					klines = RevertArray(klines)
+				}
+
 				return klines
 			} else {
 				logger.Errorf("Fail to get balance:%v", response["err-msg"].(string))
@@ -758,7 +949,24 @@ func (p *Huobi) GetTradeType(tradeType string) TradeType {
 	} else {
 		return TradeTypeSell
 	}
+}
 
+func (p *Huobi) GetDMTradeType(direction string, offset string) TradeType {
+	if direction == "buy" {
+		if offset == "open" {
+			return TradeTypeOpenLong
+		} else {
+			return TradeTypeCloseShort
+		}
+	} else if direction == "sell" {
+		if offset == "open" {
+			return TradeTypeOpenShort
+		} else {
+			return TradeTypeCloseLong
+		}
+	}
+
+	return TradeTypeUnknown
 }
 
 func (p *Huobi) GetOrderStatus(status string) OrderStatusType {
@@ -776,5 +984,23 @@ func (p *Huobi) GetOrderStatus(status string) OrderStatusType {
 	default:
 		return OrderStatusUnknown
 	}
+}
 
+func (p *Huobi) GetDMOrderStatus(status int) OrderStatusType {
+	switch status {
+	case 1:
+		return OrderStatusOpen
+	case 2:
+		return OrderStatusOpen
+	case 3:
+		return OrderStatusOpen
+	case 4:
+		return OrderStatusPartDone
+	case 6:
+		return OrderStatusDone
+	case 7:
+		return OrderStatusCanceled
+	default:
+		return OrderStatusUnknown
+	}
 }
