@@ -206,7 +206,7 @@ func (p *CryptoFacilities) GetTicker(pair string) *TickerValue {
 	return nil
 }
 
-func (p *CryptoFacilities) getSymbol(pair string) string {
+func (p *CryptoFacilities) GetSymbol(pair string) string {
 	pair = strings.Replace(pair, "usdt", "usd", 1)
 	coins := ParsePair(pair)
 	return "pi_" + strings.ToLower(coins[0]+coins[1])
@@ -216,7 +216,7 @@ func (p *CryptoFacilities) getSymbol(pair string) string {
 // GetDepthValue(pair string, price float64, limit float64, orderQuantity float64, tradeType TradeType) []DepthPrice
 func (p *CryptoFacilities) GetDepthValue(pair string) [][]DepthPrice {
 	//ethusdt@depth20
-	symbol := p.getSymbol(pair)
+	symbol := p.GetSymbol(pair)
 	if err, response := p.marketRequest("/api/v3/orderbook", map[string]string{
 		"symbol": symbol,
 		// "limit":  "100",
@@ -309,7 +309,7 @@ func (p *CryptoFacilities) GetBalance() map[string]interface{} {
 
 // Trade() trade as the configs
 func (p *CryptoFacilities) Trade(configs TradeConfig) *TradeResult {
-	symbol := p.getSymbol(configs.Pair)
+	symbol := p.GetSymbol(configs.Pair)
 
 	if configs.Type == TradeTypeOpenShort || configs.Type == TradeTypeCloseLong {
 		configs.Type = TradeTypeSell
@@ -527,7 +527,7 @@ func (p *CryptoFacilities) GetInstruments() []interface{} {
 }
 
 func (p *CryptoFacilities) GetPositions(pair string) map[string]interface{} {
-	symbol := p.getSymbol(pair)
+	symbol := p.GetSymbol(pair)
 	if err, response := p.orderRequest("GET", "/api/v3/openpositions", map[string]string{}); err != nil {
 		logger.Errorf("Fail to get instruments info:%v", err)
 		return nil
