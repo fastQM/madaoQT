@@ -33,6 +33,7 @@ const OKEXV3OpSubscribe = "subscribe"
 
 const OKEXV3TableSpotDepthPrefix = "spot/depth"
 const OKEXV3TableSwapDepthPrefix = "swap/depth"
+const OKEXV3TableFutureDepthPrefix = "futures/depth"
 const OKEXV3KeyTimestamp = "timestamp"
 
 type InstrumentType int8
@@ -40,6 +41,7 @@ type InstrumentType int8
 const (
 	InstrumentTypeSpot InstrumentType = iota
 	InstrumentTypeSwap
+	InstrumentTypeFuture
 )
 
 type OKEXV3API struct {
@@ -49,9 +51,10 @@ type OKEXV3API struct {
 	SecretKey      string
 	Passphare      string
 
-	conn *Websocket.Conn
-
+	conn        *Websocket.Conn
 	depthValues map[string]*sync.Map
+
+	FutureIndex string // 季度合约的日期
 }
 
 func (o *OKEXV3API) mergeDepth(oldList [][]DepthPrice, updateList [][]DepthPrice) [][]DepthPrice {
@@ -282,7 +285,7 @@ func (o *OKEXV3API) Start2(errChan chan EventType) error {
 				table = response["table"].(string)
 			}
 
-			if table == OKEXV3TableSpotDepthPrefix || table == OKEXV3TableSwapDepthPrefix {
+			if table == OKEXV3TableSpotDepthPrefix || table == OKEXV3TableSwapDepthPrefix || table == OKEXV3TableFutureDepthPrefix {
 				action := response["action"].(string)
 				datas := response["data"].([]interface{})
 				for _, tmp := range datas {
@@ -407,7 +410,7 @@ func (o *OKEXV3API) Start2(errChan chan EventType) error {
 
 								} else {
 									counter = 0
-									// logger.Infof("Update the depths")
+									// logger.Infof("Update the depths, CRC32 is ok")
 								}
 
 								o.depthValues[channel].Store("data", newList)
@@ -589,6 +592,12 @@ func (o *OKEXV3API) GetDepthValue(coin string) [][]DepthPrice {
 		if o.depthValues[channel] == nil {
 			o.depthValues[channel] = new(sync.Map)
 			o.StartDepth(OKEXV3TableSpotDepthPrefix + ":" + channel)
+		}
+	} else if o.InstrumentType == InstrumentTypeFuture {
+		channel = strings.ToUpper(coins[0]) + "-USD-" + o.FutureIndex
+		if o.depthValues[channel] == nil {
+			o.depthValues[channel] = new(sync.Map)
+			o.StartDepth(OKEXV3TableFutureDepthPrefix + ":" + channel)
 		}
 	}
 
