@@ -254,6 +254,33 @@ func (p *CTPDll) MarketClosePosition(instrument string, volume int, price int, i
 	return nil
 }
 
+func (p *CTPDll) CancelOrder(instrument string, exchangeID string, orderSysID string) map[string]interface{} {
+	buffer := make([]byte, 1024)
+	para3 := []byte(orderSysID + "\x00")
+	function := p.Dll.NewProc("CancelOrder")
+	result, _, err := function.Call(uintptr(unsafe.Pointer(&[]byte(instrument)[0])),
+		uintptr(unsafe.Pointer(&[]byte(exchangeID)[0])),
+		uintptr(unsafe.Pointer(&para3[0])),
+		uintptr(unsafe.Pointer(&buffer[0])))
+	if err != nil {
+		// log.Printf("error:%v result:%v", err, result)
+	}
+
+	if result != 0 {
+		// return buffer[:result]
+		var values map[string]interface{}
+
+		if err = json.Unmarshal(buffer[:result], &values); err != nil {
+			logger.Errorf("Fail to Unmarshal:%v, buffer:%v", err, string(buffer[:result]))
+			return nil
+		}
+		logger.Infof("CancelOrder:%v", values)
+		return values
+	}
+
+	return nil
+}
+
 func (p *CTPDll) GetStatus() uintptr {
 	function := p.Dll.NewProc("GetStatus")
 	result, _, _ := function.Call()
