@@ -596,11 +596,12 @@ func (o *DeribitV2API) StartDepth(channel string) {
 
 }
 
-func (o *DeribitV2API) GetDepthValue(instrument DeribitInstrumentType) [][]DepthPrice {
+func (o *DeribitV2API) GetDepthValue(pair string) [][]DepthPrice {
 
 	var channel string
+	coins := ParsePair(pair)
 
-	channel = "book." + string(instrument) + "-PERPETUAL.100ms"
+	channel = "book." + strings.ToUpper(coins[0]) + "-PERPETUAL.100ms"
 
 	if o.depthValues[channel] == nil {
 		o.depthValues[channel] = new(sync.Map)
@@ -610,9 +611,9 @@ func (o *DeribitV2API) GetDepthValue(instrument DeribitInstrumentType) [][]Depth
 	if o.depthValues[channel] != nil {
 		now := time.Now()
 		if timestamp, ok := o.depthValues[channel].Load("timestamp"); ok {
-			location, _ := time.LoadLocation("Asia/Shanghai")
+			// location, _ := time.LoadLocation("Asia/Shanghai")
 			updateTime := time.Unix(int64(timestamp.(float64))/1000, 0)
-			logger.Infof("Now:%v Update:%v", now.String(), updateTime.In(location).String())
+			// logger.Infof("Now:%v Update:%v", now.String(), updateTime.In(location).String())
 			if updateTime.Add(10 * time.Second).Before(now) {
 				logger.Error("Invalid timestamp")
 				return nil
@@ -803,11 +804,17 @@ func (o *DeribitV2API) GetTicker(pair string) *TickerValue {
 	return nil
 }
 
-func (p *DeribitV2API) GetBalance(currency string) (error, float64) {
+func (p *DeribitV2API) GetBalance() map[string]interface{} {
+	return nil
+}
+
+func (p *DeribitV2API) GetBalance2(pair string) (error, float64) {
 
 	id := p.commandID
 	p.commandID++
 	method := "private/get_account_summary"
+
+	coins := ParsePair(pair)
 
 	data := map[string]interface{}{
 		"json":   "2.0",
@@ -815,7 +822,7 @@ func (p *DeribitV2API) GetBalance(currency string) (error, float64) {
 		"id":     id,
 		"params": map[string]interface{}{
 			"access_token": p.accessToken,
-			"currency":     currency,
+			"currency":     strings.ToUpper(coins[0]),
 		},
 	}
 
