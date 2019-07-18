@@ -5,6 +5,7 @@ import (
 	"log"
 	"sort"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -37,10 +38,9 @@ const (
 	CTPStatusError
 )
 
-var wssCTPMD = "wss://openmd.shinnytech.com/t/md/front/mobile"
-
 type CTPDll struct {
 	Dll *syscall.LazyDLL
+	URL string
 }
 
 // var dll *syscall.LazyDLL
@@ -57,7 +57,7 @@ func (p *CTPDll) GetKlines(contract string, intervalMinutes int, count int, rand
 	duration := float64(1000000000 * intervalMinutes * 60)
 	dialer := Websocket.DefaultDialer
 
-	connection, _, err := dialer.Dial(wssCTPMD, nil)
+	connection, _, err := dialer.Dial(URL, nil)
 	if err != nil {
 		logger.Errorf("Fail to dial:%v", err)
 		return nil
@@ -142,7 +142,7 @@ func (p *CTPDll) GetKlines(contract string, intervalMinutes int, count int, rand
 			}
 			send(connection, command)
 
-			time.Sleep(200 * time.Microsecond)
+			time.Sleep(100 * time.Microsecond)
 
 			command = map[string]interface{}{
 				"aid": "peek_message",
@@ -150,7 +150,7 @@ func (p *CTPDll) GetKlines(contract string, intervalMinutes int, count int, rand
 			send(connection, command)
 		case 2:
 			step++
-			time.Sleep(200 * time.Microsecond)
+			time.Sleep(50 * time.Microsecond)
 			command = map[string]interface{}{
 				"aid": "peek_message",
 			}
@@ -162,6 +162,7 @@ func (p *CTPDll) GetKlines(contract string, intervalMinutes int, count int, rand
 	return nil
 }
 
+// MAX five contracts for 200 klines
 func (p *CTPDll) GetMultipleKlines(contracts []string, intervalMinutes int, count int, randomString string) map[string][]KlineValue {
 
 	klines := make(map[string][]KlineValue)
@@ -185,7 +186,7 @@ func (p *CTPDll) GetMultipleKlines(contracts []string, intervalMinutes int, coun
 
 	defer connection.Close()
 	step := 0
-	isFetched := false
+	var buffer []interface{}
 
 	for {
 		_, message, err := connection.ReadMessage()
@@ -195,53 +196,104 @@ func (p *CTPDll) GetMultipleKlines(contracts []string, intervalMinutes int, coun
 		}
 
 		var response map[string]interface{}
+
 		if err = json.Unmarshal([]byte(message), &response); err != nil {
 			logger.Errorf("Fail to Unmarshal:%v", err)
 			return nil
 		}
 
-		log.Printf("Reseponse:%v", string(message))
+		// log.Printf("Reseponse:%v", string(message))
 		if step == 2 || step == 3 {
 			data := response["data"].([]interface{})
-			log.Printf("LENGTH:%v", len(data))
-			if data != nil && len(data) == len(contracts)*2+1 {
-				for i, contract := range contracts {
-					// log.Printf("[Index %d] %v", i, data[i])
-					data := data[i*2].(map[string]interface{})["klines"].(map[string]interface{})
-					if data != nil {
-						// log.Printf("data:%v contract:%v", data, contract)
-						values := data[contract].(map[string]interface{})
-						if values != nil {
-							dutrationStr := strconv.Itoa(int(duration))
-							datas := values[dutrationStr].(map[string]interface{})
-							if datas["data"] != nil {
-								for _, data := range datas["data"].(map[string]interface{}) {
-									tmp := data.(map[string]interface{})
-									klines[contract] = append(klines[contract], KlineValue{
-										Time:     time.Unix(int64(tmp["datetime"].(float64)/1000000000.0), 0).Format("2006-01-02 15:04:05"),
-										OpenTime: tmp["datetime"].(float64) / 1000000000.0,
-										Open:     tmp["open"].(float64),
-										High:     tmp["high"].(float64),
-										Low:      tmp["low"].(float64),
-										Close:    tmp["close"].(float64),
-										Volumn:   tmp["volume"].(float64),
-									})
+			// log.Printf("LENGTH:%v", len(data))
+
+			if data != nil && len(data) > 0 { // if == 2, the datas are not ready in the server
+
+				if data[len(data)-2].(map[string]interface{})["charts"] != nil &&
+					data[len(data)-2].(map[string]interface{})["charts"].(map[string]interface{})[randomString].(map[string]interface{})["left_id"].(float64) == -1 {
+					log.Printf("Invalid data, resend peek")
+					command := map[string]interface{}{
+						"aid": "peek_message",
+					}
+					send(connection, command)
+					continue
+				} else if data[len(data)-2].(map[string]interface{})["mdhis_more_data"] == true {
+
+					log.Printf("more datas reserved, resend peek")
+					command := map[string]interface{}{
+						"aid": "peek_message",
+					}
+					send(connection, command)
+
+					for _, tmp := range data[0 : len(data)-2] {
+						tmpString, _ := json.Marshal(tmp)
+						if strings.Contains(string(tmpString), "binding") {
+							continue
+						}
+						if strings.Count(string(tmpString), "datetime") != count {
+							continue
+						}
+
+						buffer = append(buffer, tmp)
+					}
+
+					continue
+				} else {
+					for _, tmp := range data[0 : len(data)-2] {
+						tmpString, _ := json.Marshal(tmp)
+						if strings.Contains(string(tmpString), "binding") {
+							continue
+						}
+						if strings.Count(string(tmpString), "datetime") != count {
+							continue
+						}
+
+						buffer = append(buffer, tmp)
+					}
+
+					// for key, value := range buffer {
+					// 	log.Printf("Key:%v value:%v", key, value)
+					// }
+
+					// return nil
+
+					for i, contract := range contracts {
+						// log.Printf("[Index %d] %v", i, data[i])
+						data := buffer[i].(map[string]interface{})["klines"].(map[string]interface{})
+						if data != nil {
+							// log.Printf("data:%v contract:%v", data, contract)
+							if data[contract] != nil {
+								values := data[contract].(map[string]interface{})
+								if values != nil {
+									dutrationStr := strconv.Itoa(int(duration))
+									datas := values[dutrationStr].(map[string]interface{})
+									if datas["data"] != nil {
+										for _, data := range datas["data"].(map[string]interface{}) {
+											tmp := data.(map[string]interface{})
+											klines[contract] = append(klines[contract], KlineValue{
+												Time:     time.Unix(int64(tmp["datetime"].(float64)/1000000000.0), 0).Format("2006-01-02 15:04:05"),
+												OpenTime: tmp["datetime"].(float64) / 1000000000.0,
+												Open:     tmp["open"].(float64),
+												High:     tmp["high"].(float64),
+												Low:      tmp["low"].(float64),
+												Close:    tmp["close"].(float64),
+												Volumn:   tmp["volume"].(float64),
+											})
+										}
+										sort.Sort(KlineSort(klines[contract]))
+									}
 								}
-								sort.Sort(KlineSort(klines[contract]))
-								isFetched = true
+							} else {
+								return nil
 							}
+
 						}
 					}
-				}
 
-				if isFetched {
 					return klines
 				}
 			}
 
-			if step == 3 {
-				return nil
-			}
 		}
 		command := make(map[string]interface{})
 
@@ -263,7 +315,7 @@ func (p *CTPDll) GetMultipleKlines(contracts []string, intervalMinutes int, coun
 			}
 			send(connection, command)
 
-			time.Sleep(300 * time.Microsecond)
+			time.Sleep(100 * time.Microsecond)
 
 			command = map[string]interface{}{
 				"aid": "peek_message",
@@ -271,7 +323,7 @@ func (p *CTPDll) GetMultipleKlines(contracts []string, intervalMinutes int, coun
 			send(connection, command)
 		case 2:
 			step++
-			time.Sleep(300 * time.Microsecond)
+			time.Sleep(100 * time.Microsecond)
 			command = map[string]interface{}{
 				"aid": "peek_message",
 			}
