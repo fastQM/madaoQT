@@ -58,6 +58,7 @@ func (p *CTPDll) GetKlines(contract string, intervalMinutes int, count int, rand
 	dialer := Websocket.DefaultDialer
 
 	connection, _, err := dialer.Dial(p.URL, nil)
+
 	if err != nil {
 		logger.Errorf("Fail to dial:%v", err)
 		return nil
@@ -170,6 +171,7 @@ func (p *CTPDll) GetMultipleKlines(contracts []string, intervalMinutes int, coun
 	dialer := Websocket.DefaultDialer
 
 	connection, _, err := dialer.Dial(p.URL, nil)
+
 	if err != nil {
 		logger.Errorf("Fail to dial:%v", err)
 		return nil
