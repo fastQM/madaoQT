@@ -221,6 +221,7 @@ func (o *DeribitV2API) Start2(errChan chan EventType) error {
 					"ticker",
 					"pong",
 					"userinfo",
+					"token",
 				}
 
 				var filtered = false
@@ -262,8 +263,9 @@ func (o *DeribitV2API) Start2(errChan chan EventType) error {
 				datas := params["data"].(map[string]interface{})
 				channel := params["channel"].(string)
 				changeID := datas["change_id"].(float64)
+				dataType := datas["type"].(string)
 
-				if prevList, ok := o.depthValues[channel].Load("data"); !ok {
+				if prevList, ok := o.depthValues[channel].Load("data"); !ok && dataType == "snapshot" {
 					asks := datas["asks"].([]interface{})
 					bids := datas["bids"].([]interface{})
 
@@ -297,7 +299,7 @@ func (o *DeribitV2API) Start2(errChan chan EventType) error {
 					o.depthValues[channel].Store("timestamp", datas["timestamp"].(float64))
 				} else {
 					// errChan <- EventLostConnection
-					if lastID, ok := o.depthValues[channel].Load("changeid"); ok {
+					if lastID, ok := o.depthValues[channel].Load("changeid"); ok && dataType == "change" {
 						previousID := datas["prev_change_id"].(float64)
 						if lastID.(float64) != previousID {
 							logger.Error("changeID is lost")
@@ -582,8 +584,6 @@ func (o *DeribitV2API) GetExchangeName() string {
 
 func (o *DeribitV2API) StartDepth(channel string) {
 
-	o.commandID++
-
 	data := map[string]interface{}{
 		"json":   "2.0",
 		"method": "public/subscribe",
@@ -592,6 +592,7 @@ func (o *DeribitV2API) StartDepth(channel string) {
 			"channels": []string{channel},
 		},
 	}
+	o.commandID++
 	o.command(data)
 
 }
@@ -648,6 +649,7 @@ func (o *DeribitV2API) command(data map[string]interface{}) error {
 
 		filters := []string{
 			"ping",
+			"auth",
 		}
 
 		found := false

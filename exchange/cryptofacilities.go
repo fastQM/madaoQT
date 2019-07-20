@@ -212,6 +212,12 @@ func (p *CryptoFacilities) GetSymbol(pair string) string {
 	return "pi_" + strings.ToLower(coins[0]+coins[1])
 }
 
+func (p *CryptoFacilities) GetBalanceSymbol(pair string) string {
+	pair = strings.Replace(pair, "usdt", "usd", 1)
+	coins := ParsePair(pair)
+	return "fi_" + strings.ToLower(coins[0]+coins[1])
+}
+
 // GetDepthValue() get the depth of the assigned price area and quantity
 // GetDepthValue(pair string, price float64, limit float64, orderQuantity float64, tradeType TradeType) []DepthPrice
 func (p *CryptoFacilities) GetDepthValue(pair string) [][]DepthPrice {

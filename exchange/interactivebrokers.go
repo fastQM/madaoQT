@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	Websocket "github.com/gorilla/websocket"
 	"golang.org/x/net/proxy"
@@ -66,7 +67,11 @@ func (p *InteractiveBrokers) marketRequest(path string, params map[string]string
 	httpTransport := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
-	httpClient := &http.Client{Transport: httpTransport}
+
+	httpClient := &http.Client{
+		Transport: httpTransport,
+		Timeout:   10 * time.Second,
+	}
 
 	if p.Proxy != "" {
 		values := strings.Split(p.Proxy, ":")
@@ -544,6 +549,21 @@ func (p *InteractiveBrokers) PortfolioAccounts() []interface{} {
 
 func (p *InteractiveBrokers) GetStatus() map[string]interface{} {
 	if err, response := p.marketRequest("/iserver/auth/status", map[string]string{}); err != nil {
+		logger.Errorf("Invalid request:%v", err)
+		return nil
+	} else {
+		var values map[string]interface{}
+		if err = json.Unmarshal(response, &values); err != nil {
+			logger.Errorf("Fail to parse:%v", err)
+			return nil
+		}
+
+		return values
+	}
+}
+
+func (p *InteractiveBrokers) Reauthenticate() map[string]interface{} {
+	if err, response := p.marketRequest("/iserver/reauthenticate", map[string]string{}); err != nil {
 		logger.Errorf("Invalid request:%v", err)
 		return nil
 	} else {

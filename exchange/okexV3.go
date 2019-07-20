@@ -198,7 +198,7 @@ func (o *OKEXV3API) Start2(errChan chan EventType) error {
 	}
 
 	go func() {
-		counter := 0
+		counter := make(map[string]int)
 
 		cancle := make(chan struct{})
 		go func() {
@@ -398,18 +398,18 @@ func (o *OKEXV3API) Start2(errChan chan EventType) error {
 								valueOriginal := fmt.Sprintf("%x", uint32(data["checksum"].(float64)))
 								if valueCalc != valueOriginal {
 
-									logger.Error("2.The crc32 is NOT the same")
+									logger.Errorf("[%s]The crc32 is NOT the same", channel)
 									// o.triggerEvent(EventLostConnection)
-									if counter > 5 {
+									if counter[channel] > 5 {
 										connection.Close()
 										errChan <- EventLostConnection
 										return
 									} else {
-										counter++
+										counter[channel]++
 									}
 
 								} else {
-									counter = 0
+									counter[channel] = 0
 									// logger.Infof("Update the depths, CRC32 is ok")
 								}
 
@@ -740,10 +740,11 @@ func (o *OKEXV3API) Trade(configs TradeConfig) *TradeResult {
 
 			if values["result"] == nil || !values["result"].(bool) {
 
-				errorCode := values["code"].(float64)
+				errorCode := values["error_code"].(string)
+				intCode, _ := strconv.Atoi(errorCode)
 				return &TradeResult{
-					Error:     errors.New(values["message"].(string)),
-					ErrorCode: int(errorCode),
+					Error:     errors.New(values["error_message"].(string)),
+					ErrorCode: intCode,
 				}
 
 			} else {

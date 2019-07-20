@@ -11,7 +11,8 @@ const HuobiSecret = ""
 
 func TestHuobiGetBalance(t *testing.T) {
 	huobi := Huobi{
-		InstrumentType: InstrumentTypeSpot,
+		// InstrumentType: InstrumentTypeSpot,
+		InstrumentType: InstrumentTypeSwap,
 		Proxy:          "SOCKS5:127.0.0.1:1080",
 		ApiKey:         HuobiAPI,
 		SecretKey:      HuobiSecret,
@@ -37,6 +38,52 @@ func TestHuobiTrade(t *testing.T) {
 	log.Printf("Result:%v", result)
 }
 
+func TestHuobiDMTrade(t *testing.T) {
+	huobi := Huobi{
+		InstrumentType: InstrumentTypeSwap,
+		Proxy:          "SOCKS5:127.0.0.1:1080",
+		ApiKey:         HuobiAPI,
+		SecretKey:      HuobiSecret,
+	}
+
+	result := huobi.Trade(TradeConfig{
+		Amount: 1,
+		Pair:   "eth/usdt",
+		Type:   TradeTypeCloseLong,
+		Price:  140,
+	})
+
+	log.Printf("Result:%v", result)
+}
+
+func TestHuobiDMGetOrderInfo(t *testing.T) {
+	huobi := Huobi{
+		InstrumentType: InstrumentTypeSwap,
+		Proxy:          "SOCKS5:127.0.0.1:1080",
+		ApiKey:         HuobiAPI,
+		SecretKey:      HuobiSecret,
+	}
+
+	log.Printf("result:%v", huobi.GetOrderInfo(OrderInfo{
+		OrderID: "7",
+		Pair:    "eth/usdt",
+	}))
+}
+
+func TestHuobiDMCancelOrder(t *testing.T) {
+	huobi := Huobi{
+		InstrumentType: InstrumentTypeSwap,
+		Proxy:          "SOCKS5:127.0.0.1:1080",
+		ApiKey:         HuobiAPI,
+		SecretKey:      HuobiSecret,
+	}
+
+	log.Printf("result:%v", huobi.CancelOrder(OrderInfo{
+		OrderID: "5",
+		Pair:    "eth/usdt",
+	}))
+}
+
 func TestHuobiGetOrderInfo(t *testing.T) {
 	huobi := Huobi{
 		InstrumentType: InstrumentTypeSpot,
@@ -54,16 +101,16 @@ func TestHuobiGetKlines(t *testing.T) {
 	huobi := Huobi{
 		InstrumentType: InstrumentTypeSpot,
 		Proxy:          "SOCKS5:127.0.0.1:1080",
-		ApiKey:         HuobiAPI,
-		SecretKey:      HuobiSecret,
+		// ApiKey:         HuobiAPI,
+		// SecretKey:      HuobiSecret,
 	}
 	location, _ := time.LoadLocation("Asia/Shanghai")
 	klines := huobi.GetKline("eth/usdt", KlinePeriod1Hour, 200)
+	klines = Swith1HourToHoursKlines(2, klines)
 	for _, kline := range klines {
 		log.Printf("TIme:%v %v", time.Unix(int64(kline.OpenTime), 0).In(location), kline)
 	}
 }
-
 func TestHuobiGetDepth(t *testing.T) {
 
 	huobi := Huobi{
