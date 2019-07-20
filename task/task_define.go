@@ -1,7 +1,7 @@
 package task
 
 const (
-	TrendTradeCollectionOKEX             = "TrendFunds2"
+	TrendTradeCollectionOKEX             = "TrendTradeOKEX"
 	TrendTradeCollectionOKEXWithSteps    = "TrendTradeOkexSteps"
 	TrendTradeCollectionBinance          = "TrendFundBinance"
 	TrendTradeCollectionBitmex           = "TrendFuncCollectionBitmex"
@@ -13,6 +13,9 @@ const (
 	TrendTradeOkexV3                     = "TrendTradeOkexV3"
 	TrendTradeOkexV3Spot                 = "TrendTradeOkexV3Spot"
 	TrendTradeHuobiSpot                  = "TrendTradeHuobiSpot"
+	TrendTradeHuobiDM                    = "TrendTradeHuobiDM"
+	TrendTradeIB                         = "TrendTradeIB"
+	TrendTradeDeribit                    = "TrendTradeDeribit"
 
 	TrendBalanceOKEX             = "TrendBalanceOKEX"
 	TrendBalanceOKEXWithSteps    = "TrendBalanceOKEXSteps"
@@ -26,6 +29,9 @@ const (
 	TrendBalanceOkexV3           = "TrendBalanceOkexV3"
 	TrendBalanceOkexV3Spot       = "TrendBalanceOkexV3Spot"
 	TrendBalanceHuobiSpot        = "TrendBalanceHuobiSpot"
+	TrendBalanceHuobiDM          = "TrendBalanceHuobiDM"
+	TrendBalanceIB               = "TrendBalanceIB"
+	TrendBalanceDeribit          = "TrendBalanceDeribit"
 
 	TrendFundOKEX             = "TrendFundStructOKEX"
 	TrendFundOKEXWithSteps    = "TrendFundOKEXWithSteps"

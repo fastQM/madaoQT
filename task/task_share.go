@@ -46,6 +46,7 @@ const (
 	TaskInvalidInput
 	TaskAPINotFound
 	TaskIOCReturn
+	TaskInvalidResponseFromServer
 )
 
 var TaskErrorMsg = map[TaskErrorType]string{
