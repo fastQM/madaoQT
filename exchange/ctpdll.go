@@ -45,13 +45,24 @@ type CTPDll struct {
 
 // var dll *syscall.LazyDLL
 
+type KlineSort []KlineValue
+
+func (p KlineSort) Len() int           { return len(p) }
+func (p KlineSort) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+func (p KlineSort) Less(i, j int) bool { return p[i].OpenTime < p[j].OpenTime }
+
 func send(conn *Websocket.Conn, datas map[string]interface{}) {
 	cmd, _ := json.Marshal(datas)
-	log.Printf("Cmd:%v", string(cmd))
+	log.Printf("[%s]Cmd:%v", time.Now().Format("2006-01-02 15:04:05.999999999"), string(cmd))
 	conn.WriteMessage(Websocket.TextMessage, cmd)
 }
 
 func (p *CTPDll) GetKlines(contract string, intervalMinutes int, count int, randomString string) []KlineValue {
+
+	if contract == "" || intervalMinutes == 0 || count == 0 || randomString == "" {
+		logger.Errorf("Invalid parameters")
+		return nil
+	}
 
 	var klines KlineSort
 	duration := float64(1000000000 * intervalMinutes * 60)
@@ -89,10 +100,16 @@ func (p *CTPDll) GetKlines(contract string, intervalMinutes int, count int, rand
 			return nil
 		}
 
-		// log.Printf("Reseponse:%v", string(message))
+		log.Printf("[%s]Reseponse", time.Now().Format("2006-01-02 15:04:05.999999999"))
 		if step == 2 || step == 3 {
 			data := response["data"].([]interface{})
 			if data != nil {
+
+				if data[0].(map[string]interface{})["klines"] == nil {
+					logger.Errorf("Fail to get klines")
+					return nil
+				}
+
 				data := data[0].(map[string]interface{})["klines"].(map[string]interface{})
 				if data != nil {
 					values := data[contract].(map[string]interface{})
@@ -166,6 +183,11 @@ func (p *CTPDll) GetKlines(contract string, intervalMinutes int, count int, rand
 // MAX five contracts for 200 klines
 func (p *CTPDll) GetMultipleKlines(contracts []string, intervalMinutes int, count int, randomString string) map[string][]KlineValue {
 
+	if contracts == nil || len(contracts) == 0 || intervalMinutes == 0 || count == 0 || randomString == "" {
+		logger.Errorf("Invalid parameters")
+		return nil
+	}
+
 	klines := make(map[string][]KlineValue)
 	duration := float64(1000000000 * intervalMinutes * 60)
 	dialer := Websocket.DefaultDialer
@@ -204,7 +226,7 @@ func (p *CTPDll) GetMultipleKlines(contracts []string, intervalMinutes int, coun
 			return nil
 		}
 
-		// log.Printf("Reseponse:%v", string(message))
+		log.Printf("[%s]Reseponse", time.Now().Format("2006-01-02 15:04:05.999999999"))
 		if step == 2 || step == 3 {
 			data := response["data"].([]interface{})
 			// log.Printf("LENGTH:%v", len(data))
@@ -232,7 +254,7 @@ func (p *CTPDll) GetMultipleKlines(contracts []string, intervalMinutes int, coun
 						if strings.Contains(string(tmpString), "binding") {
 							continue
 						}
-						if strings.Count(string(tmpString), "datetime") != count {
+						if strings.Count(string(tmpString), "datetime") < 10 { // how about 10?
 							continue
 						}
 
@@ -246,7 +268,7 @@ func (p *CTPDll) GetMultipleKlines(contracts []string, intervalMinutes int, coun
 						if strings.Contains(string(tmpString), "binding") {
 							continue
 						}
-						if strings.Count(string(tmpString), "datetime") != count {
+						if strings.Count(string(tmpString), "datetime") < 10 {
 							continue
 						}
 
